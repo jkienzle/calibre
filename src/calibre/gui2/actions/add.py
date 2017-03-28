@@ -42,6 +42,7 @@ def get_filters():
             (_('Comics'), ['cbz', 'cbr', 'cbc']),
             (_('Archives'), ['zip', 'rar']),
             (_('Wordprocessor files'), ['odt', 'doc', 'docx']),
+            (_('Audiobooks'), ['mp3', 'm4b']),
     ]
 
 
@@ -152,6 +153,7 @@ class AddAction(InterfaceAction):
     def add_empty_format(self, format_):
         if self.gui.stack.currentIndex() != 0:
             return
+
         view = self.gui.library_view
         rows = view.selectionModel().selectedRows()
         if not rows:
