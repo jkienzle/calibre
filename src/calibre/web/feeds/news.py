@@ -14,7 +14,7 @@ from contextlib import nested, closing
 
 
 from calibre import (browser, __appname__, iswindows, force_unicode,
-                    strftime, preferred_encoding, as_unicode)
+                    strftime, preferred_encoding, as_unicode, random_user_agent)
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, NavigableString, CData, Tag
 from calibre.ebooks.metadata.opf2 import OPFCreator
 from calibre import entity_to_unicode
@@ -494,6 +494,9 @@ class BasicNewsRecipe(Recipe):
                 return br
 
         '''
+        if 'user_agent' not in kwargs:
+            # More and more news sites are serving JPEG XR images to IE
+            kwargs['user_agent'] = random_user_agent(allow_ie=False)
         br = browser(*args, **kwargs)
         br.addheaders += [('Accept', '*/*')]
         if self.handle_gzip:
@@ -831,8 +834,7 @@ class BasicNewsRecipe(Recipe):
         from the parsed HTML (soup).
 
         :param article: A object of class :class:`calibre.web.feeds.Article`.
-        If you change the summary, remember to also change the
-        text_summary
+            If you change the summary, remember to also change the text_summary
         :param soup: Parsed HTML belonging to this article
         :param first: True iff the parsed HTML is the first page of the article.
         '''

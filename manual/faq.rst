@@ -475,7 +475,7 @@ the server has IP address 63.45.128.5, in the browser, you would type::
     http://63.45.128.5:8080
 
 Some devices, like the Kindle (1/2/DX), do not allow you to access port 8080 (the default port on which the content
-server runs. In that case, change the port in the calibre Preferences to 80. (On some operating systems,
+server runs). In that case, change the port in the calibre Preferences to 80. (On some operating systems,
 you may not be able to run the server on a port number less than 1024 because of security settings. In
 this case the simplest solution is to adjust your router to forward requests on port 80 to port 8080).
 
@@ -740,7 +740,7 @@ then import it on another computer. First let's see how to export the data:
     you for the location of the calibre library. Point it to the previously copied
     folder. If the computer you are transferring to already has a calibre
     installation, then the Welcome wizard wont run. In that case, right-click the
-    calibre icon in the tooolbar and point it to the newly copied directory. You will
+    calibre icon in the toolbar and point it to the newly copied directory. You will
     now have two calibre libraries on your computer and you can switch between them
     by clicking the calibre icon on the toolbar. Transferring your library in this
     manner preserver all your metadata, tags, custom columns, etc.
