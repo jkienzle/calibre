@@ -410,28 +410,32 @@ OptionRecommendation(name='margin_top',
         help=_('Set the top margin in pts. Default is %default. '
             'Setting this to less than zero will cause no margin to be set '
             '(the margin setting in the original document will be preserved). '
-            'Note: 72 pts equals 1 inch')),
+            'Note: Page oriented formats such as PDF and DOCX have their own'
+            ' margin settings that take precedence.')),
 
 OptionRecommendation(name='margin_bottom',
         recommended_value=5.0, level=OptionRecommendation.LOW,
         help=_('Set the bottom margin in pts. Default is %default. '
             'Setting this to less than zero will cause no margin to be set '
             '(the margin setting in the original document will be preserved). '
-            'Note: 72 pts equals 1 inch')),
+            'Note: Page oriented formats such as PDF and DOCX have their own'
+            ' margin settings that take precedence.')),
 
 OptionRecommendation(name='margin_left',
         recommended_value=5.0, level=OptionRecommendation.LOW,
         help=_('Set the left margin in pts. Default is %default. '
             'Setting this to less than zero will cause no margin to be set '
             '(the margin setting in the original document will be preserved). '
-            'Note: 72 pts equals 1 inch')),
+            'Note: Page oriented formats such as PDF and DOCX have their own'
+            ' margin settings that take precedence.')),
 
 OptionRecommendation(name='margin_right',
         recommended_value=5.0, level=OptionRecommendation.LOW,
         help=_('Set the right margin in pts. Default is %default. '
             'Setting this to less than zero will cause no margin to be set '
             '(the margin setting in the original document will be preserved). '
-            'Note: 72 pts equals 1 inch')),
+            'Note: Page oriented formats such as PDF and DOCX have their own'
+            ' margin settings that take precedence.')),
 
 OptionRecommendation(name='change_justification',
         recommended_value='original', level=OptionRecommendation.LOW,
@@ -854,10 +858,20 @@ OptionRecommendation(name='search_replace',
         level is >= the baseline recommended level, the UI value is used,
         *except* if the baseline has a recommendation level of `HIGH`.
         '''
+
+        def eq(name, a, b):
+            if name in {'sr1_search', 'sr1_replace', 'sr2_search', 'sr2_replace', 'sr3_search', 'sr3_replace', 'filter_css'}:
+                if not a and not b:
+                    return True
+            if name in {'transform_css_rules', 'search_replace'}:
+                if b == '[]':
+                    b = None
+            return a == b
+
         for name, val, level in recommendations:
             rec = self.get_option_by_name(name)
             if rec is not None and rec.level <= level and rec.level < rec.HIGH:
-                changed = rec.recommended_value != val
+                changed = not eq(name, rec.recommended_value, val)
                 rec.recommended_value = val
                 rec.level = level
                 if changed:
