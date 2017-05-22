@@ -853,12 +853,16 @@ class BuiltinFormatNumber(BuiltinFormatterFunction):
                   '"{0:,d}" or "${0:5,.2f}". The field_name part of the '
                   'template must be a 0 (zero) (the "{0:" in the above examples). '
                   'See the template language and Python documentation for more '
-                  'examples. Returns the empty string if formatting fails.'
+                  'examples. You can leave off the leading "{0:" and trailing '
+                  '"}" if the template contains only a format. Returns the empty '
+                  'string if formatting fails.'
             )
 
     def evaluate(self, formatter, kwargs, mi, locals, val, template):
         if val == '' or val == 'None':
             return ''
+        if '{' not in template:
+            template = '{0:' + template + '}'
         try:
             v1 = float(val)
         except:
@@ -1622,11 +1626,8 @@ class UserFunction(FormatterUserFunction):
     cls = locals_['UserFunction'](name, doc, arg_count, eval_func)
     return cls
 
-
-def load_user_template_functions(library_uuid, funcs):
-    unload_user_template_functions(library_uuid)
-
-    compiled_funcs = []
+def compile_user_template_functions(funcs):
+    compiled_funcs = {}
     for func in funcs:
         try:
             # Force a name conflict to test the logic
@@ -1637,11 +1638,19 @@ def load_user_template_functions(library_uuid, funcs):
             # source. This helps ensure that if the function already is defined
             # then white space differences don't cause them to compare differently
 
-            compiled_funcs.append(compile_user_function(*func))
+            cls = compile_user_function(*func)
+            compiled_funcs[cls.name] = cls
         except:
             traceback.print_exc()
-    formatter_functions().register_functions(library_uuid, compiled_funcs)
+    return compiled_funcs
 
+def load_user_template_functions(library_uuid, funcs, precompiled_user_functions=None):
+    unload_user_template_functions(library_uuid)
+    if precompiled_user_functions:
+        compiled_funcs = precompiled_user_functions
+    else:
+        compiled_funcs = compile_user_template_functions(funcs)
+    formatter_functions().register_functions(library_uuid, compiled_funcs.values())
 
 def unload_user_template_functions(library_uuid):
     formatter_functions().unregister_functions(library_uuid)

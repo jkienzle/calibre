@@ -634,7 +634,7 @@ class TagsView(QTreeView):  # {{{
                     self.context_menu.addAction(_('Manage %s')%category,
                             partial(self.context_menu_handler, action='edit_author_sort'))
                 elif key == 'search':
-                    self.context_menu.addAction(_('Manage Saved Searches'),
+                    self.context_menu.addAction(_('Manage Saved searches'),
                         partial(self.context_menu_handler, action='manage_searches',
                                 category=tag.name if tag else None))
 
@@ -648,11 +648,11 @@ class TagsView(QTreeView):  # {{{
                 self.context_menu.addSeparator()
                 if key.startswith('@') and \
                         key[1:] in self.db.prefs.get('user_categories', {}).keys():
-                    self.context_menu.addAction(_('Manage User Categories'),
+                    self.context_menu.addAction(_('Manage User categories'),
                             partial(self.context_menu_handler, action='manage_categories',
                                     category=key[1:]))
                 else:
-                    self.context_menu.addAction(_('Manage User Categories'),
+                    self.context_menu.addAction(_('Manage User categories'),
                             partial(self.context_menu_handler, action='manage_categories',
                                     category=None))
 

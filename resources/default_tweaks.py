@@ -186,7 +186,9 @@ gui_last_modified_display_format = 'dd MMM yyyy'
 # This flag affects calibre's library display. It has no effect on devices. In
 # addition, titles for books added before changing the flag will retain their
 # order until the title is edited. Double-clicking on a title and hitting return
-# without changing anything is sufficient to change the sort.
+# without changing anything is sufficient to change the sort. Or you can use
+# the 'Update title sort' action in the Bulk metadata edit dialog to update
+# it for many books at once.
 title_series_sorting = 'library_order'
 
 #: Control formatting of title and series when used in templates
@@ -350,9 +352,6 @@ sony_collection_sorting_rules = []
 # a book' are added when copying books to another library
 add_new_book_tags_when_importing_books = False
 
-#: Set the maximum number of tags to show per book in the Content server
-max_content_server_tags_shown=5
-
 #: Set custom metadata fields that the Content server will or will not display.
 # content_server_will_display is a list of custom fields to be displayed.
 # content_server_wont_display is a list of custom fields not to be displayed.
@@ -457,14 +456,6 @@ maximum_cover_size = (1650, 2200)
 # the files will be sent to the location with the most free space.
 send_news_to_device_location = "main"
 
-#: What interfaces should the Content server listen on
-# By default, the calibre Content server listens on '0.0.0.0' which means that it
-# accepts IPv4 connections on all interfaces. You can change this to, for
-# example, '127.0.0.1' to only listen for connections from the local machine, or
-# to '::' to listen to all incoming IPv6 and IPv4 connections (this may not
-# work on all operating systems)
-server_listen_on = '0.0.0.0'
-
 #: Unified toolbar on OS X
 # If you enable this option and restart calibre, the toolbar will be 'unified'
 # with the titlebar as is normal for OS X applications. However, doing this has
@@ -493,16 +484,6 @@ gui_view_history_size = 15
 # comments are rendered in the metadata edit dialog. Set it to a positive or
 # negative number to increase or decrease the font size.
 change_book_details_font_size_by = 0
-
-#: Compile general program mode templates to Python
-# Compiled general program mode templates are significantly faster than
-# interpreted templates. Setting this tweak to True causes calibre to compile
-# (in most cases) general program mode templates. Setting it to False causes
-# calibre to use the old behavior -- interpreting the templates. Set the tweak
-# to False if some compiled templates produce incorrect values.
-# Default:    compile_gpm_templates = True
-# No compile: compile_gpm_templates = False
-compile_gpm_templates = True
 
 #: What format to default to when using the "Unpack book" feature
 # The "Unpack book" feature of calibre allows direct editing of a book format.

@@ -30,15 +30,12 @@ from calibre.ptempfile import PersistentTemporaryFile
 def get_filters():
     return [
             (_('Books'), BOOK_EXTENSIONS),
-            (_('EPUB Books'), ['epub']),
-            (_('LRF Books'), ['lrf']),
-            (_('HTML Books'), ['htm', 'html', 'xhtm', 'xhtml']),
-            (_('LIT Books'), ['lit']),
-            (_('MOBI Books'), ['mobi', 'prc', 'azw', 'azw3']),
-            (_('Topaz books'), ['tpz','azw1']),
-            (_('Text books'), ['txt', 'text', 'rtf']),
-            (_('PDF Books'), ['pdf', 'azw4']),
-            (_('SNB Books'), ['snb']),
+            (_('EPUB books'), ['epub', 'kepub']),
+            (_('Kindle books'), ['mobi', 'prc', 'azw', 'azw3', 'kfx', 'tpz', 'azw1', 'azw4']),
+            (_('PDF books'), ['pdf', 'azw4']),
+            (_('HTML books'), ['htm', 'html', 'xhtm', 'xhtml']),
+            (_('LIT books'), ['lit']),
+            (_('Text books'), ['txt', 'text', 'rtf', 'md', 'markdown', 'textile', 'txtz']),
             (_('Comics'), ['cbz', 'cbr', 'cbc']),
             (_('Archives'), ['zip', 'rar']),
             (_('Wordprocessor files'), ['odt', 'doc', 'docx']),
@@ -289,9 +286,7 @@ class AddAction(InterfaceAction):
                     fmts = [pt.name]
                 ids.append(db.import_book(mi, fmts))
             tuple(map(os.remove, orig_fmts))
-            self.gui.library_view.model().books_added(num)
-            self.gui.refresh_cover_browser()
-            self.gui.tags_view.recount()
+            self.refresh_gui(num)
             if ids:
                 ids.reverse()
                 self.gui.library_view.select_rows(ids)
@@ -443,6 +438,14 @@ class AddAction(InterfaceAction):
         Adder(paths, db=None if to_device else self.gui.current_db,
               parent=self.gui, callback=partial(self._files_added, on_card=on_card), pool=self.gui.spare_pool())
 
+    def refresh_gui(self, num, set_current_row=-1, recount=True):
+        self.gui.library_view.model().books_added(num)
+        if set_current_row > -1:
+            self.gui.library_view.set_current_row(0)
+        self.gui.refresh_cover_browser()
+        if recount:
+            self.gui.tags_view.recount()
+
     def _files_added(self, adder, on_card=None):
         if adder.items:
             paths, infos, names = [], [], []
@@ -456,10 +459,7 @@ class AddAction(InterfaceAction):
             return
 
         if adder.number_of_books_added > 0:
-            self.gui.library_view.model().books_added(adder.number_of_books_added)
-            self.gui.library_view.set_current_row(0)
-            self.gui.refresh_cover_browser()
-            self.gui.tags_view.recount()
+            self.refresh_gui(adder.number_of_books_added, set_current_row=0)
 
         if adder.merged_books:
             merged = defaultdict(list)

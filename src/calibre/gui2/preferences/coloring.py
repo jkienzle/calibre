@@ -371,7 +371,7 @@ class RuleEditor(QDialog):  # {{{
             create_filename_box()
 
             vb = QVBoxLayout()
-            self.multiple_icon_cb = QCheckBox(_('Choose more than one icon'))
+            self.multiple_icon_cb = QCheckBox(_('Choose &more than one icon'))
             vb.addWidget(self.multiple_icon_cb)
             self.update_filename_box()
             self.multiple_icon_cb.clicked.connect(self.multiple_box_clicked)
@@ -395,7 +395,7 @@ class RuleEditor(QDialog):  # {{{
         l.addWidget(sa, 4, 0, 1, 8)
 
         self.add_button = b = QPushButton(QIcon(I('plus.png')),
-                _('Add another condition'))
+                _('Add &another condition'))
         l.addWidget(b, 5, 0, 1, 8)
         b.clicked.connect(self.add_blank_condition)
 
@@ -409,9 +409,10 @@ class RuleEditor(QDialog):  # {{{
         bb.rejected.connect(self.reject)
         l.addWidget(bb, 7, 0, 1, 8)
         if self.rule_kind != 'color':
-            self.remove_button = b = bb.addButton(_('Remove image'), bb.ActionRole)
+            self.remove_button = b = bb.addButton(_('&Remove icon'), bb.ActionRole)
             b.setIcon(QIcon(I('minus.png')))
             b.setMenu(QMenu())
+            b.setToolTip('<p>' + _('Remove a previously added icon. Note that doing so will cause rules that use it to stop working.'))
             self.update_remove_button()
 
         self.conditions_widget = QWidget(self)
@@ -495,7 +496,7 @@ class RuleEditor(QDialog):  # {{{
         self.color_label.setText('''
             <span style="color: {c}; background-color: {bg1}">&nbsp;{st}&nbsp;</span>
             <span style="color: {c}; background-color: {bg2}">&nbsp;{st}&nbsp;</span>
-            '''.format(c=c, bg1=bg1, bg2=bg2, st=_('Sample Text')))
+            '''.format(c=c, bg1=bg1, bg2=bg2, st=_('Sample text')))
 
     def sanitize_icon_file_name(self, icon_path):
         n = lower(sanitize_file_name_unicode(
@@ -887,10 +888,10 @@ class EditRules(QWidget):  # {{{
         l1.setWordWrap(True)
         l.addWidget(l1, l.rowCount(), 0, 1, 2)
 
-        self.add_button = QPushButton(QIcon(I('plus.png')), _('Add rule'),
+        self.add_button = QPushButton(QIcon(I('plus.png')), _('&Add rule'),
                 self)
         self.remove_button = QPushButton(QIcon(I('minus.png')),
-                _('Remove rule(s)'), self)
+                _('&Remove rule(s)'), self)
         self.add_button.clicked.connect(self.add_rule)
         self.remove_button.clicked.connect(self.remove_rule)
         l.addWidget(self.add_button, l.rowCount(), 0)
@@ -920,7 +921,7 @@ class EditRules(QWidget):  # {{{
         l.setRowStretch(l.rowCount() - 1, 10)
 
         self.add_advanced_button = b = QPushButton(QIcon(I('plus.png')),
-                _('Add advanced rule'), self)
+                _('Add ad&vanced rule'), self)
         b.clicked.connect(self.add_advanced)
         self.hb = hb = QHBoxLayout()
         l.addLayout(hb, l.rowCount(), 0, 1, 2)

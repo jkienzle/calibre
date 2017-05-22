@@ -437,7 +437,7 @@ class SearchBoxMixin(object):  # {{{
 
     def init_search_box_mixin(self):
         self.search.initialize('main_search_history', colorize=True,
-                help_text=_('Search (For Advanced search click the button to the left)'))
+                help_text=_('Search (For advanced search click the button to the left)'))
         self.search.cleared.connect(self.search_box_cleared)
         # Queued so that search.current_text will be correct
         self.search.changed.connect(self.search_box_changed,
@@ -531,7 +531,7 @@ class SavedSearchBoxMixin(object):  # {{{
                                 self.saved_search.copy_search_button_clicked)
         # self.saved_searches_changed()
         self.saved_search.initialize(self.search, colorize=True,
-                help_text=_('Saved Searches'))
+                help_text=_('Saved searches'))
         self.saved_search.tool_tip_text=_('Choose saved search or enter name for new saved search')
         self.saved_search.setToolTip(self.saved_search.tool_tip_text)
         self.saved_search.setStatusTip(self.saved_search.tool_tip_text)

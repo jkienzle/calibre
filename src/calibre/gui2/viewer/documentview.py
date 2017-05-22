@@ -247,10 +247,10 @@ class Document(QWebPage):  # {{{
         self.first_load = False
 
     def colors(self):
-        ans = self.javascript('''
+        ans = json.loads(self.javascript('''
             bs = getComputedStyle(document.body);
-            [bs.backgroundColor, bs.color]
-            ''')
+            JSON.stringify([bs.backgroundColor, bs.color])
+            '''))
         return ans if isinstance(ans, list) else ['white', 'black']
 
     def read_anchor_positions(self, use_cache=True):
@@ -299,8 +299,8 @@ class Document(QWebPage):  # {{{
     def column_boundaries(self):
         if not self.loaded_javascript:
             return (0, 1)
-        ans = self.javascript(u'paged_display.column_boundaries()')
-        return tuple(int(x) for x in ans)
+        ans = self.javascript(u'JSON.stringify(paged_display.column_boundaries())')
+        return tuple(int(x) for x in json.loads(ans))
 
     def after_resize(self):
         if self.in_paged_mode:
@@ -558,7 +558,7 @@ class DocumentView(QWebView):  # {{{
         copy_action.triggered.connect(self.copy, Qt.QueuedConnection)
         d = self.document
         self.unimplemented_actions = list(map(self.pageAction,
-            [d.DownloadImageToDisk, d.OpenLinkInNewWindow, d.DownloadLinkToDisk,
+            [d.DownloadImageToDisk, d.OpenLinkInNewWindow, d.DownloadLinkToDisk, d.CopyImageUrlToClipboard,
                 d.OpenImageInNewWindow, d.OpenLink, d.Reload, d.InspectElement]))
 
         self.search_online_action = QAction(QIcon(I('search.png')), '', self)
@@ -725,6 +725,10 @@ class DocumentView(QWebView):  # {{{
             menu.removeAction(action)
 
         if not img.isNull():
+            cia = self.pageAction(self.document.CopyImageToClipboard)
+            for action in menu.actions():
+                if action is cia:
+                    action.setText(_('&Copy image'))
             menu.addAction(self.view_image_action)
         if table is not None:
             self.document.mark_element.emit(table)
@@ -762,7 +766,7 @@ class DocumentView(QWebView):  # {{{
                 menu.addAction(self.manager.action_font_size_smaller)
 
         menu.addSeparator()
-        menu.addAction(_('Inspect'), self.inspect)
+        menu.addAction(_('I&nspect'), self.inspect)
 
         if not text and img.isNull() and self.manager is not None:
             menu.addSeparator()

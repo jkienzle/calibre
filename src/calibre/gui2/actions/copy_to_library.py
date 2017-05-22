@@ -133,19 +133,20 @@ class Worker(Thread):  # {{{
     def add_formats(self, id_, paths, newdb, replace=True):
         for path in paths:
             fmt = os.path.splitext(path)[-1].replace('.', '').upper()
-            with open(path, 'rb') as f:
+            with lopen(path, 'rb') as f:
                 newdb.add_format(id_, fmt, f, index_is_id=True,
                         notify=False, replace=replace)
 
     def doit(self):
-        from calibre.db.legacy import LibraryDatabase
-        newdb = LibraryDatabase(self.loc, is_second_db=True)
-        with closing(newdb):
+        from calibre.gui2.ui import get_gui
+        library_broker = get_gui().library_broker
+        newdb = library_broker.get_library(self.loc)
+        try:
             if self.check_for_duplicates:
                 self.find_identical_books_data = newdb.new_api.data_for_find_identical_books()
             self._doit(newdb)
-        newdb.break_cycles()
-        del newdb
+        finally:
+            library_broker.prune_loaded_dbs()
 
     def _doit(self, newdb):
         for i, x in enumerate(self.ids):
@@ -508,7 +509,7 @@ class CopyToLibraryAction(InterfaceAction):
             if delete_after:
                 msg += ' ' + _('No books were deleted from this library.')
             msg += ' ' + _('The best way to resume this operation is to re-copy all the books with the option to'
-                     ' "Check for duplicates when Copying to Library" in Preferences->Adding books turned on.')
+                     ' "Check for duplicates when copying to library" in Preferences->Import/export->Adding books turned on.')
             warning_dialog(self.gui, _('Canceled'), msg, show=True)
             return
 
@@ -531,7 +532,7 @@ class CopyToLibraryAction(InterfaceAction):
                         'records in the target library. Click "Show '
                         'details" to see which ones. This behavior is '
                         'controlled by the Automerge option in '
-                        'Preferences->Adding books.'), det_msg=books,
+                        'Preferences->Import/export->Adding books.'), det_msg=books,
                     show=True)
         if delete_after and self.worker.processed:
             v = self.gui.library_view

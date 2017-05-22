@@ -108,9 +108,9 @@ class FilenamePattern(QWidget, Ui_Form):  # {{{
         fname = unicode(self.filename.text())
         ext = os.path.splitext(fname)[1][1:].lower()
         if ext not in BOOK_EXTENSIONS:
-            return warning_dialog(self, _('Test name invalid'),
-                    _('The name <b>%s</b> does not appear to end with a'
-                        ' file extension. The name must end with a file '
+            return warning_dialog(self, _('Test file name invalid'),
+                    _('The file name <b>%s</b> does not appear to end with a'
+                        ' file extension. It must end with a file '
                         ' extension like .epub or .mobi')%fname, show=True)
 
         try:
@@ -959,6 +959,7 @@ class LayoutButton(QToolButton):
         self.label = text
         self.setIcon(QIcon(icon))
         self.setCheckable(True)
+        self.icname = os.path.basename(icon).rpartition('.')[0]
 
         self.splitter = splitter
         if splitter is not None:
@@ -970,14 +971,16 @@ class LayoutButton(QToolButton):
 
     def set_state_to_show(self, *args):
         self.setChecked(False)
-        self.setText(_('Show %(label)s [%(shortcut)s]')%dict(label=self.label, shortcut=self.shortcut))
+        self.setText(_('Show %(label)s [%(shortcut)s]')%dict(label=self.label, shortcut=self.shortcut) + '\n\n' +
+                     _('Right click to configure'))
         self.setToolTip(self.text())
         self.setStatusTip(self.text())
 
     def set_state_to_hide(self, *args):
         self.setChecked(True)
         self.setText(_('Hide %(label)s [%(shortcut)s]')%dict(
-            label=self.label, shortcut=self.shortcut))
+            label=self.label, shortcut=self.shortcut) + '\n\n' +
+                     _('Right click to configure'))
         self.setToolTip(self.text())
         self.setStatusTip(self.text())
 
@@ -986,6 +989,18 @@ class LayoutButton(QToolButton):
             self.set_state_to_show()
         else:
             self.set_state_to_hide()
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.RightButton:
+            tab_name = {'book':'book_details', 'grid':'cover_grid', 'cover_flow':'cover_browser', 'tags':'tag_browser'}.get(self.icname)
+            if tab_name:
+                from calibre.gui2.ui import get_gui
+                gui = get_gui()
+                if gui is not None:
+                    gui.iactions['Preferences'].do_config(initial_plugin=('Interface', 'Look & Feel', tab_name+'_tab'), close_after_initial=True)
+                    ev.accept()
+                    return
+        return QToolButton.mouseReleaseEvent(self, ev)
 
 
 class Splitter(QSplitter):

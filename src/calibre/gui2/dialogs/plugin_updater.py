@@ -475,13 +475,17 @@ class PluginUpdaterDialog(SizePersistedDialog):
         self.filter_combo = PluginFilterComboBox(self)
         self.filter_combo.setMinimumContentsLength(20)
         self.filter_combo.currentIndexChanged[int].connect(self._filter_combo_changed)
-        header_layout.addWidget(QLabel(_('Filter list of plugins')+':', self))
+        la = QLabel(_('Filter list of &plugins')+':', self)
+        la.setBuddy(self.filter_combo)
+        header_layout.addWidget(la)
         header_layout.addWidget(self.filter_combo)
         header_layout.addStretch(10)
 
         # filter plugins by name
-        header_layout.addWidget(QLabel(_('Filter by name')+':', self))
+        la = QLabel(_('Filter by &name')+':', self)
+        header_layout.addWidget(la)
         self.filter_by_name_lineedit = QLineEdit(self)
+        la.setBuddy(self.filter_by_name_lineedit)
         self.filter_by_name_lineedit.setText("")
         self.filter_by_name_lineedit.textChanged.connect(self._filter_name_lineedit_changed)
 
@@ -551,7 +555,7 @@ class PluginUpdaterDialog(SizePersistedDialog):
         sep1.setSeparator(True)
         self.plugin_view.addAction(sep1)
 
-        self.toggle_enabled_action = QAction(_('Enable/&Disable plugin'), self)
+        self.toggle_enabled_action = QAction(_('Enable/&disable plugin'), self)
         self.toggle_enabled_action.setToolTip(_('Enable or disable this plugin'))
         self.toggle_enabled_action.triggered.connect(self._toggle_enabled_clicked)
         self.toggle_enabled_action.setEnabled(False)
@@ -706,8 +710,8 @@ class PluginUpdaterDialog(SizePersistedDialog):
 
         plugin_zip_url = display_plugin.zip_url
         if DEBUG:
-            prints('Downloading plugin zip attachment: ', plugin_zip_url)
-        self.gui.status_bar.showMessage(_('Downloading plugin zip attachment: %s') % plugin_zip_url)
+            prints('Downloading plugin ZIP attachment: ', plugin_zip_url)
+        self.gui.status_bar.showMessage(_('Downloading plugin ZIP attachment: %s') % plugin_zip_url)
         zip_path = self._download_zip(plugin_zip_url)
 
         if DEBUG:
@@ -733,7 +737,7 @@ class PluginUpdaterDialog(SizePersistedDialog):
                         ' {1} plugins</b>. You may have to restart calibre '
                         'for the plugin to take effect.').format(plugin.name, plugin.type),
                     show_copy_button=False)
-            b = d.bb.addButton(_('Restart calibre now'), d.bb.AcceptRole)
+            b = d.bb.addButton(_('&Restart calibre now'), d.bb.AcceptRole)
             b.setIcon(QIcon(I('lt.png')))
             d.do_restart = False
 

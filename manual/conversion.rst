@@ -79,9 +79,9 @@ The four sub-directories are:
     ==========    =============
 
 If you want to edit the input document a little before having calibre convert it, the best thing to 
-do is edit the files in the :file:`input` sub-directory, then zip it up, and use the zip file as the 
+do is edit the files in the :file:`input` sub-directory, then zip it up, and use the ZIP file as the 
 input format for subsequent conversions. To do this use the :guilabel:`Edit meta information` dialog
-to add the zip file as a format for the book and then, in the top left corner of the conversion dialog,
+to add the ZIP file as a format for the book and then, in the top left corner of the conversion dialog,
 select ZIP as the input format.
 
 This document will deal mainly with the various transforms that operate on the intermediate XHTML
@@ -319,7 +319,7 @@ remove all non-breaking-space entities, or may include false positive matches re
     If this option is configured then calibre will replace scene break markers it finds with the replacement text specified by the
     user.  Please note that some ornamental characters may not be supported across all reading devices.
     
-    In general you should avoid using html tags, calibre will discard any tags and use pre-defined markup.  <hr />
+    In general you should avoid using HTML tags, calibre will discard any tags and use pre-defined markup.  <hr />
     tags, i.e. horizontal rules, and <img> tags are exceptions.  Horizontal rules can optionally be specified with styles, if you 
     choose to add your own style be sure to include the 'width' setting, otherwise the style information will be discarded.  Image 
     tags can used, but calibre does not provide the ability to add the image during conversion, this must be done after the fact using 
@@ -345,7 +345,7 @@ remove all non-breaking-space entities, or may include false positive matches re
 
 :guilabel:`Replace entity indents with CSS indents`
     Some documents use a convention of defining text indents using non-breaking space entities.  When this option is enabled calibre will
-    attempt to detect this sort of formatting and convert them to a 3% text indent using css.
+    attempt to detect this sort of formatting and convert them to a 3% text indent using CSS.
 
 .. _search-replace:
 
@@ -442,7 +442,7 @@ generate a Table of Contents in the converted e-book, based on the actual conten
     This will launch the ToC Editor tool after the conversion. It allows you to
     create entries in the Table of Contents by simply clicking the place in the
     book where you want the entry to point. You can also use the ToC Editor by
-    itself, without doing a conversion. Go to :guilabel:`Preferences->Toolbars`
+    itself, without doing a conversion. Go to :guilabel:`Preferences->Interface->Toolbars`
     and add the :guilabel:`ToC Editor` to the main toolbar. Then just select the book you
     want to edit and click the :guilabel:`ToC Editor` button.
 
@@ -622,7 +622,7 @@ the latest version of calibre as support for ``.docx`` files is very new).
     download it and convert it to EPUB or AZW3 to see what calibre can do.
 
 calibre will automatically generate a Table of Contents based on headings if you mark
-your headings with the ``Heading 1``, ``Heading 2``, etc. styles in Word. Open
+your headings with the ``Heading 1``, ``Heading 2``, etc. styles in Microsoft Word. Open
 the output e-book in the calibre E-book viewer and click the :guilabel:`Table of Contents` button
 to view the generated Table of Contents.
 
@@ -690,17 +690,17 @@ TXT input supports a number of options to differentiate how paragraphs are detec
 
     :guilabel:`Formatting style: Heuristic`
         Analyzes the document for common chapter headings, scene breaks, and italicized words and applies the
-        appropriate html markup during conversion.
+        appropriate HTML markup during conversion.
 
     :guilabel:`Formatting style: Markdown`
-        calibre also supports running TXT input though a transformation preprocessor known as markdown. Markdown
+        calibre also supports running TXT input though a transformation preprocessor known as Markdown. Markdown
         allows for basic formatting to be added to TXT documents, such as bold, italics, section headings, tables,
         lists, a Table of Contents, etc. Marking chapter headings with a leading # and setting the chapter XPath detection
         expression to "//h:h1" is the easiest way to have a proper table of contents generated from a TXT document.
-        You can learn more about the markdown syntax at `daringfireball <https://daringfireball.net/projects/markdown/syntax>`_.
+        You can learn more about the Markdown syntax at `daringfireball <https://daringfireball.net/projects/markdown/syntax>`_.
 
     :guilabel:`Formatting style: None`
-        Applies no special formatting to the text, the document is converted to html with no other changes.
+        Applies no special formatting to the text, the document is converted to HTML with no other changes.
 
 .. _pdfconversion:
 
@@ -735,7 +735,7 @@ output ranging anywhere from decent to unusable, depending on the input PDF.
 Comic book collections
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A comic book collection is a .cbc file. A .cbc file is a zip file that contains other CBZ/CBR files. In addition the
+A comic book collection is a .cbc file. A .cbc file is a ZIP file that contains other CBZ/CBR files. In addition the
 .cbc file must contain a simple text file called comics.txt, encoded in UTF-8. The comics.txt file must contain
 a list of the comics files inside the .cbc file, in the form filename:title, as shown below::
 

@@ -31,6 +31,7 @@ from calibre.gui2 import (error_dialog, GetMetadata, open_url,
         gprefs, max_available_height, config, info_dialog, Dispatcher,
         question_dialog, warning_dialog)
 from calibre.gui2.cover_flow import CoverFlowMixin
+from calibre.gui2.changes import handle_changes
 from calibre.gui2.widgets import ProgressIndicator
 from calibre.gui2.update import UpdateMixin
 from calibre.gui2.main_window import MainWindow
@@ -51,6 +52,7 @@ from calibre.gui2.job_indicator import Pointer
 from calibre.gui2.dbus_export.widgets import factory
 from calibre.gui2.open_with import register_keyboard_shortcuts
 from calibre.library import current_library_name
+from calibre.srv.library_broker import GuiLibraryBroker
 
 
 class Listener(Thread):  # {{{
@@ -220,7 +222,11 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         opts = self.opts
         self.preferences_action, self.quit_action = actions
         self.library_path = library_path
+        self.library_broker = GuiLibraryBroker(db)
         self.content_server = None
+        self.server_change_notification_timer = t = QTimer(self)
+        self.server_changes = Queue()
+        t.setInterval(1000), t.timeout.connect(self.handle_changes_from_server_debounced), t.setSingleShot(True)
         self._spare_pool = None
         self.must_restart_before_config = False
         self.listener = Listener(listener)
@@ -278,10 +284,6 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         self.toggle_to_tray_action = self.system_tray_menu.addAction(QIcon(I('page.png')), '')
         self.toggle_to_tray_action.triggered.connect(self.system_tray_icon_activated)
         self.system_tray_menu.addAction(self.donate_action)
-        self.donate_button.clicked.connect(self.donate_action.trigger)
-        self.donate_button.setToolTip(self.donate_action.text().replace('&', ''))
-        self.donate_button.setIcon(self.donate_action.icon())
-        self.donate_button.setStatusTip(self.donate_button.toolTip())
         self.eject_action = self.system_tray_menu.addAction(
                 QIcon(I('eject.png')), _('&Eject connected device'))
         self.eject_action.setEnabled(False)
@@ -401,8 +403,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         self.read_settings()
 
         self.finalize_layout()
-        if self.bars_manager.showing_donate:
-            self.donate_button.start_animation()
+        self.bars_manager.start_animation()
         self.set_window_title()
 
         for ac in self.iactions.values():
@@ -473,15 +474,35 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         self.iactions['Connect Share'].set_smartdevice_action_state()
 
     def start_content_server(self, check_started=True):
-        from calibre.library.server.main import start_threaded_server
-        from calibre.library.server import server_config
-        self.content_server = start_threaded_server(
-                self.library_view.model().db, server_config().parse())
+        from calibre.srv.embedded import Server
+        self.content_server = Server(self.library_broker, Dispatcher(self.handle_changes_from_server))
         self.content_server.state_callback = Dispatcher(
                 self.iactions['Connect Share'].content_server_state_changed)
         if check_started:
             self.content_server.start_failure_callback = \
                 Dispatcher(self.content_server_start_failed)
+        self.content_server.start()
+
+    def handle_changes_from_server(self, library_path, change_event):
+        if DEBUG:
+            prints('Received server change event: {} for {}'.format(change_event, library_path))
+        if self.library_broker.is_gui_library(library_path):
+            self.server_changes.put((library_path, change_event))
+            self.server_change_notification_timer.start()
+
+    def handle_changes_from_server_debounced(self):
+        if self.shutting_down:
+            return
+        changes = []
+        while True:
+            try:
+                library_path, change_event = self.server_changes.get_nowait()
+            except Empty:
+                break
+            if self.library_broker.is_gui_library(library_path):
+                changes.append(change_event)
+        if changes:
+            handle_changes(changes, self)
 
     def content_server_start_failed(self, msg):
         error_dialog(self, _('Failed to start Content server'),
@@ -565,6 +586,14 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
     def current_db(self):
         return self.library_view.model().db
 
+    def refresh_all(self):
+        m = self.library_view.model()
+        m.db.data.refresh(clear_caches=False, do_search=False)
+        self.saved_searches_changed(recount=False)
+        m.resort()
+        m.research()
+        self.tags_view.recount()
+
     def another_instance_wants_to_talk(self):
         try:
             msg = self.listener.queue.get_nowait()
@@ -593,10 +622,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         elif msg.startswith('refreshdb:'):
             m = self.library_view.model()
             m.db.new_api.reload_from_db()
-            m.db.data.refresh(clear_caches=False, do_search=False)
-            m.resort()
-            m.research()
-            self.tags_view.recount()
+            self.refresh_all()
         elif msg.startswith('shutdown:'):
             self.quit(confirm_quit=False)
         elif msg.startswith('bookedited:'):
@@ -631,81 +657,74 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
     def booklists(self):
         return self.memory_view.model().db, self.card_a_view.model().db, self.card_b_view.model().db
 
-    def library_moved(self, newloc, copy_structure=False, call_close=True,
-            allow_rebuild=False):
+    def library_moved(self, newloc, copy_structure=False, allow_rebuild=False):
         if newloc is None:
             return
-        default_prefs = None
-        try:
-            olddb = self.library_view.model().db
-            if copy_structure:
-                default_prefs = olddb.prefs
-        except:
-            olddb = None
-        if copy_structure and olddb is not None and default_prefs is not None:
-            default_prefs['field_metadata'] = olddb.new_api.field_metadata.all_metadata()
-        try:
-            db = LibraryDatabase(newloc, default_prefs=default_prefs)
-        except apsw.Error:
-            if not allow_rebuild:
-                raise
-            import traceback
-            repair = question_dialog(self, _('Corrupted database'),
-                    _('The library database at %s appears to be corrupted. Do '
-                    'you want calibre to try and rebuild it automatically? '
-                    'The rebuild may not be completely successful.')
-                    % force_unicode(newloc, filesystem_encoding),
-                    det_msg=traceback.format_exc()
-                    )
-            if repair:
-                from calibre.gui2.dialogs.restore_library import repair_library_at
-                if repair_library_at(newloc, parent=self):
-                    db = LibraryDatabase(newloc, default_prefs=default_prefs)
-                else:
-                    return
-            else:
-                return
-        if self.content_server is not None:
-            self.content_server.set_database(db)
-        self.library_path = newloc
-        prefs['library_path'] = self.library_path
-        self.book_on_device(None, reset=True)
-        db.set_book_on_device_func(self.book_on_device)
-        self.library_view.set_database(db)
-        self.tags_view.set_database(db, self.alter_tb)
-        self.library_view.model().set_book_on_device_func(self.book_on_device)
-        self.status_bar.clear_message()
-        self.search.clear()
-        self.saved_search.clear()
-        self.book_details.reset_info()
-        # self.library_view.model().count_changed()
-        db = self.library_view.model().db
-        self.iactions['Choose Library'].count_changed(db.count())
-        self.set_window_title()
-        self.apply_named_search_restriction('')  # reset restriction to null
-        self.saved_searches_changed(recount=False)  # reload the search restrictions combo box
-        if db.prefs['virtual_lib_on_startup']:
-            self.apply_virtual_library(db.prefs['virtual_lib_on_startup'])
-        self.rebuild_vl_tabs()
-        for action in self.iactions.values():
-            action.library_changed(db)
-        if olddb is not None:
+        with self.library_broker:
+            default_prefs = None
             try:
-                if call_close:
-                    olddb.close()
+                olddb = self.library_view.model().db
+                if copy_structure:
+                    default_prefs = olddb.prefs
             except:
-                import traceback
-                traceback.print_exc()
-            olddb.break_cycles()
-        if self.device_connected:
-            self.set_books_in_library(self.booklists(), reset=True)
-            self.refresh_ondevice()
-            self.memory_view.reset()
-            self.card_a_view.reset()
-            self.card_b_view.reset()
-        self.set_current_library_information(current_library_name(), db.library_id,
-                                             db.field_metadata)
-        self.library_view.set_current_row(0)
+                olddb = None
+            if copy_structure and olddb is not None and default_prefs is not None:
+                default_prefs['field_metadata'] = olddb.new_api.field_metadata.all_metadata()
+            db = self.library_broker.prepare_for_gui_library_change(newloc)
+            if db is None:
+                try:
+                    db = LibraryDatabase(newloc, default_prefs=default_prefs)
+                except apsw.Error:
+                    if not allow_rebuild:
+                        raise
+                    import traceback
+                    repair = question_dialog(self, _('Corrupted database'),
+                            _('The library database at %s appears to be corrupted. Do '
+                            'you want calibre to try and rebuild it automatically? '
+                            'The rebuild may not be completely successful.')
+                            % force_unicode(newloc, filesystem_encoding),
+                            det_msg=traceback.format_exc()
+                            )
+                    if repair:
+                        from calibre.gui2.dialogs.restore_library import repair_library_at
+                        if repair_library_at(newloc, parent=self):
+                            db = LibraryDatabase(newloc, default_prefs=default_prefs)
+                        else:
+                            return
+                    else:
+                        return
+            self.library_path = newloc
+            prefs['library_path'] = self.library_path
+            self.book_on_device(None, reset=True)
+            db.set_book_on_device_func(self.book_on_device)
+            self.library_view.set_database(db)
+            self.tags_view.set_database(db, self.alter_tb)
+            self.library_view.model().set_book_on_device_func(self.book_on_device)
+            self.status_bar.clear_message()
+            self.search.clear()
+            self.saved_search.clear()
+            self.book_details.reset_info()
+            # self.library_view.model().count_changed()
+            db = self.library_view.model().db
+            self.iactions['Choose Library'].count_changed(db.count())
+            self.set_window_title()
+            self.apply_named_search_restriction('')  # reset restriction to null
+            self.saved_searches_changed(recount=False)  # reload the search restrictions combo box
+            if db.prefs['virtual_lib_on_startup']:
+                self.apply_virtual_library(db.prefs['virtual_lib_on_startup'])
+            self.rebuild_vl_tabs()
+            for action in self.iactions.values():
+                action.library_changed(db)
+            self.library_broker.gui_library_changed(db, olddb)
+            if self.device_connected:
+                self.set_books_in_library(self.booklists(), reset=True)
+                self.refresh_ondevice()
+                self.memory_view.reset()
+                self.card_a_view.reset()
+                self.card_b_view.reset()
+            self.set_current_library_information(current_library_name(), db.library_id,
+                                                db.field_metadata)
+            self.library_view.set_current_row(0)
         # Run a garbage collection now so that it does not freeze the
         # interface later
         gc.collect()
@@ -780,7 +799,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
                 files that are large undifferentiated blocks of text, this
                 splitting fails.
                 <p>You can <b>work around the problem</b> by either increasing the
-                maximum split size under EPUB Output in the conversion dialog,
+                maximum split size under <i>EPUB output</i> in the conversion dialog,
                 or by turning on Heuristic Processing, also in the conversion
                 dialog. Note that if you make the maximum split size too large,
                 your e-book reader may have trouble with the EPUB.
@@ -906,6 +925,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
     def shutdown(self, write_settings=True):
         self.shutting_down = True
         self.show_shutdown_message()
+        self.server_change_notification_timer.stop()
 
         from calibre.customize.ui import has_library_closed_plugins
         if has_library_closed_plugins():
