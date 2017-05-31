@@ -47,7 +47,7 @@ def create_msg_label(self):
     f.um_label = la = QLabel(_(
         "<p>You can also perform other kinds of advanced searches, for example checking"
         ' for books that have no covers, combining multiple search expression using Boolean'
-        ' operators and so on. See the <a href=\"%s\">The search interface</a> for more information.'
+        ' operators and so on. See <a href=\"%s\">The search interface</a> for more information.'
     ) % localize_user_manual_link('https://manual.calibre-ebook.com/gui.html#the-search-interface'))
     la.setMinimumSize(QSize(150, 0))
     la.setWordWrap(True)
@@ -142,6 +142,8 @@ def create_simple_tab(self, db):
     self.general_combo = QComboBox(w)
     self.general_combo.addItems(searchables)
     self.box_last_values = copy.deepcopy(box_values)
+    self.general_box = le = QLineEdit(self)
+    l.addRow(self.general_combo, le)
     if self.box_last_values:
         for k,v in self.box_last_values.items():
             if k == 'general_index':
@@ -149,8 +151,6 @@ def create_simple_tab(self, db):
             getattr(self, k).setText(v)
         self.general_combo.setCurrentIndex(
                 self.general_combo.findText(self.box_last_values['general_index']))
-    self.general_box = le = QLineEdit(self)
-    l.addRow(self.general_combo, le)
 
 
 def create_date_tab(self, db):

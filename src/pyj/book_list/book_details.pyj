@@ -85,9 +85,9 @@ def on_fmt_click(ev):
         parent.appendChild(E.div(
             E.div(_('What would you like to do with the {} format?').format(fmt)),
             E.div(class_='button-box',
-                create_button(_('Read {}').format(fmt), 'book', action.bind(None, read_format)),
+                create_button(_('Read'), 'book', action.bind(None, read_format)),
                 '\xa0',
-                create_button(_('Download {}').format(fmt), 'cloud-download', action.bind(None, download_format)),
+                create_button(_('Download'), 'cloud-download', action.bind(None, download_format)),
             )
         ))
     )
@@ -249,9 +249,10 @@ def render_metadata(mi, table, book_id):  # {{{
                 ival = 1.0
             ival = fmt_sidx(ival, use_roman=interface_data.use_roman_numerals_for_series_number)
             table.appendChild(E.tr(E.td(name + ':'), E.td()))
-            table.lastChild.lastChild.appendChild(E.span(ival, _(' of '), E.a(
-                href=href_for_search(field, val),
-                title=_('Click to see books with {0}: {1}').format(name, val), val)))
+            s = safe_set_inner_html(E.span(), _('{0} of <a>{1}</a>').format(ival, val))
+            s.lastChild.setAttribute('href', href_for_search(field, val))
+            s.lastChild.setAttribute('title', _('Click to see books with {0}: {1}').format(name, val))
+            table.lastChild.lastChild.appendChild(s)
 
     def process_field(field, fm):
         name = fm.name or field

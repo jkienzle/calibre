@@ -2,16 +2,27 @@
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2015, Kovid Goyal <kovid at kovidgoyal.net>
 
-from __future__ import (unicode_literals, division, absolute_import, print_function)
-import hashlib, random, zipfile, shutil, sys, cPickle
+from __future__ import absolute_import, division, print_function, unicode_literals
+
+import cPickle
+import hashlib
+import random
+import shutil
+import sys
+import zipfile
 from json import load as load_json_file
+from threading import Lock
 
 from calibre import as_unicode
 from calibre.customize.ui import available_input_formats
 from calibre.db.view import sanitize_sort_field_name
 from calibre.srv.ajax import search_result
-from calibre.srv.errors import HTTPNotFound, HTTPBadRequest, BookNotFound
-from calibre.srv.metadata import book_as_json, categories_as_json, icon_map, categories_settings
+from calibre.srv.errors import (
+    BookNotFound, HTTPBadRequest, HTTPForbidden, HTTPNotFound
+)
+from calibre.srv.metadata import (
+    book_as_json, categories_as_json, categories_settings, icon_map
+)
 from calibre.srv.routes import endpoint, json
 from calibre.srv.utils import get_library_data, get_use_roman
 from calibre.utils.config import prefs, tweaks
@@ -44,11 +55,21 @@ def auto_reload(ctx, rd):
     return str(max(0, auto_reload_port))
 
 
+@endpoint('/allow-console-print', cache_control='no-cache', auth_required=False)
+def allow_console_print(ctx, rd):
+    return 'y' if getattr(rd.opts, 'allow_console_print', False) else 'n'
+
+
+print_lock = Lock()
+
+
 @endpoint('/console-print', methods=('POST', ))
 def console_print(ctx, rd):
     if not getattr(rd.opts, 'allow_console_print', False):
-        raise HTTPNotFound('console printing is not allowed')
-    shutil.copyfileobj(rd.request_body_file, sys.stdout)
+        raise HTTPForbidden('console printing is not allowed')
+    with print_lock:
+        print(rd.remote_addr, end=' ')
+        shutil.copyfileobj(rd.request_body_file, sys.stdout)
     return ''
 
 
@@ -109,7 +130,6 @@ def basic_interface_data(ctx, rd):
         tweaks['gui_last_modified_display_format'],
         'use_roman_numerals_for_series_number': get_use_roman(),
         'translations': get_translations(),
-        'allow_console_print': getattr(rd.opts, 'allow_console_print', False),
         'icon_map': icon_map(),
         'icon_path': ctx.url_for('/icon', which=''),
     }

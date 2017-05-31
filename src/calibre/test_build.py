@@ -44,6 +44,20 @@ class BuildTest(unittest.TestCase):
         import regex
         self.assertEqual(regex.findall(r'(?i)(a)(b)', 'ab cd AB 1a1b'), [('a', 'b'), ('A', 'B')])
 
+    def test_chardet(self):
+        from chardet import detect
+        raw = 'mūsi Füße'.encode('utf-8')
+        data = detect(raw)
+        self.assertEqual(data['encoding'], 'utf-8')
+        self.assertGreater(data['confidence'], 0.5)
+        # The following is used by html5lib
+        from chardet.universaldetector import UniversalDetector
+        detector = UniversalDetector()
+        self.assertTrue(hasattr(detector, 'done'))
+        detector.feed(raw)
+        detector.close()
+        self.assertEqual(detector.result['encoding'], 'utf-8')
+
     def test_lzma(self):
         from lzma.xz import test_lzma2
         test_lzma2()
@@ -119,6 +133,7 @@ class BuildTest(unittest.TestCase):
         conn = apsw.Connection(':memory:')
         conn.close()
 
+    @unittest.skipIf('SKIP_QT_BUILD_TEST' in os.environ, 'Skipping Qt build test as it causes crashes in the macOS VM')
     def test_qt(self):
         from PyQt5.Qt import QImageReader, QNetworkAccessManager, QFontDatabase
         from calibre.utils.img import image_from_data, image_to_data, test

@@ -6,6 +6,10 @@ from ajax import encode_query
 from encodings import hexlify
 from book_list.theme import get_font_family
 
+
+is_ios = v'!!navigator.platform && /iPad|iPhone|iPod/.test(navigator.platform)'
+
+
 def debounce(func, wait, immediate=False):
     # Returns a function, that, as long as it continues to be invoked, will not
     # be triggered. The function will be called after it stops being called for
@@ -215,7 +219,7 @@ def simple_markup(html):
     div.textContent = html
     html = div.innerHTML
     return html.replace(/\uffff(\/?[a-z1-6]+)\uffff/g, '<$1>')
-simple_markup.allowed_tags = v"'b|i|br|h1|h2|h3|h4|h5|h6|div|em|strong|span'.split('|')"
+simple_markup.allowed_tags = v"'a|b|i|br|h1|h2|h3|h4|h5|h6|div|em|strong|span'.split('|')"
 
 
 def safe_set_inner_html(elem, html):

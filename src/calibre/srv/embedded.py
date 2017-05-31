@@ -8,7 +8,7 @@ import os
 from threading import Thread
 
 from calibre import as_unicode
-from calibre.constants import cache_dir
+from calibre.constants import cache_dir, is_running_from_develop
 from calibre.srv.bonjour import BonJour
 from calibre.srv.handler import Handler
 from calibre.srv.http_response import create_http_handler
@@ -46,10 +46,6 @@ class Server(object):
         self.opts = opts
         self.log, self.access_log = log, access_log
         self.handler.set_log(self.log)
-        _df = os.environ.get('CALIBRE_DEVELOP_FROM', None)
-        if _df and os.path.exists(_df):
-            from calibre.utils.rapydscript import compile_srv
-            compile_srv()
 
     @property
     def user_manager(self):
@@ -68,6 +64,7 @@ class Server(object):
                 self.loop.initialize_socket()
             except Exception as e:
                 self.loop = None
+                self.exception = e
                 if self.start_failure_callback is not None:
                     try:
                         self.start_failure_callback(as_unicode(e))
@@ -84,6 +81,18 @@ class Server(object):
     def serve_forever(self):
         self.exception = None
         from calibre.srv.content import reset_caches
+        try:
+            if is_running_from_develop:
+                from calibre.utils.rapydscript import compile_srv
+                compile_srv()
+        except BaseException as e:
+            self.exception = e
+            if self.start_failure_callback is not None:
+                try:
+                    self.start_failure_callback(as_unicode(e))
+                except Exception:
+                    pass
+            return
         if self.state_callback is not None:
             try:
                 self.state_callback(True)

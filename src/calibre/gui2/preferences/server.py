@@ -211,7 +211,7 @@ class MainTab(QWidget):  # {{{
         fl.addRow(options['port'].shortdoc + ':', sb)
         l.addSpacing(25)
         self.opt_auth = cb = QCheckBox(
-            _('Require username/password to access the content server')
+            _('Require &username and password to access the content server')
         )
         l.addWidget(cb)
         self.auth_desc = la = QLabel(self)
@@ -570,7 +570,7 @@ class User(QWidget):
         self.cpb = b = QPushButton(_('Change &password'))
         l.addWidget(b)
         b.clicked.connect(self.change_password)
-        self.ro_text = _('Allow {} to make changes (i.e. grant write access)?')
+        self.ro_text = _('Allow {} to make &changes (i.e. grant write access)?')
         self.rw = rw = QCheckBox(self)
         rw.setToolTip(
             _(
@@ -613,7 +613,7 @@ class User(QWidget):
             b = _('Change the blocked libraries')
         else:
             m = _('{} is currently allowed access to all libraries')
-            b = _('Restrict the libraries {} can access'.format(self.username))
+            b = _('Restrict the &libraries {} can access'.format(self.username))
         self.restrict_button.setText(b),
         self.access_label.setText(m.format(username))
 
@@ -745,7 +745,7 @@ class ConfigWidget(ConfigWidgetBase):
         m.show_logs.connect(self.view_server_logs)
         self.opt_autolaunch_server = m.opt_autolaunch_server
         self.users_tab = ua = Users(self)
-        t.addTab(ua, _('&User Accounts'))
+        t.addTab(ua, _('&User accounts'))
         self.advanced_tab = a = AdvancedTab(self)
         sa = QScrollArea(self)
         sa.setWidget(a), sa.setWidgetResizable(True)
@@ -798,6 +798,7 @@ class ConfigWidget(ConfigWidgetBase):
                     _('Failed to start content server'),
                     as_unicode(self.gui.content_server.exception)
                 ).exec_()
+                self.gui.content_server = None
                 return
             self.main_tab.update_button_state()
         finally:
@@ -872,7 +873,7 @@ class ConfigWidget(ConfigWidgetBase):
                     _(
                         'You have turned on the setting to require passwords to access'
                         ' the content server, but you have not created any user accounts.'
-                        ' Create at least one user account in the "User Accounts" tab to proceed.'
+                        ' Create at least one user account in the "User accounts" tab to proceed.'
                     ),
                     show=True
                 )
