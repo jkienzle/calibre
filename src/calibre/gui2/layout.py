@@ -7,7 +7,7 @@ __docformat__ = 'restructuredtext en'
 
 from functools import partial
 
-from PyQt5.Qt import (QIcon, Qt, QWidget, QSize,
+from PyQt5.Qt import (QIcon, Qt, QWidget, QSize, QFrame,
     pyqtSignal, QToolButton, QMenu, QAction, QCoreApplication,
     QObject, QVBoxLayout, QSizePolicy, QLabel, QHBoxLayout, QActionGroup)
 
@@ -179,11 +179,15 @@ class SearchBar(QWidget):  # {{{
         self._layout.setContentsMargins(0,5,0,0)
 
         x = QToolButton(self)
-        x.setText(_('Vi&rtual library'))
+        x.setCursor(Qt.PointingHandCursor)
+        x.setText(_('Virtual library'))
         x.setIcon(QIcon(I('lt.png')))
         x.setObjectName("virtual_library")
         x.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
         l.addWidget(x)
+        self.vl_sep = QFrame(self)
+        self.vl_sep.setFrameShape(QFrame.VLine)
+        l.addWidget(self.vl_sep)
         parent.virtual_library = x
 
         x = QToolButton(self)
@@ -201,6 +205,7 @@ class SearchBar(QWidget):  # {{{
         x.setSizePolicy(QSizePolicy.Minimum, QSizePolicy.Minimum)
 
         parent.advanced_search_button = x = QToolButton(self)
+        x.setCursor(Qt.PointingHandCursor)
         parent.advanced_search_toggle_action = ac = QAction(parent)
         parent.addAction(ac)
         parent.keyboard.register_shortcut('advanced search toggle',
@@ -221,19 +226,14 @@ class SearchBar(QWidget):  # {{{
 
         self.search_button = QToolButton()
         self.search_button.setToolButtonStyle(Qt.ToolButtonTextOnly)
-        self.search_button.setText(_('&Go!'))
+        self.search_button.setText(_('Go!'))
+        self.search_button.setCursor(Qt.PointingHandCursor)
         l.addWidget(self.search_button)
         self.search_button.setSizePolicy(QSizePolicy.Minimum,
                 QSizePolicy.Minimum)
         self.search_button.clicked.connect(parent.do_search_button)
         self.search_button.setToolTip(
             _('Do Quick Search (you can also press the Enter key)'))
-
-        x = parent.clear_button = QToolButton(self)
-        x.setIcon(QIcon(I('clear_left.png')))
-        x.setObjectName("clear_button")
-        l.addWidget(x)
-        x.setToolTip(_("Reset Quick Search"))
 
         x = parent.highlight_only_button = QToolButton(self)
         x.setIcon(QIcon(I('arrow-down.png')))
@@ -244,17 +244,28 @@ class SearchBar(QWidget):  # {{{
         x.setMinimumContentsLength(10)
         x.setObjectName("saved_search")
         l.addWidget(x)
+        x.setVisible(tweaks['show_saved_search_box'])
 
         x = parent.copy_search_button = QToolButton(self)
+        x.setCursor(Qt.PointingHandCursor)
         x.setIcon(QIcon(I("search_copy_saved.png")))
         x.setObjectName("copy_search_button")
         l.addWidget(x)
         x.setToolTip(_("Copy current search text (instead of search name)"))
+        x.setVisible(tweaks['show_saved_search_box'])
 
         x = parent.save_search_button = RightClickButton(self)
+        x.setCursor(Qt.PointingHandCursor)
         x.setIcon(QIcon(I("search_add_saved.png")))
         x.setObjectName("save_search_button")
         l.addWidget(x)
+        x.setVisible(tweaks['show_saved_search_box'])
+
+        x = parent.add_saved_search_button = RightClickButton(self)
+        x.setCursor(Qt.PointingHandCursor)
+        x.setIcon(QIcon(I("plus.png")))
+        l.addWidget(x)
+        x.setVisible(not tweaks['show_saved_search_box'])
 
 # }}}
 
@@ -282,8 +293,10 @@ class MainWindowMixin(object):  # {{{
         self.setContextMenuPolicy(Qt.NoContextMenu)
         self.centralwidget = QWidget(self)
         self.setCentralWidget(self.centralwidget)
-        self._central_widget_layout = QVBoxLayout()
-        self.centralwidget.setLayout(self._central_widget_layout)
+        self._central_widget_layout = l = QVBoxLayout(self.centralwidget)
+        m = l.contentsMargins()
+        m.setTop(0), m.setBottom(2)
+        l.setContentsMargins(m)
         self.resize(1012, 740)
         self.location_manager = LocationManager(self)
 
@@ -304,8 +317,6 @@ class MainWindowMixin(object):  # {{{
                 self.setUnifiedTitleAndToolBarOnMac(True)
             except AttributeError:
                 pass  # PyQt5 seems to be missing this property
-
-        l = self.centralwidget.layout()
 
         # And now, start adding the real widgets
         l.addWidget(self.search_bar)

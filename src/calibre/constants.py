@@ -6,7 +6,7 @@ from future_builtins import map
 import sys, locale, codecs, os, importlib, collections
 
 __appname__   = u'calibre'
-numeric_version = (2, 99, 9)
+numeric_version = (2, 99, 11)
 __version__   = u'.'.join(map(unicode, numeric_version))
 __author__    = u"Kovid Goyal <kovid@kovidgoyal.net>"
 
@@ -167,7 +167,6 @@ class Plugins(collections.Mapping):
                 'matcher',
                 'tokenizer',
                 'certgen',
-                'dukpy',
                 'lzma_binding',
             ]
         if iswindows:

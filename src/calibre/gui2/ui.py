@@ -447,7 +447,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
                     'log will be displayed automatically.')%self.gui_debug, show=True)
 
     def esc(self, *args):
-        self.clear_button.click()
+        self.search.clear()
 
     def shift_esc(self):
         self.current_view().setFocus(Qt.OtherFocusReason)
@@ -890,6 +890,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
             config.set('main_window_geometry', self.saveGeometry())
             dynamic.set('sort_history', self.library_view.model().sort_history)
             self.save_layout_state()
+            self.stack.tb_widget.save_state()
 
     def quit(self, checked=True, restart=False, debug_on_restart=False,
             confirm_quit=True):

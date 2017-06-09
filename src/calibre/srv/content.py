@@ -156,6 +156,17 @@ def cover(ctx, rd, library_id, db, book_id, width=None, height=None):
     return create_file_copy(ctx, rd, prefix, library_id, book_id, 'jpg', mtime, copy_func)
 
 
+def book_filename(rd, book_id, mi, fmt):
+    au = authors_to_string(mi.authors or [_('Unknown')])
+    title = mi.title or _('Unknown')
+    ext = (fmt or '').lower()
+    if ext == 'kepub' and 'Kobo Touch' in rd.inheaders.get('User-Agent', ''):
+        ext = 'kepub.epub'
+    fname = '%s - %s_%s.%s' % (title[:30], au[:30], book_id, ext)
+    fname = ascii_filename(fname).replace('"', '_')
+    return fname
+
+
 def book_fmt(ctx, rd, library_id, db, book_id, fmt):
     mdata = db.format_metadata(book_id, fmt)
     if not mdata:
@@ -186,14 +197,7 @@ def book_fmt(ctx, rd, library_id, db, book_id, fmt):
             set_metadata(dest, mi, fmt)
             dest.seek(0)
 
-    au = authors_to_string(mi.authors or [_('Unknown')])
-    title = mi.title or _('Unknown')
-    ext = fmt
-    if ext == 'kepub' and 'Kobo Touch' in rd.inheaders.get('User-Agent', ''):
-        ext = 'kepub.epub'
-    fname = '%s - %s_%s.%s' % (title[:30], au[:30], book_id, ext)
-    fname = ascii_filename(fname).replace('"', '_')
-    rd.outheaders['Content-Disposition'] = 'attachment; filename="%s"' % fname
+    rd.outheaders['Content-Disposition'] = 'attachment; filename="%s"' % book_filename(rd, book_id, mi, fmt)
 
     return create_file_copy(ctx, rd, 'fmt', library_id, book_id, fmt, mtime, copy_func, extra_etag_data=extra_etag_data)
 # }}}
@@ -274,7 +278,7 @@ def icon(ctx, rd, which):
         return ans
 
 
-@endpoint('/get/{what}/{book_id}/{library_id=None}')
+@endpoint('/get/{what}/{book_id}/{library_id=None}', android_workaround=True)
 def get(ctx, rd, what, book_id, library_id):
     book_id, rest = book_id.partition('_')[::2]
     try:

@@ -353,6 +353,8 @@ sony_collection_sorting_rules = []
 add_new_book_tags_when_importing_books = False
 
 #: Set custom metadata fields that the Content server will or will not display.
+# Controls what fields are displayed when clicking the "Search" button in the
+# browser to search your calibre library.
 # content_server_will_display is a list of custom fields to be displayed.
 # content_server_wont_display is a list of custom fields not to be displayed.
 # wont_display has priority over will_display.
@@ -557,3 +559,9 @@ content_server_thumbnail_compression_quality = 75
 # Examples:
 #    cover_drop_exclude = {'tiff', 'webp'}
 cover_drop_exclude = ()
+
+#: Show the Saved searches box in the search bar
+# In newer version of calibre, only a button that allows you to add a new Saved
+# search is shown in the search bar. If you would like to have the old
+# Saved searches box with its two buttons back, set this tweak to True.
+show_saved_search_box = False

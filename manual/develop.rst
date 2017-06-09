@@ -94,6 +94,8 @@ always available as an `archive <https://calibre-ebook.com/dist/src>`_.
 To update a branch to the latest code, use the command::
 
     git pull --no-edit
+    
+You can also browse the code at `GitHub <https://github.com/kovidgoyal/calibre>`_.
 
 Submitting your changes to be included
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -122,7 +124,7 @@ commits::
 Be careful to not include merges when using ``HEAD~n``.
 
 If you plan to do a lot of development on calibre, then the best method is to create a
-`GitHub <https://github.com>`_ account. Below is a basic guide to setting up
+`GitHub <https://github.com>`__ account. Below is a basic guide to setting up
 your own fork of calibre in a way that will allow you to submit pull requests
 for inclusion into the main calibre repository:
 

@@ -396,7 +396,7 @@ class BasicNewsRecipe(Recipe):
     # See the built-in recipes for examples of these settings.
 
     def short_title(self):
-        return self.title
+        return force_unicode(self.title, preferred_encoding)
 
     def is_link_wanted(self, url, tag):
         '''
