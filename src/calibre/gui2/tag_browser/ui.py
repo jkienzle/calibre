@@ -12,7 +12,7 @@ from functools import partial
 
 from PyQt5.Qt import (
     Qt, QIcon, QWidget, QHBoxLayout, QVBoxLayout, QToolButton, QLabel, QFrame,
-    QTimer, QMenu, QActionGroup, QAction)
+    QTimer, QMenu, QActionGroup, QAction, QSizePolicy)
 
 from calibre.gui2 import error_dialog, question_dialog, gprefs
 from calibre.gui2.widgets import HistoryLineEdit
@@ -341,21 +341,51 @@ class TagBrowserMixin(object):  # {{{
 # }}}
 
 
-class TagBrowserWidget(QWidget):  # {{{
+class FindBox(HistoryLineEdit):  # {{{
+
+    def keyPressEvent(self, event):
+        k = event.key()
+        if k not in (Qt.Key_Up, Qt.Key_Down):
+            return HistoryLineEdit.keyPressEvent(self, event)
+        self.blockSignals(True)
+        if k == Qt.Key_Down and self.currentIndex() == 0 and not self.lineEdit().text():
+            self.setCurrentIndex(1), self.setCurrentIndex(0)
+            event.accept()
+        else:
+            HistoryLineEdit.keyPressEvent(self, event)
+        self.blockSignals(False)
+# }}}
+
+
+class TagBrowserBar(QWidget):  # {{{
 
     def __init__(self, parent):
         QWidget.__init__(self, parent)
-        self.parent = parent
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0,0,0,0)
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        parent = parent.parent()
+        self.l = l = QHBoxLayout(self)
+        l.setContentsMargins(0, 0, 0, 0)
+        self.alter_tb = parent.alter_tb = b = QToolButton(self)
+        b.setAutoRaise(True)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setPopupMode(b.InstantPopup)
+        b.setToolTip(textwrap.fill(_(
+            'Change how the Tag browser works, such as,'
+            ' how it is sorted, what happens when you click'
+            ' items, etc.'
+        )))
+        b.setIcon(QIcon(I('config.png')))
+        b.m = QMenu()
+        b.setMenu(b.m)
 
-        # Set up the find box & button
-        search_layout = QHBoxLayout()
-        search_layout.setAlignment(Qt.AlignLeft | Qt.AlignBottom)
-        search_layout.setContentsMargins(0, 0, 0, 0)
-        self.item_search = HistoryLineEdit(parent)
+        self.label = la = QLabel(self)
+        la.setText(_('Tag browser'))
+
+        self.item_search = FindBox(parent)
         self.item_search.setMinimumContentsLength(5)
         self.item_search.setSizeAdjustPolicy(self.item_search.AdjustToMinimumContentsLengthWithIcon)
+        self.item_search.initialize('tag_browser_search')
+        self.item_search.completer().setCaseSensitivity(Qt.CaseSensitive)
         self.item_search.setToolTip(_(
         'Search for items. This is a "contains" search; items containing the\n'
         'text anywhere in the name will be found. You can limit the search\n'
@@ -363,52 +393,92 @@ class TagBrowserWidget(QWidget):  # {{{
         'tags:foo will find foo in any tag, but not in authors etc. Entering\n'
         '*foo will filter all categories at once, showing only those items\n'
         'containing the text "foo"'))
-        search_layout.addWidget(self.item_search)
         ac = QAction(parent)
         parent.addAction(ac)
         parent.keyboard.register_shortcut('tag browser find box',
-                _('Find item'), default_keys=(),
+                _('Find next match'), default_keys=(),
                 action=ac, group=_('Tag browser'))
         ac.triggered.connect(self.set_focus_to_find_box)
 
         self.search_button = QToolButton()
         self.search_button.setCursor(Qt.PointingHandCursor)
-        self.search_button.setText(_('Find'))
+        self.search_button.setIcon(QIcon(I('search.png')))
         self.search_button.setToolTip(_('Find the first/next matching item'))
-        search_layout.addWidget(self.search_button)
         ac = QAction(parent)
         parent.addAction(ac)
         parent.keyboard.register_shortcut('tag browser find button',
-                _('Find button'), default_keys=(),
+                _('Find in Tag browser'), default_keys=(),
                 action=ac, group=_('Tag browser'))
         ac.triggered.connect(self.search_button.click)
 
-        self.expand_button = QToolButton()
-        self.expand_button.setCursor(Qt.PointingHandCursor)
-        self.expand_button.setText('▸')
-        self.expand_button.setToolTip(_('Collapse all categories'))
-        search_layout.insertWidget(0, self.expand_button)
-        search_layout.setStretch(0, 10)
-        search_layout.setStretch(1, 1)
-        search_layout.setStretch(2, 1)
-        ac = QAction(parent)
-        parent.addAction(ac)
-        parent.keyboard.register_shortcut('tag browser collapse all',
-                _('Collapse all'), default_keys=(),
-                action=ac, group=_('Tag browser'))
-        ac.triggered.connect(self.expand_button.clicked)
+        self.toggle_search_button = b = QToolButton(self)
+        le = self.item_search.lineEdit()
+        le.addAction(QIcon(I('window-close.png')), le.LeadingPosition).triggered.connect(self.close_find_box)
+        b.setCursor(Qt.PointingHandCursor)
+        b.setIcon(QIcon(I('search.png')))
+        b.setCheckable(True)
+        b.setChecked(gprefs.get('tag browser search box visible', False))
+        b.setToolTip(_('Search for items in the Tag browser'))
+        b.setAutoRaise(True)
+        b.toggled.connect(self.update_searchbar_state)
+        self.update_searchbar_state()
+
+    def close_find_box(self):
+        self.item_search.setCurrentIndex(0)
+        self.item_search.setCurrentText('')
+        self.toggle_search_button.click()
+
+    def set_focus_to_find_box(self):
+        self.toggle_search_button.setChecked(True)
+        self.item_search.setFocus()
+        self.item_search.lineEdit().selectAll()
+
+    def update_searchbar_state(self):
+        find_shown = self.toggle_search_button.isChecked()
+        self.toggle_search_button.setVisible(not find_shown)
+        self.label.setVisible(not find_shown)
+        self.search_button.setVisible(find_shown)
+        self.item_search.setVisible(find_shown)
+        l = self.layout()
+        items = [l.itemAt(i) for i in range(l.count())]
+        tuple(map(l.removeItem, items))
+        if find_shown:
+            l.addWidget(self.alter_tb)
+            l.addWidget(self.item_search, 10)
+            l.addWidget(self.search_button)
+            self.item_search.setFocus(Qt.OtherFocusReason)
+        else:
+            l.addWidget(self.alter_tb)
+            l.addStretch(10)
+            l.addWidget(self.label)
+            l.addStretch(10)
+            l.addWidget(self.toggle_search_button)
+# }}}
+
+
+class TagBrowserWidget(QWidget):  # {{{
+
+    def __init__(self, parent):
+        QWidget.__init__(self, parent)
+        self._parent = parent
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins(0,0,0,0)
+
+        # Set up the find box & button
+        self.tb_bar = tbb = TagBrowserBar(self)
+        self.alter_tb, self.item_search, self.search_button = tbb.alter_tb, tbb.item_search, tbb.search_button
+        self.toggle_search_button = tbb.toggle_search_button
+        self._layout.addWidget(tbb)
 
         self.current_find_position = None
         self.search_button.clicked.connect(self.find)
-        self.item_search.initialize('tag_browser_search')
         self.item_search.lineEdit().returnPressed.connect(self.do_find)
         self.item_search.lineEdit().textEdited.connect(self.find_text_changed)
         self.item_search.activated[str].connect(self.do_find)
-        self.item_search.completer().setCaseSensitivity(Qt.CaseSensitive)
 
+        # The tags view
         parent.tags_view = TagsView(parent)
         self.tags_view = parent.tags_view
-        self.expand_button.clicked.connect(self.tags_view.collapseAll)
         self._layout.addWidget(parent.tags_view)
 
         # Now the floating 'not found' box
@@ -426,34 +496,19 @@ class TagBrowserWidget(QWidget):  # {{{
         self.not_found_label_timer.setSingleShot(True)
         self.not_found_label_timer.timeout.connect(self.not_found_label_timer_event,
                                                    type=Qt.QueuedConnection)
-        self.toggle_search_button = b = QToolButton(self)
-        b.setCursor(Qt.PointingHandCursor)
-        b.setIcon(QIcon(I('search.png')))
-        b.setCheckable(True)
-        search_layout.insertWidget(1, b)
-        b.setChecked(gprefs.get('tag browser search box visible', False))
-        b.setToolTip(_('Search for items in the Tag browser'))
-        b.toggled.connect(self.update_search_state)
-        parent.alter_tb = self.alter_tb = l = QToolButton(parent)
-        l.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
-        l.setText(_('Alter Tag browser'))
-        l.setCursor(Qt.PointingHandCursor)
-        l.setPopupMode(l.InstantPopup)
-        l.setToolTip(textwrap.fill(_(
-            'Change how the Tag browser works, such as,'
-            ' how it is sorted, what happens when you click'
-            ' items, etc.'
-        )))
-        l.setIcon(QIcon(I('config.png')))
-        l.m = QMenu()
-        l.setMenu(l.m)
-        self._layout.addLayout(search_layout)
-        search_layout.insertWidget(0, l)
-        self.update_search_state()
+        # The Alter Tag Browser button
+        l = self.alter_tb
+        self.collapse_all_action = ac = QAction(parent)
+        parent.addAction(ac)
+        parent.keyboard.register_shortcut('tag browser collapse all',
+                _('Collapse all'), default_keys=(),
+                action=ac, group=_('Tag browser'))
+        ac.triggered.connect(lambda : self.tags_view.collapseAll())
+
         ac = QAction(parent)
         parent.addAction(ac)
         parent.keyboard.register_shortcut('tag browser alter',
-                _('Alter Tag browser'), default_keys=(),
+                _('Change Tag browser'), default_keys=(),
                 action=ac, group=_('Tag browser'))
         ac.triggered.connect(l.showMenu)
 
@@ -511,14 +566,6 @@ class TagBrowserWidget(QWidget):  # {{{
     def save_state(self):
         gprefs.set('tag browser search box visible', self.toggle_search_button.isChecked())
 
-    def update_search_state(self):
-        shown = self.toggle_search_button.isChecked()
-        self.search_button.setVisible(shown)
-        self.item_search.setVisible(shown)
-        self.alter_tb.setToolButtonStyle(Qt.ToolButtonIconOnly if shown else Qt.ToolButtonTextBesideIcon)
-        if shown:
-            self.item_search.setFocus(Qt.OtherFocusReason)
-
     def toggle_item(self):
         self.tags_view.toggle_current_index()
 
@@ -529,8 +576,7 @@ class TagBrowserWidget(QWidget):  # {{{
         self.current_find_position = None
 
     def set_focus_to_find_box(self):
-        self.item_search.setFocus()
-        self.item_search.lineEdit().selectAll()
+        self.tb_bar.set_focus_to_find_box()
 
     def do_find(self, str=None):
         self.current_find_position = None
@@ -561,7 +607,7 @@ class TagBrowserWidget(QWidget):  # {{{
         key = None
         colon = txt.rfind(':') if len(txt) > 2 else 0
         if colon > 0:
-            key = self.parent.library_view.model().db.\
+            key = self._parent.library_view.model().db.\
                         field_metadata.search_term_to_field_key(txt[:colon])
             txt = txt[colon+1:]
 

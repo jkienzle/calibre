@@ -8,14 +8,14 @@ __docformat__ = 'restructuredtext en'
 import functools
 
 from PyQt5.Qt import (Qt, QApplication, QStackedWidget, QMenu, QTimer,
-        QSize, QSizePolicy, QStatusBar, QLabel, QFont, QAction, QTabBar,
-        QVBoxLayout, QWidget, QSplitter)
+        QSizePolicy, QStatusBar, QLabel, QFont, QAction, QTabBar, QStyle,
+        QVBoxLayout, QWidget, QSplitter, QToolButton, QIcon, QPainter, QStyleOption)
 
 from calibre.utils.config import prefs
-from calibre.utils.icu import sort_key
+from calibre.utils.icu import sort_key, primary_sort_key
 from calibre.constants import (isosx, __appname__, preferred_encoding,
     get_version)
-from calibre.gui2 import config, is_widescreen, gprefs, error_dialog
+from calibre.gui2 import config, is_widescreen, gprefs, error_dialog, open_url
 from calibre.gui2.library.views import BooksView, DeviceBooksView
 from calibre.gui2.library.alternate_views import GridView
 from calibre.gui2.widgets import Splitter, LayoutButton
@@ -210,6 +210,44 @@ class UpdateLabel(QLabel):  # {{{
 # }}}
 
 
+class VersionLabel(QLabel):  # {{{
+
+    def __init__(self, parent):
+        QLabel.__init__(self, parent)
+        self.mouse_over = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(_('See what\'s new in this calibre release'))
+
+    def mouseReleaseEvent(self, ev):
+        open_url('https://calibre-ebook.com/whats-new')
+        ev.accept()
+        return QLabel.mouseReleaseEvent(self, ev)
+
+    def event(self, ev):
+        m = None
+        et = ev.type()
+        if et == ev.Enter:
+            m = True
+        elif et == ev.Leave:
+            m = False
+        if m is not None and m != self.mouse_over:
+            self.mouse_over = m
+            self.update()
+        return QLabel.event(self, ev)
+
+    def paintEvent(self, ev):
+        if self.mouse_over:
+            p = QPainter(self)
+            tool = QStyleOption()
+            tool.rect = self.rect()
+            tool.state = QStyle.State_Raised | QStyle.State_Active | QStyle.State_MouseOver
+            s = self.style()
+            s.drawPrimitive(QStyle.PE_PanelButtonTool, tool, p, self)
+            p.end()
+        return QLabel.paintEvent(self, ev)
+# }}}
+
+
 class StatusBar(QStatusBar):  # {{{
 
     def __init__(self, parent=None):
@@ -224,7 +262,7 @@ class StatusBar(QStatusBar):  # {{{
         self._font = QFont()
         self._font.setBold(True)
         self.setFont(self._font)
-        self.defmsg = QLabel('')
+        self.defmsg = VersionLabel(self)
         self.defmsg.setFont(self._font)
         self.addWidget(self.defmsg)
         self.set_label()
@@ -320,7 +358,7 @@ class GridViewButton(LayoutButton):  # {{{
 class SearchBarButton(LayoutButton):  # {{{
 
     def __init__(self, gui):
-        sc = 'Shift+Alt+/'
+        sc = 'Shift+Alt+F'
         LayoutButton.__init__(self, I('search.png'), _('Search bar'), parent=gui, shortcut=sc)
         self.set_state_to_show()
         self.action_toggle = QAction(self.icon(), _('Toggle') + ' ' + self.label, self)
@@ -340,8 +378,7 @@ class SearchBarButton(LayoutButton):  # {{{
         gprefs['search bar visible'] = bool(self.isChecked())
 
     def restore_state(self):
-        if gprefs.get('search bar visible', True):
-            self.toggle()
+        self.setChecked(gprefs.get('search bar visible', True))
 
 
 # }}}
@@ -535,21 +572,39 @@ class LayoutMixin(object):  # {{{
         self.grid_view_button.toggled.connect(self.toggle_grid_view)
         self.search_bar_button.toggled.connect(self.toggle_search_bar)
 
+        self.layout_buttons = []
         for x in button_order:
             if hasattr(self, x + '_splitter'):
                 button = getattr(self, x + '_splitter').button
             else:
                 button = self.grid_view_button if x == 'gv' else self.search_bar_button
-            button.setIconSize(QSize(24, 24))
+            self.layout_buttons.append(button)
+            button.setVisible(False)
             if isosx and stylename != u'Calibre':
                 button.setStyleSheet('''
                         QToolButton { background: none; border:none; padding: 0px; }
                         QToolButton:checked { background: rgba(0, 0, 0, 25%); }
                 ''')
             self.status_bar.addPermanentWidget(button)
+        self.layout_button = b = QToolButton(self)
+        b.setAutoRaise(True), b.setCursor(Qt.PointingHandCursor)
+        b.setPopupMode(b.InstantPopup)
+        b.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        b.setText(_('Layout')), b.setIcon(QIcon(I('config.png')))
+        b.setMenu(QMenu()), b.menu().aboutToShow.connect(self.populate_layout_menu)
+        b.setToolTip(_(
+            'Show and hide various parts of the calibre main window'))
+        self.status_bar.addPermanentWidget(b)
         self.status_bar.addPermanentWidget(self.jobs_button)
         self.setStatusBar(self.status_bar)
         self.status_bar.update_label.linkActivated.connect(self.update_link_clicked)
+
+    def populate_layout_menu(self):
+        m = self.layout_button.menu()
+        m.clear()
+        buttons = sorted(self.layout_buttons, key=lambda b:primary_sort_key(b.label))
+        for b in buttons:
+            m.addAction(b.icon(), b.text(), b.click)
 
     def finalize_layout(self):
         self.status_bar.initialize(self.system_tray_icon)
@@ -595,6 +650,8 @@ class LayoutMixin(object):  # {{{
 
     def toggle_grid_view(self, show):
         self.library_view.alternate_views.show_view('grid' if show else None)
+        self.sort_sep.setVisible(show)
+        self.sort_button.setVisible(show)
 
     def toggle_search_bar(self, show):
         self.search_bar.setVisible(show)
