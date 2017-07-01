@@ -20,6 +20,45 @@
 #   new recipes:
 #     - title:
 
+- version: 3.2.1
+  date: 2017-06-29
+
+  new features:
+    - title: "Server: Allow logged in users to change their passwords by clicking the user icon in the top right corner of the home screen."
+      tickets: [1700631]
+
+    - title: "macOS: Add headless support: calibre command-line utilities can now run on macOS machines without a screen"
+
+  bug fixes:
+    - title: "3.2.1 has a fix for an issue that broke mouse wheel scrolling in the cover grid view"
+
+    - title: "Viewer: Fix incorrect display of pages in paged mode for books that override the box-sizing CSS property on the <body> element."
+      tickets: [1700109]
+
+    - title: "Server: Fix timeout errors when using SSL (particularly common when running the server on windows)"
+
+    - title: "Linux: Fix slow mouse wheel scrolling in Cover grid because of Qt bug"
+
+    - title: "Blacklist the iOS Reader applications and Marvin XD plugins as they were preventing calibre from starting up and they have not worked in a long time anyway, since Apple restricted USB access to their iOS devices"
+
+    - title: "Fix for in-program restart not working on some Windows 10 Home machines"
+
+    - title: "EPUB3 metadata: Fix handling of <dc:creator> elements with multiple roles."
+      tickets: [1699918]
+
+    - title: "Server: Disallow client initiated SSL renegotiation"
+
+    - title: "Windows: Try to prevent windows from showing the annoying 'no disk in drive' error messages at calibre startup if one of the calibre libraries is on a removable disk that is missing from the system"
+      tickets: [1701399]
+
+  improved recipes:
+    - The Australian
+    - Wired Daily
+
+  new recipes:
+    - title: Kitekinto
+      author: pofa
+
 - version: 3.1.0
   date: 2017-06-23
 
@@ -688,7 +727,7 @@
     - title: "Fix a regression that broke the icon theme creation tool in the previous release"
       tickets: [1643228]
 
-    - title: "Fix insert character dialog not reflowing characters on resize. Also only allow the search bar in the dialog to get input focus"
+    - title: "Fix insert character dialog not reflowing characters on resize. Also only allow the Search bar in the dialog to get input focus"
 
   improved recipes:
     - Dilbert
@@ -1583,7 +1622,7 @@
   date: 2016-02-12
 
   new features:
-    - title: "Add an action to the context menu for the search bar to paste and instantly execute the search"
+    - title: "Add an action to the context menu for the Search bar to paste and instantly execute the search"
       tickets: [1541286]
 
     - title: "When adding multiple books from a single directory, added the books in order of the last modified time of the book files"
