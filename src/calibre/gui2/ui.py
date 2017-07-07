@@ -26,7 +26,7 @@ from calibre.constants import (
 from calibre.utils.config import prefs, dynamic
 from calibre.utils.ipc.pool import Pool
 from calibre.db.legacy import LibraryDatabase
-from calibre.customize.ui import interface_actions, available_store_plugins
+from calibre.customize.ui import interface_actions, available_store_plugins, find_plugin
 from calibre.gui2 import (error_dialog, GetMetadata, open_url,
         gprefs, max_available_height, config, info_dialog, Dispatcher,
         question_dialog, warning_dialog)
@@ -426,6 +426,13 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         if self.system_tray_icon is not None and self.system_tray_icon.isVisible() and opts.start_in_tray:
             self.hide_windows()
         self.auto_adder = AutoAdder(gprefs['auto_add_path'], self)
+
+        # Now that the gui is initialized we can restore the quickview state
+        # The same thing will be true for any action-based operation with a
+        # layout button
+        qv = find_plugin('Show Quickview')
+        if qv is not None:
+            qv.actual_plugin_.qv_button.restore_state()
         self.save_layout_state()
 
         # Collect cycles now
