@@ -200,7 +200,7 @@ class Quickview(QDialog, Ui_Quickview):
         self.view.model().new_bookdisplay_data.connect(self.book_was_changed)
 
         self.close_button.setDefault(False)
-        self.close_button_tooltip = _('The Quickview shortcut ({0}) shows/hides the Quickview pane')
+        self.close_button_tooltip = _('The Quickview shortcut ({0}) shows/hides the Quickview panel')
         self.search_button_tooltip = _('Search in the library view for the currently highlighted selection')
         self.search_button.setToolTip(self.search_button_tooltip)
         if self.is_pane:
@@ -218,6 +218,7 @@ class Quickview(QDialog, Ui_Quickview):
 
         self.books_table.horizontalHeader().sectionResized.connect(self.section_resized)
         self.dock_button.clicked.connect(self.show_as_pane_changed)
+        self.gui.search.cleared.connect(self.indicate_no_items)
 
     def add_columns_to_widget(self):
         '''
@@ -226,6 +227,7 @@ class Quickview(QDialog, Ui_Quickview):
         '''
         self.column_order = [x[0] for x in get_qv_field_list(self.fm) if x[1]]
         self.books_table.clear()
+        self.books_table.setRowCount(0)
         self.books_table.setColumnCount(len(self.column_order))
         for idx,col in enumerate(self.column_order):
             t = QTableWidgetItem(self.fm[col]['name'])
@@ -356,13 +358,16 @@ class Quickview(QDialog, Ui_Quickview):
         if self.lock_qv.isChecked():
             return
 
-        bv_row = idx.row()
-        self.current_column = idx.column()
-        key = self.view.column_map[self.current_column]
-        book_id = self.view.model().id(bv_row)
-        if self.current_book_id == book_id and self.current_key == key:
-            return
-        self._refresh(book_id, key)
+        try:
+            bv_row = idx.row()
+            self.current_column = idx.column()
+            key = self.view.column_map[self.current_column]
+            book_id = self.view.model().id(bv_row)
+            if self.current_book_id == book_id and self.current_key == key:
+                return
+            self._refresh(book_id, key)
+        except:
+            self.indicate_no_items()
 
     def _refresh(self, book_id, key):
         '''
@@ -415,6 +420,7 @@ class Quickview(QDialog, Ui_Quickview):
     def indicate_no_items(self):
         self.no_valid_items = True
         self.items.clear()
+        self.add_columns_to_widget()
         self.items.addItem(QListWidgetItem(_('**No items found**')))
         self.books_label.setText(_('Click in a column  in the library view '
                                    'to see the information for that book'))
@@ -536,7 +542,7 @@ class Quickview(QDialog, Ui_Quickview):
         if modifiers in (Qt.CTRL, Qt.SHIFT):
             self.view.select_rows([book_id])
             em = find_plugin('Edit Metadata')
-            if em is not None:
+            if em and em.actual_plugin_:
                 em.actual_plugin_.edit_metadata(None)
         else:
             self.view.select_cell(self.db.data.id_to_index(book_id),

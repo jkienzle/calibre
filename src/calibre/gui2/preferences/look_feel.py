@@ -36,7 +36,7 @@ from calibre.gui2.dialogs.quickview import get_qv_field_list
 from calibre.gui2.preferences.coloring import EditRules
 from calibre.gui2.library.alternate_views import auto_height, CM_TO_INCH
 from calibre.gui2.widgets2 import Dialog
-from calibre.customize.ui import find_plugin
+from calibre.gui2.actions.show_quickview import get_quickview_action_plugin
 
 
 class BusyCursor(object):
@@ -64,16 +64,19 @@ class DefaultAuthorLink(QWidget):  # {{{
         c.setMinimumContentsLength(30)
         for text, data in [
                 (_('Search for the author on Goodreads'), 'search-goodreads'),
+                (_('Search for the author on Amazon'), 'search-amzn'),
                 (_('Search for the author in your calibre library'), 'search-calibre'),
                 (_('Search for the author on Wikipedia'), 'search-wikipedia'),
                 (_('Search for the author on Google Books'), 'search-google'),
                 (_('Search for the book on Goodreads'), 'search-goodreads-book'),
+                (_('Search for the book on Amazon'), 'search-amzn-book'),
                 (_('Search for the book on Google Books'), 'search-google-book'),
                 (_('Use a custom search URL'), 'url'),
         ]:
             c.addItem(text, data)
         l.addRow(_('Clicking on &author names should:'), c)
         self.custom_url = u = QLineEdit(self)
+        u.textChanged.connect(self.changed_signal)
         u.setPlaceholderText(_('Enter the URL'))
         c.currentIndexChanged.connect(self.current_changed)
         l.addRow(u)
@@ -760,9 +763,9 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             getattr(gui, view + '_view').set_row_header_visibility()
         gui.library_view.refresh_row_sizing()
         gui.grid_view.refresh_settings()
-        qv = find_plugin('Show Quickview')
-        if qv is not None:
-            qv.actual_plugin_.refill_quickview()
+        qv = get_quickview_action_plugin()
+        if qv:
+            qv.refill_quickview()
 
 
 if __name__ == '__main__':
