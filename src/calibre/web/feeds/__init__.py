@@ -1,5 +1,6 @@
 #!/usr/bin/env  python2
 
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 '''
@@ -19,7 +20,9 @@ class Article(object):
         from lxml import html
         self.downloaded = False
         self.id = id
-        title = force_unicode(title or _('Unknown'), 'utf-8')
+        if not title or not isinstance(title, basestring):
+            title = _('Unknown')
+        title = force_unicode(title, 'utf-8')
         self._title = clean_xml_chars(title).strip()
         try:
             self._title = re.sub(r'&(\S+?);',
@@ -41,8 +44,8 @@ class Article(object):
                 s = html.fragment_fromstring(summary, create_parent=True)
                 summary = html.tostring(s, method='text', encoding=unicode)
             except:
-                print 'Failed to process article summary, deleting:'
-                print summary.encode('utf-8')
+                print('Failed to process article summary, deleting:')
+                print(summary.encode('utf-8'))
                 traceback.print_exc()
                 summary = u''
         self.text_summary = clean_ascii_chars(summary)
@@ -294,8 +297,8 @@ class FeedCollection(list):
                     return x
             return None
 
-        print '#feeds', len(self)
-        print map(len, self)
+        print('#feeds', len(self))
+        print(map(len, self))
         for f in self:
             dups = []
             for a in f:
@@ -309,8 +312,8 @@ class FeedCollection(list):
                 f.articles.remove(x)
 
         self.duplicates = duplicates
-        print len(duplicates)
-        print map(len, self)
+        print(len(duplicates))
+        print(map(len, self))
         # raise
 
     def find_article(self, article):

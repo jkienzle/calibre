@@ -40,6 +40,10 @@ raw_options = (
     'timeout', 120.0,
     None,
 
+    _('Time (in seconds) to wait for a response from the server when making queries'),
+    'ajax_timeout',  60.0,
+    None,
+
     _('Total time in seconds to wait for clean shutdown'),
     'shutdown_timeout', 5.0,
     None,
@@ -83,6 +87,10 @@ raw_options = (
     _('A prefix to prepend to all URLs'),
     'url_prefix', None,
     _('Useful if you wish to run this server behind a reverse proxy. For example use, /calibre as the URL prefix.'),
+
+    _('Number of books to show in a single page'),
+    'num_per_page', 50,
+    _('The number of books to show in a single page in the browser.'),
 
     _('Advertise OPDS feeds via BonJour'),
     'use_bonjour', True,
@@ -153,6 +161,14 @@ raw_options = (
     _('Set the HTTP authentication mode used by the server. Set to "basic" if you are'
     ' putting this server behind an SSL proxy. Otherwise, leave it as "auto", which'
     ' will use "basic" if SSL is configured otherwise it will use "digest".'),
+
+    _('Ban IP addresses that have repeated login failures'), 'ban_for', 0,
+    _('Temporarily bans access for IP addresses that have repeated login failures for the'
+      ' specified number of minutes. Useful to prevent attempts at guessing passwords. If'
+      ' set to zero, no banning is done.'),
+
+    _('Number of login failures for ban'), 'ban_after', 5,
+    _('The number of login failures after which an IP address is banned'),
 
     _('Ignored user-defined metadata fields'),
     'ignored_fields', None,

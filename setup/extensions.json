@@ -10,7 +10,14 @@
     {
         "name": "monotonic",
         "sources": "calibre/utils/monotonic.c",
-        "linux_libraries": "rt"
+        "linux_libraries": "rt",
+        "needs_py2": true
+    },
+    {
+        "name": "unicode_names",
+        "headers": "unicode_names/names.h unicode_names/data-types.h",
+        "sources": "unicode_names/unicode_names.c",
+        "needs_c99": true
     },
     {
         "name": "speedup",
@@ -24,7 +31,8 @@
         "inc_dirs": "!zlib_inc_dirs",
         "lib_dirs": "!zlib_lib_dirs",
         "libraries": "z",
-        "windows_libraries": "zlib"
+        "windows_libraries": "zlib",
+        "needs_py2": true
     },
     {
         "name": "certgen",
@@ -163,7 +171,7 @@
         "name": "winutil",
         "only": "windows",
         "sources": "calibre/utils/windows/winutil.c",
-        "libraries": "shell32 wininet",
+        "libraries": "shell32 wininet advapi32",
         "cflags": "/X"
     },
     {
@@ -194,8 +202,14 @@
         "libraries": "usb-1.0"
     },
     {
+        "name": "libusb",
+        "only": "freebsd",
+        "sources": "calibre/devices/libusb/libusb.c",
+        "libraries": "usb"
+    },
+    {
         "name": "libmtp",
-        "only": "osx linux haiku",
+        "only": "freebsd osx linux haiku",
         "sources": "calibre/devices/mtp/unix/devices.c calibre/devices/mtp/unix/libmtp.c",
         "headers": "calibre/devices/mtp/unix/devices.h calibre/devices/mtp/unix/upstream/music-players.h calibre/devices/mtp/unix/upstream/device-flags.h",
         "libraries": "mtp"

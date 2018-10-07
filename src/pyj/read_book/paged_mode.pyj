@@ -4,6 +4,7 @@ from __python__ import hash_literals
 
 import traceback
 from elementmaker import E
+from select import word_at_point
 
 from dom import set_css
 from keycodes import get_key
@@ -55,13 +56,13 @@ def create_page_div(elem):
 _in_paged_mode = False
 def in_paged_mode():
     return _in_paged_mode
-col_width = screen_width = screen_height = cols_per_screen = gap = col_and_gap = 0
+col_width = screen_width = screen_height = cols_per_screen = gap = col_and_gap = number_of_cols = 0
 is_full_screen_layout = False
 
 def reset_paged_mode_globals():
-    nonlocal _in_paged_mode, col_width, col_and_gap, screen_height, gap, screen_width, is_full_screen_layout, cols_per_screen
+    nonlocal _in_paged_mode, col_width, col_and_gap, screen_height, gap, screen_width, is_full_screen_layout, cols_per_screen, number_of_cols
     scroll_viewport.reset_globals()
-    col_width = screen_width = screen_height = cols_per_screen = gap = col_and_gap = 0
+    col_width = screen_width = screen_height = cols_per_screen = gap = col_and_gap = number_of_cols = 0
     is_full_screen_layout = _in_paged_mode = False
 
 def column_at(xpos):
@@ -77,11 +78,16 @@ def fit_images():
     # force a relayout if the render tree is dirty.
     images = []
     vimages = []
+    img_tags = document.getElementsByTagName('img')
+    bounding_rects = v'[]'
+    for img_tag in img_tags:
+        bounding_rects.push(img_tag.getBoundingClientRect())
     maxh = screen_height
-    for img in document.getElementsByTagName('img'):
+    for i in range(img_tags.length):
+        img = img_tags[i]
+        br = bounding_rects[i]
         previously_limited = get_elem_data(img, 'width-limited', False)
         data = get_elem_data(img, 'img-data', None)
-        br = img.getBoundingClientRect()
         if data is None:
             data = {'left':br.left, 'right':br.right, 'height':br.height, 'display': img.style.display}
             set_elem_data(img, 'img-data', data)
@@ -99,13 +105,13 @@ def fit_images():
             set_css(img, break_before='auto', display=data.display)
         set_css(img, break_inside='avoid')
 
-    for img, max_width in images:
-        img.style.setProperty('max-width', max_width+'px')
-        set_elem_data(img, 'width-limited', True)
+    for img_tag, max_width in images:
+        img_tag.style.setProperty('max-width', max_width+'px')
+        set_elem_data(img_tag, 'width-limited', True)
 
-    for img in vimages:
-        data = get_elem_data(img, 'img-data', None)
-        set_css(img, break_before='always', max_height=maxh+'px')
+    for img_tag in vimages:
+        data = get_elem_data(img_tag, 'img-data', None)
+        set_css(img_tag, break_before='always', max_height=maxh+'px')
         if data.height > maxh:
             # This is needed to force the image onto a new page, without
             # it, the webkit algorithm may still decide to split the image
@@ -114,10 +120,7 @@ def fit_images():
         set_elem_data(img, 'height-limited', True)
 
 
-def layout(is_single_page):
-    nonlocal _in_paged_mode, col_width, col_and_gap, screen_height, gap, screen_width, is_full_screen_layout, cols_per_screen
-    body_style = window.getComputedStyle(document.body)
-    first_layout = not _in_paged_mode
+def calc_columns_per_screen():
     cps = opts.columns_per_screen or {}
     cps = cps.landscape if scroll_viewport.width() > scroll_viewport.height() else cps.portrait
     try:
@@ -127,6 +130,14 @@ def layout(is_single_page):
     if not cps:
         cps = int(Math.floor(scroll_viewport.width() / 500.0))
     cps = max(1, min(cps or 1, 20))
+    return cps
+
+
+def layout(is_single_page):
+    nonlocal _in_paged_mode, col_width, col_and_gap, screen_height, gap, screen_width, is_full_screen_layout, cols_per_screen
+    body_style = window.getComputedStyle(document.body)
+    first_layout = not _in_paged_mode
+    cps = calc_columns_per_screen()
     if first_layout:
         handle_rtl_body(body_style)
         # Check if the current document is a full screen layout like
@@ -210,12 +221,14 @@ def layout(is_single_page):
     # themselves, unless the container width is an exact multiple, so we check
     # for that and manually set the container widths.
     def check_column_widths():
-        ncols = (scroll_viewport.paged_content_width() + gap) / col_and_gap
+        nonlocal number_of_cols
+        ncols = number_of_cols = (scroll_viewport.paged_content_width() + gap) / col_and_gap
         if ncols is not Math.floor(ncols):
-            n = Math.floor(ncols)
+            n = number_of_cols = Math.floor(ncols)
             dw = n*col_width + (n-1)*gap
             data = {'col_width':col_width, 'gap':gap, 'scrollWidth':scroll_viewport.paged_content_width(), 'ncols':ncols, 'desired_width':dw}
             return data
+
     data = check_column_widths()
     if data:
         dw = data.desired_width
@@ -223,7 +236,7 @@ def layout(is_single_page):
             set_css(elem, max_width=dw + 'px', min_width=dw + 'px')
     data = check_column_widths()
     if data:
-        print('WARNING: column layout broken', data)
+        print('WARNING: column layout broken, probably because there is some non-reflowable content in the book that is wider than the column width', data)
 
     _in_paged_mode = True
     fit_images()
@@ -453,11 +466,20 @@ def onwheel(evt):
 def scroll_by_page(backward, by_screen):
     if by_screen:
         pos = previous_screen_location() if backward else next_screen_location()
+        pages = cols_per_screen
     else:
         pos = previous_col_location() if backward else next_col_location()
+        pages = 1
     if pos is -1:
+        # dont report human scroll since we dont know if a full page was
+        # scrolled or not
         get_boss().send_message('next_spine_item', previous=backward)
     else:
+        if not backward:
+            scrolled_frac = (pages / number_of_cols) if number_of_cols > 0 else 0
+            get_boss().report_human_scroll(scrolled_frac)
+        else:
+            get_boss().report_human_scroll()
         scroll_to_xpos(pos)
 
 def onkeydown(evt):
@@ -466,21 +488,25 @@ def onkeydown(evt):
     if key is 'up' or key is 'down':
         handled = True
         if evt.ctrlKey:
+            get_boss().report_human_scroll()
             scroll_to_offset(0 if key is 'left' else document_width())
         else:
             scroll_by_page(key is 'up', True)
     elif (key is 'left' or key is 'right') and not evt.altKey:
         handled = True
         if evt.ctrlKey:
+            get_boss().report_human_scroll()
             scroll_to_offset(0 if key is 'left' else document_width())
         else:
             scroll_by_page(key is 'left', False)
     elif key is 'home' or key is 'end':
         handled = True
         if evt.ctrlKey:
+            get_boss().report_human_scroll()
             get_boss().send_message('goto_doc_boundary', start=key is 'home')
         else:
             if key is 'home':
+                get_boss().report_human_scroll()
                 scroll_to_offset(0)
             else:
                 scroll_to_offset(document_width())
@@ -502,6 +528,13 @@ def handle_gesture(gesture):
         scroll_by_page(True, False)
     elif gesture.type is 'next-page':
         scroll_by_page(False, False)
+    elif gesture.type is 'long-tap':
+        r = word_at_point(gesture.viewport_x, gesture.viewport_y)
+        if r:
+            s = document.getSelection()
+            s.removeAllRanges()
+            s.addRange(r)
+            get_boss().send_message('lookup_word', word=str(r))
 
 
 anchor_funcs = {

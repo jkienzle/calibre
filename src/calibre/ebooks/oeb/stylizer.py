@@ -12,7 +12,7 @@ import os, re, logging, copy, unicodedata
 from weakref import WeakKeyDictionary
 from xml.dom import SyntaxErr as CSSSyntaxError
 from cssutils.css import (CSSStyleRule, CSSPageRule, CSSFontFaceRule,
-        cssproperties, CSSRule)
+        cssproperties)
 from cssutils import (profile as cssprofiles, parseString, parseStyle, log as
         cssutils_log, CSSParser, profiles, replaceUrls)
 from calibre import force_unicode, as_unicode
@@ -133,8 +133,7 @@ class Stylizer(object):
                 log=logging.getLogger('calibre.css'))
         self.font_face_rules = []
         for elem in style_tags:
-            if (elem.tag == XHTML('style') and
-                elem.get('type', CSS_MIME) in OEB_STYLES and media_ok(elem.get('media'))):
+            if (elem.tag == XHTML('style') and elem.get('type', CSS_MIME) in OEB_STYLES and media_ok(elem.get('media'))):
                 text = elem.text if elem.text else u''
                 for x in elem:
                     t = getattr(x, 'text', None)
@@ -164,18 +163,15 @@ class Stylizer(object):
                                 self.logger.warn('CSS @import of non-CSS file %r' % rule.href)
                                 continue
                             stylesheets.append(sitem.data)
-                    for rule in tuple(stylesheet.cssRules.rulesOfType(CSSRule.PAGE_RULE)):
-                        stylesheet.cssRules.remove(rule)
                     # Make links to resources absolute, since these rules will
                     # be folded into a stylesheet at the root
                     replaceUrls(stylesheet, item.abshref,
                             ignoreImportRules=True)
                     stylesheets.append(stylesheet)
-            elif (elem.tag == XHTML('link') and elem.get('href') and
-                  elem.get('rel', 'stylesheet').lower() == 'stylesheet' and
-                  elem.get('type', CSS_MIME).lower() in OEB_STYLES and
-                  media_ok(elem.get('media'))
-                  ):
+            elif (elem.tag == XHTML('link') and elem.get('href') and elem.get(
+                    'rel', 'stylesheet').lower() == 'stylesheet' and elem.get(
+                    'type', CSS_MIME).lower() in OEB_STYLES and media_ok(elem.get('media'))
+                ):
                 href = urlnormalize(elem.attrib['href'])
                 path = item.abshref(href)
                 sitem = oeb.manifest.hrefs.get(path, None)
@@ -221,7 +217,7 @@ class Stylizer(object):
         rules.sort()
         self.rules = rules
         self._styles = {}
-        pseudo_pat = re.compile(ur':{1,2}(%s)' % ('|'.join(INAPPROPRIATE_PSEUDO_CLASSES)), re.I)
+        pseudo_pat = re.compile(u':{1,2}(%s)' % ('|'.join(INAPPROPRIATE_PSEUDO_CLASSES)), re.I)
         select = Select(tree, ignore_inappropriate_pseudo_classes=True)
 
         for _, _, cssdict, text, _ in rules:
@@ -237,8 +233,6 @@ class Stylizer(object):
                 if fl == 'first-letter' and getattr(self.oeb,
                         'plumber_output_format', '').lower() in {u'mobi', u'docx'}:
                     # Fake first-letter
-                    from lxml.builder import ElementMaker
-                    E = ElementMaker(namespace=XHTML_NS)
                     for elem in matches:
                         for x in elem.iter('*'):
                             if x.text:
@@ -253,7 +247,8 @@ class Stylizer(object):
 
                                 special_text = u''.join(punctuation_chars) + \
                                         (text[0] if text else u'')
-                                span = E.span(special_text)
+                                span = x.makeelement('{%s}span' % XHTML_NS)
+                                span.text = special_text
                                 span.set('data-fake-first-letter', '1')
                                 span.tail = text[1:]
                                 x.text = None
@@ -342,6 +337,9 @@ class Stylizer(object):
                 size = 'xx-small'
             if size in FONT_SIZE_NAMES:
                 style['font-size'] = "%dpt" % self.profile.fnames[size]
+        if '-epub-writing-mode' in style:
+            for x in ('-webkit-writing-mode', 'writing-mode'):
+                style[x] = style.get(x, style['-epub-writing-mode'])
         return style
 
     def _apply_text_align(self, text):

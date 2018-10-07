@@ -10,9 +10,9 @@ __docformat__ = 'restructuredtext en'
 import sys, os, textwrap
 from threading import Thread
 from functools import partial
-from future_builtins import map
+from polyglot.builtins import map
 
-from PyQt5.Qt import (QPushButton, QFrame, QMenu, QInputDialog,
+from PyQt5.Qt import (QPushButton, QFrame, QMenu, QInputDialog, QCheckBox,
     QDialog, QVBoxLayout, QDialogButtonBox, QSize, QStackedWidget, QWidget,
     QLabel, Qt, pyqtSignal, QIcon, QTreeWidget, QGridLayout, QTreeWidgetItem,
     QToolButton, QItemSelectionModel, QCursor, QKeySequence, QSizePolicy)
@@ -60,6 +60,9 @@ class XPathDialog(QDialog):  # {{{
         self.load_menu = QMenu(b)
         b.setMenu(self.load_menu)
         self.setup_load_button()
+        self.remove_duplicates_cb = QCheckBox(_('Do not add duplicate entries at the same level'))
+        self.remove_duplicates_cb.setChecked(self.prefs.get('xpath_toc_remove_duplicates', True))
+        l.addWidget(self.remove_duplicates_cb)
         l.addStretch()
         l.addWidget(bb)
         self.resize(self.sizeHint() + QSize(50, 75))
@@ -115,6 +118,7 @@ class XPathDialog(QDialog):  # {{{
 
     def accept(self):
         if self.check():
+            self.prefs.set('xpath_toc_remove_duplicates', self.remove_duplicates_cb.isChecked())
             super(XPathDialog, self).accept()
 
     @property
@@ -129,7 +133,7 @@ class ItemView(QFrame):  # {{{
     delete_item = pyqtSignal()
     flatten_item = pyqtSignal()
     go_to_root = pyqtSignal()
-    create_from_xpath = pyqtSignal(object)
+    create_from_xpath = pyqtSignal(object, object)
     create_from_links = pyqtSignal()
     create_from_files = pyqtSignal()
     flatten_toc = pyqtSignal()
@@ -266,13 +270,13 @@ class ItemView(QFrame):  # {{{
         # Add new item
         rs = l.rowCount()
         ip.b3 = b = QPushButton(QIcon(I('plus.png')), _('New entry &inside this entry'))
-        b.clicked.connect(partial(self.add_new, 'inside'))
+        connect_lambda(b.clicked, self, lambda self: self.add_new('inside'))
         l.addWidget(b, l.rowCount()+1, 0, 1, 2)
         ip.b4 = b = QPushButton(QIcon(I('plus.png')), _('New entry &above this entry'))
-        b.clicked.connect(partial(self.add_new, 'before'))
+        connect_lambda(b.clicked, self, lambda self: self.add_new('before'))
         l.addWidget(b, l.rowCount(), 0, 1, 2)
         ip.b5 = b = QPushButton(QIcon(I('plus.png')), _('New entry &below this entry'))
-        b.clicked.connect(partial(self.add_new, 'after'))
+        connect_lambda(b.clicked, self, lambda self: self.add_new('after'))
         l.addWidget(b, l.rowCount(), 0, 1, 2)
         # Flatten entry
         ip.b3 = b = QPushButton(QIcon(I('heuristics.png')), _('&Flatten this entry'))
@@ -303,15 +307,15 @@ class ItemView(QFrame):  # {{{
         l.addWidget(la, l.rowCount(), 0, 1, 2)
 
     def create_from_major_headings(self):
-        self.create_from_xpath.emit(['//h:h%d'%i for i in xrange(1, 4)])
+        self.create_from_xpath.emit(['//h:h%d'%i for i in xrange(1, 4)], True)
 
     def create_from_all_headings(self):
-        self.create_from_xpath.emit(['//h:h%d'%i for i in xrange(1, 7)])
+        self.create_from_xpath.emit(['//h:h%d'%i for i in xrange(1, 7)], True)
 
     def create_from_user_xpath(self):
         d = XPathDialog(self, self.prefs)
         if d.exec_() == d.Accepted and d.xpaths:
-            self.create_from_xpath.emit(d.xpaths)
+            self.create_from_xpath.emit(d.xpaths, d.remove_duplicates_cb.isChecked())
 
     def hide_azw3_warning(self):
         self.w1.setVisible(False), self.w2.setVisible(False)
@@ -355,8 +359,7 @@ class ItemView(QFrame):  # {{{
 # }}}
 
 
-NODE_FLAGS = (Qt.ItemIsDragEnabled|Qt.ItemIsEditable|Qt.ItemIsEnabled|
-                        Qt.ItemIsSelectable|Qt.ItemIsDropEnabled)
+NODE_FLAGS = (Qt.ItemIsDragEnabled|Qt.ItemIsEditable|Qt.ItemIsEnabled|Qt.ItemIsSelectable|Qt.ItemIsDropEnabled)
 
 
 class TreeWidget(QTreeWidget):  # {{{
@@ -393,6 +396,10 @@ class TreeWidget(QTreeWidget):  # {{{
         if self.history:
             self.unserialize_tree(self.history.pop())
             self.history_state_changed.emit()
+
+    def commitData(self, editor):
+        self.push_history()
+        return QTreeWidget.commitData(self, editor)
 
     def iteritems(self, parent=None):
         if parent is None:
@@ -586,12 +593,33 @@ class TreeWidget(QTreeWidget):  # {{{
             t = unicode(item.data(0, Qt.DisplayRole) or '')
             item.setData(0, Qt.DisplayRole, icu_upper(t))
 
+    def lower_case(self):
+        self.push_history()
+        for item in self.selectedItems():
+            t = unicode(item.data(0, Qt.DisplayRole) or '')
+            item.setData(0, Qt.DisplayRole, icu_lower(t))
+
+    def swap_case(self):
+        self.push_history()
+        from calibre.utils.icu import swapcase
+        for item in self.selectedItems():
+            t = unicode(item.data(0, Qt.DisplayRole) or '')
+            item.setData(0, Qt.DisplayRole, swapcase(t))
+
+    def capitalize(self):
+        self.push_history()
+        from calibre.utils.icu import capitalize
+        for item in self.selectedItems():
+            t = unicode(item.data(0, Qt.DisplayRole) or '')
+            item.setData(0, Qt.DisplayRole, capitalize(t))
+
     def bulk_rename(self):
         from calibre.gui2.tweak_book.file_list import get_bulk_rename_settings
         sort_map = {item:i for i, item in enumerate(self.iteritems())}
         items = sorted(self.selectedItems(), key=lambda x:sort_map.get(x, -1))
-        fmt, num = get_bulk_rename_settings(self, len(items), prefix=_('Chapter '), msg=_(
+        settings = get_bulk_rename_settings(self, len(items), prefix=_('Chapter '), msg=_(
             'All selected items will be renamed to the form prefix-number'), sanitize=lambda x:x, leading_zeros=False)
+        fmt, num = settings['prefix'], settings['start']
         if fmt is not None and num is not None:
             self.push_history()
             for i, item in enumerate(items):
@@ -625,6 +653,10 @@ class TreeWidget(QTreeWidget):  # {{{
 
         if item is not None:
             m = QMenu()
+            m.addAction(QIcon(I('edit_input.png')), _('Change the location this entry points to'), self.edit_item)
+            m.addAction(QIcon(I('modified.png')), _('Bulk rename all selected items'), self.bulk_rename)
+            m.addAction(QIcon(I('trash.png')), _('Remove all selected items'), self.del_items)
+            m.addSeparator()
             ci = unicode(item.data(0, Qt.DisplayRole) or '')
             p = item.parent() or self.invisibleRootItem()
             idx = p.indexOfChild(item)
@@ -632,15 +664,20 @@ class TreeWidget(QTreeWidget):  # {{{
                 m.addAction(QIcon(I('arrow-up.png')), (_('Move "%s" up')%ci)+key(Qt.Key_Up), self.move_up)
             if idx + 1 < p.childCount():
                 m.addAction(QIcon(I('arrow-down.png')), (_('Move "%s" down')%ci)+key(Qt.Key_Down), self.move_down)
-            m.addAction(QIcon(I('trash.png')), _('Remove all selected items'), self.del_items)
             if item.parent() is not None:
                 m.addAction(QIcon(I('back.png')), (_('Unindent "%s"')%ci)+key(Qt.Key_Left), self.move_left)
             if idx > 0:
                 m.addAction(QIcon(I('forward.png')), (_('Indent "%s"')%ci)+key(Qt.Key_Right), self.move_right)
-            m.addAction(QIcon(I('edit_input.png')), _('Change the location this entry points to'), self.edit_item)
-            m.addAction(_('Change all selected items to title case'), self.title_case)
-            m.addAction(_('Change all selected items to upper case'), self.upper_case)
-            m.addAction(QIcon(I('modified.png')), _('Bulk rename all selected items'), self.bulk_rename)
+
+            m.addSeparator()
+            case_menu = QMenu(_('Change case'))
+            case_menu.addAction(_('Upper case'), self.upper_case)
+            case_menu.addAction(_('Lower case'), self.lower_case)
+            case_menu.addAction(_('Swap case'), self.swap_case)
+            case_menu.addAction(_('Title case'), self.title_case)
+            case_menu.addAction(_('Capitalize'), self.capitalize)
+            m.addMenu(case_menu)
+
             m.exec_(QCursor.pos())
 # }}}
 
@@ -895,11 +932,14 @@ class TOCView(QWidget):  # {{{
         process_node(self.root, toc, nodes)
         self.highlight_item(nodes[0])
 
-    def create_from_xpath(self, xpaths):
+    def create_from_xpath(self, xpaths, remove_duplicates=True):
         toc = from_xpaths(self.ebook, xpaths)
+        print(1111111, remove_duplicates)
         if len(toc) == 0:
             return error_dialog(self, _('No items found'),
                 _('No items were found that could be added to the Table of Contents.'), show=True)
+        if remove_duplicates:
+            toc.remove_duplicates()
         self.insert_toc_fragment(toc)
 
     def create_from_links(self):

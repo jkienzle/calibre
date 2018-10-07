@@ -102,7 +102,10 @@ want to rename all the HTML files to have names Chapter-1.html, Chapter-2.html
 and so on. Select the files you want bulk renamed by holding down the Shift or
 Ctrl key and clicking the files. Then right click and select :guilabel:`Bulk
 rename`. Enter a prefix and what number you would like the automatic numbering
-to start at, click OK and you are done.
+to start at, click OK and you are done. The bulk rename dialog also lets you
+rename files by the order they appear in the book instead of the order you
+selected them in, useful, for instance to rename all images by the order
+they appear.
 
 Finally, you can bulk change the file extension for all selected files. Select
 multiple files, as above, and right click and choose :guilabel:`Change the file
@@ -242,10 +245,11 @@ You can also go to a specific line in the currently open editor via
 Saved searches
 ^^^^^^^^^^^^^^^
 
-You can save frequently used search/replace expressions and reuse them multiple times.
-To save a search simply right click in the Find box and select :guilabel:`Save current search`.
+You can save frequently used search/replace expressions (including function
+mode expressions) and reuse them multiple times.  To save a search simply right
+click in the Find box and select :guilabel:`Save current search`.
 
-You can bring up the dialog of saved searches via :guilabel:`Search->Saved
+You can bring up the saved searches via :guilabel:`Search->Saved
 searches`. This will present you with a list of search and replace expressions
 that you can apply. You can even select multiple entries in the list by holding
 down the Ctrl Key while clicking so as to run multiple search and replace
@@ -480,6 +484,14 @@ everywhere they occur --- stylesheets, ``<style>`` tags and inline ``style``
 attributes. After removing the style information, a summary of all the changes
 made is displayed so you can see exactly what was changed. The tool can be
 accessed via :guilabel:`Tools->Filter style information`.
+
+
+Upgrading the book's internals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This tool can be used to upgrade the book's internals, if possible. For
+instance it will upgrade EPUB 2 books to EPUB 3 books. The tool can be
+accessed via :guilabel:`Upgrade book internals`.
 
 .. _checkpoints:
 

@@ -22,7 +22,8 @@ class SNBInput(InputFormatPlugin):
     name        = 'SNB Input'
     author      = 'Li Fanxi'
     description = 'Convert SNB files to OEB'
-    file_types  = set(['snb'])
+    file_types  = {'snb'}
+    commit_name = 'snb_input'
 
     options = set([
     ])
@@ -119,4 +120,3 @@ class SNBInput(InputFormatPlugin):
                     item.html_input_href = f
 
         return oeb
-

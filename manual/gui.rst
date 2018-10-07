@@ -243,11 +243,9 @@ Connect/share
 
     1. **Connect to folder**: Allows you to connect to any folder on your computer as though it were a device and use all the facilities calibre has for devices with that folder. Useful if your device cannot be supported by calibre but is available as a USB disk.
 
-    2. **Connect to iTunes**: Allows you to connect to your iTunes books database as though it were a device. Once the books are sent to iTunes, you can use iTunes to make them available to your various iDevices.
+    2. **Start Content server**: Starts calibre's built-in web server.  When started, your calibre library will be accessible via a web browser from the Internet (if you choose). You can configure how the web server is accessed by setting preferences at :guilabel:`Preferences->Sharing->Sharing over the net`
 
-    3. **Start Content server**: Starts calibre's built-in web server.  When started, your calibre library will be accessible via a web browser from the Internet (if you choose). You can configure how the web server is accessed by setting preferences at :guilabel:`Preferences->Sharing->Sharing over the net`
-
-    4. **Setup email based sharing of books**: Allows sharing of books and news feeds by email.  After setting up email addresses for this option, calibre will send news updates and book updates to the entered email addresses. You can configure how calibre sends email by setting preferences at :guilabel:`Preferences->Sharing->Sharing books by email`. Once you have set up one or more email addresses, this menu entry will be replaced by menu entries to send books to the configured email addresses.
+    3. **Setup email based sharing of books**: Allows sharing of books and news feeds by email.  After setting up email addresses for this option, calibre will send news updates and book updates to the entered email addresses. You can configure how calibre sends email by setting preferences at :guilabel:`Preferences->Sharing->Sharing books by email`. Once you have set up one or more email addresses, this menu entry will be replaced by menu entries to send books to the configured email addresses.
 
 .. _remove_books:
 
@@ -283,7 +281,7 @@ Preferences
 |cbi| The :guilabel:`Preferences` action allows you to change the way various aspects of calibre work. It has four variations, accessed by doing a right-click on the button.
 
     1. **Preferences**: Allows you to change the way various aspects of calibre work. Clicking the button also performs this action.
-    2. **Run welcome wizard**: Allows you to start the Welcome Wizard which appeared the first time you started calibre.
+    2. **Run Welcome wizard**: Allows you to start the :guilabel:`Welcome wizard` which appeared the first time you started calibre.
     3. **Get plugins to enhance calibre**: Opens a new window that shows plugins for calibre. These plugins are developed by third parties to extend calibre's functionality.
     4. **Restart in debug mode**: Allows you to enable a debugging mode that can assist the calibre developers in solving problems you encounter with the program. For most users this should remain disabled unless instructed by a developer to enable it.
 
@@ -317,7 +315,7 @@ The Search & Sort section allows you to perform several powerful actions on your
 
     * You can quickly and conveniently edit metadata by selecting the entry you want changed in the list and pressing the :kbd:`E` key.
 
-    * You can perform :ref:`actions` on sets to books. To select multiple books you can either:
+    * You can perform :ref:`actions` on sets of books. To select multiple books you can either:
 
         - Keep the :kbd:`Ctrl` key pressed and click on the books you want selected.
 
@@ -359,7 +357,7 @@ You can build advanced search queries easily using the :guilabel:`Advanced searc
 clicking the button |sbi|.
 
 Available fields for searching are: ``tag, title, author, publisher, series, series_index, rating, cover,
-comments, format, identifiers, date, pubdate, search, size`` and custom columns. If a device is plugged in, the ``ondevice`` field becomes available, when searching the calibre library view. To find the search name (actually called the `lookup name`) for a custom column, hover your mouse over the column header in the library view.
+comments, format, identifiers, date, pubdate, search, size, vl`` and custom columns. If a device is plugged in, the ``ondevice`` field becomes available, when searching the calibre library view. To find the search name (actually called the `lookup name`) for a custom column, hover your mouse over the column header in the library view.
 
 The syntax for searching for dates is::
 
@@ -399,6 +397,12 @@ Series indices are numbers, so you can use the relational operators described ab
 The special field ``search`` is used for saved searches. So if you save a search with the name
 "My spouse's books" you can enter ``search:"My spouse's books"`` in the Search bar to reuse the saved
 search. More about saving searches below.
+
+The special field ``vl`` is used to search for books in a virtual library. For
+example, ``vl:Read`` will find all the books in the *Read* virtual library. The search
+``vl:Read and vl:"Science Fiction"`` will find all the books that are in both the *Read* and
+*Science Fiction* virtual libraries. The value following ``vl:`` must be the name of a 
+virtual library. If the virtual library name contains spaces then surround it with quotes.
 
 You can search for the absence or presence of a field using the special "true" and "false" values. For example::
 

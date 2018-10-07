@@ -1,4 +1,5 @@
 #!/usr/bin/env  python2
+from __future__ import print_function
 
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -82,14 +83,23 @@ Everything after the -- is passed to the script.
             help=_('Inspect the MOBI file(s) at the specified path(s)'))
     parser.add_option('-t', '--edit-book', action='store_true',
             help=_('Launch the calibre "Edit book" tool in debug mode.'))
-    parser.add_option('-x', '--explode-book', default=None,
-            help=_('Explode the book (exports the book as a collection of HTML '
+    parser.add_option('-x', '--explode-book', default=False, action='store_true',
+            help=_('Explode the book into the specified directory.\nUsage: '
+            '-x file.epub output_dir\n'
+            'Exports the book as a collection of HTML '
             'files and metadata, which you can edit using standard HTML '
-            'editing tools, and then rebuilds the file from the edited HTML. '
-            'Makes no additional changes to the HTML, unlike a full calibre '
-            'conversion).'))
+            'editing tools. Works with EPUB, AZW3, HTMLZ and DOCX files.'))
+    parser.add_option('-i', '--implode-book', default=False, action='store_true', help=_(
+        'Implode a previously exploded book.\nUsage: -i output_dir file.epub\n'
+        'Imports the book from the files in output_dir which must have'
+        ' been created by a previous call to --explode-book. Be sure to'
+        ' specify the same file type as was used when exploding.'))
     parser.add_option('--export-all-calibre-data', default=False, action='store_true',
-        help=_('Export all calibre data (books/settings/plugins)'))
+        help=_('Export all calibre data (books/settings/plugins). Normally, you will'
+            ' be asked for the export dir and the libraries to export. You can also specify them'
+            ' as command line arguments to skip the questions.'
+            ' Use absolute paths for the export directory and libraries.'
+            ' The special keyword "all" can be used to export all libraries.'))
     parser.add_option('--import-calibre-data', default=False, action='store_true',
         help=_('Import previously exported calibre data'))
     parser.add_option('-s', '--shutdown-running-calibre', default=False,
@@ -221,12 +231,15 @@ def run_debug_gui(logpath):
     calibre(['__CALIBRE_GUI_DEBUG__', logpath])
 
 
-def run_script(path, args):
+def load_user_plugins():
     # Load all user defined plugins so the script can import from the
     # calibre_plugins namespace
     import calibre.customize.ui as dummy
-    dummy
+    return dummy
 
+
+def run_script(path, args):
+    load_user_plugins()
     sys.argv = [path] + args
     ef = os.path.abspath(path)
     if '/src/calibre/' not in ef.replace(os.pathsep, '/'):
@@ -242,7 +255,7 @@ def inspect_mobi(path):
     from calibre.ebooks.mobi.debug.main import inspect_mobi
     prints('Inspecting:', path)
     inspect_mobi(path)
-    print
+    print()
 
 
 def main(args=sys.argv):
@@ -277,9 +290,14 @@ def main(args=sys.argv):
     elif opts.edit_book:
         from calibre.gui_launch import ebook_edit
         ebook_edit(['ebook-edit'] + args[1:])
-    elif opts.explode_book:
-        from calibre.ebooks.tweak import tweak
-        tweak(opts.explode_book)
+    elif opts.explode_book or opts.implode_book:
+        from calibre.ebooks.tweak import explode, implode
+        try:
+            a1, a2 = args[1:]
+        except Exception:
+            raise SystemExit('Must provide exactly two arguments')
+        f = explode if opts.explode_book else implode
+        f(a1, a2)
     elif opts.test_build:
         from calibre.test_build import test
         test()
@@ -308,11 +326,12 @@ def main(args=sys.argv):
             from calibre.utils.winreg.default_programs import register as func
         else:
             from calibre.utils.winreg.default_programs import unregister as func
-        print 'Running', func.__name__, '...'
+        print('Running', func.__name__, '...')
         func()
     elif opts.export_all_calibre_data:
+        args = args[1:]
         from calibre.utils.exim import run_exporter
-        run_exporter()
+        run_exporter(args=args)
     elif opts.import_calibre_data:
         from calibre.utils.exim import run_importer
         run_importer()
@@ -332,6 +351,7 @@ def main(args=sys.argv):
         sys.path.insert(0, args[1])
         run_script(os.path.join(args[1], '__main__.py'), args[2:])
     else:
+        load_user_plugins()
         from calibre import ipython
         ipython()
 

@@ -452,7 +452,7 @@ class BasicNewsRecipe(Recipe):
         return self.feeds
 
     @classmethod
-    def print_version(self, url):
+    def print_version(cls, url):
         '''
         Take a `url` pointing to the webpage with article content and return the
         :term:`URL` pointing to the print version of the article. By default does
@@ -483,7 +483,7 @@ class BasicNewsRecipe(Recipe):
     def get_browser(self, *args, **kwargs):
         '''
         Return a browser instance used to fetch documents from the web. By default
-        it returns a `mechanize <https://github.com/jjlee/mechanize>`_
+        it returns a `mechanize <https://mechanize.readthedocs.io/en/latest/>`_
         browser instance that supports cookies, ignores robots.txt, handles
         refreshes and has a mozilla firefox user agent.
 
@@ -693,7 +693,7 @@ class BasicNewsRecipe(Recipe):
             _raw = xml_to_unicode(_raw, strip_encoding_pats=True, resolve_entities=True)[0]
         _raw = clean_xml_chars(_raw)
         if as_tree:
-            from html5parser import parse
+            from html5_parser import parse
             return parse(_raw)
         else:
             from html5_parser.soup import set_soup_module, parse
@@ -889,14 +889,9 @@ class BasicNewsRecipe(Recipe):
             self.verbose = True
         self.report_progress = progress_reporter
 
-        if isinstance(self.feeds, basestring):
-            self.feeds = eval(self.feeds)
-            if isinstance(self.feeds, basestring):
-                self.feeds = [self.feeds]
-
         if self.needs_subscription and (
-                self.username is None or self.password is None or
-                (not self.username and not self.password)):
+                self.username is None or self.password is None or (
+                    not self.username and not self.password)):
             if self.needs_subscription != 'optional':
                 raise ValueError(_('The "%s" recipe needs a username and password.')%self.title)
 
@@ -988,6 +983,11 @@ class BasicNewsRecipe(Recipe):
         for base in list(soup.findAll(['base', 'iframe', 'canvas', 'embed',
             'command', 'datalist', 'video', 'audio'])):
             base.extract()
+        # srcset causes some viewers, like calibre's to load images from the
+        # web, and it also possible causes iBooks on iOS to barf, see
+        # https://bugs.launchpad.net/bugs/1713986
+        for img in soup.findAll('img', srcset=True):
+            del img['srcset']
 
         ans = self.postprocess_html(soup, first_fetch)
 
@@ -1432,8 +1432,8 @@ class BasicNewsRecipe(Recipe):
         desc = self.description
         if not isinstance(desc, unicode):
             desc = desc.decode('utf-8', 'replace')
-        mi.comments = (_('Articles in this issue:') + '\n\n' +
-                '\n\n'.join(article_titles)) + '\n\n' + desc
+        mi.comments = (_('Articles in this issue:'
+            ) + '\n\n' + '\n\n'.join(article_titles)) + '\n\n' + desc
 
         language = canonicalize_lang(self.language)
         if language is not None:
@@ -1633,8 +1633,7 @@ class BasicNewsRecipe(Recipe):
                 parsed_feeds.append(feed)
                 self.log.exception(msg)
 
-        remove = [fl for fl in parsed_feeds if len(fl) == 0 and
-                self.remove_empty_feeds]
+        remove = [fl for fl in parsed_feeds if len(fl) == 0 and self.remove_empty_feeds]
         for f in remove:
             parsed_feeds.remove(f)
 
@@ -1682,7 +1681,7 @@ class BasicNewsRecipe(Recipe):
 
     @classmethod
     def soup(cls, raw):
-        entity_replace = [(re.compile(ur'&(\S+?);'), partial(entity_to_unicode,
+        entity_replace = [(re.compile(u'&(\\S+?);'), partial(entity_to_unicode,
                                                            exceptions=[]))]
         nmassage = list(BeautifulSoup.MARKUP_MASSAGE)
         nmassage.extend(entity_replace)

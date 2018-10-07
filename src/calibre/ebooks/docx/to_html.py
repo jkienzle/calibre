@@ -18,7 +18,7 @@ from calibre.ebooks.docx.container import DOCX, fromstring
 from calibre.ebooks.docx.names import XML, generate_anchor
 from calibre.ebooks.docx.styles import Styles, inherit, PageProperties
 from calibre.ebooks.docx.numbering import Numbering
-from calibre.ebooks.docx.fonts import Fonts
+from calibre.ebooks.docx.fonts import Fonts, is_symbol_font, map_symbol_text
 from calibre.ebooks.docx.images import Images
 from calibre.ebooks.docx.tables import Tables
 from calibre.ebooks.docx.footnotes import Footnotes
@@ -37,10 +37,15 @@ class Text:
 
     def __init__(self, elem, attr, buf):
         self.elem, self.attr, self.buf = elem, attr, buf
+        self.elems = [self.elem]
 
     def add_elem(self, elem):
+        self.elems.append(elem)
         setattr(self.elem, self.attr, ''.join(self.buf))
         self.elem, self.attr, self.buf = elem, 'tail', []
+
+    def __iter__(self):
+        return iter(self.elems)
 
 
 def html_lang(docx_lang):
@@ -115,6 +120,7 @@ class Convert(object):
         self.log.debug('Converting Word markup to HTML')
 
         self.read_page_properties(doc)
+        self.resolve_alternate_content(doc)
         self.current_rels = relationships_by_id
         for wp, page_properties in self.page_map.iteritems():
             self.current_page = page_properties
@@ -261,6 +267,17 @@ class Convert(object):
             pr = PageProperties(self.namespace, last)
             for x in current:
                 self.page_map[x] = pr
+
+    def resolve_alternate_content(self, doc):
+        # For proprietary extensions in Word documents use the fallback, spec
+        # compliant form
+        # See https://wiki.openoffice.org/wiki/OOXML/Markup_Compatibility_and_Extensibility
+        for ac in self.namespace.descendants(doc, 'mc:AlternateContent'):
+            choices = self.namespace.XPath('./mc:Choice')(ac)
+            fallbacks = self.namespace.XPath('./mc:Fallback')(ac)
+            if fallbacks:
+                for choice in choices:
+                    ac.remove(choice)
 
     def read_styles(self, relationships_by_type):
 
@@ -690,6 +707,13 @@ class Convert(object):
                 ans.set('lang', lang)
         if style.rtl is True:
             ans.set('dir', 'rtl')
+        if is_symbol_font(style.font_family):
+            for elem in text:
+                if elem.text:
+                    elem.text = map_symbol_text(elem.text, style.font_family)
+                if elem.tail:
+                    elem.tail = map_symbol_text(elem.tail, style.font_family)
+            style.font_family = 'sans-serif'
         return ans
 
     def add_frame(self, html_obj, style):
@@ -723,9 +747,32 @@ class Convert(object):
         rmap = {v:k for k, v in self.object_map.iteritems()}
         for border_style, blocks in self.block_runs:
             paras = tuple(rmap[p] for p in blocks)
+            for p in paras:
+                if p.tag == 'li':
+                    has_li = True
+                    break
+            else:
+                has_li = False
             parent = paras[0].getparent()
-            idx = parent.index(paras[0])
-            frame = DIV(*paras)
+            if parent.tag in ('ul', 'ol'):
+                ul = parent
+                parent = ul.getparent()
+                idx = parent.index(ul)
+                frame = DIV(ul)
+            elif has_li:
+                def top_level_tag(x):
+                    while True:
+                        q = x.getparent()
+                        if q is parent or q is None:
+                            break
+                        x = q
+                    return x
+                paras = tuple(map(top_level_tag, paras))
+                idx = parent.index(paras[0])
+                frame = DIV(*paras)
+            else:
+                idx = parent.index(paras[0])
+                frame = DIV(*paras)
             parent.insert(idx, frame)
             self.framed_map[frame] = css = border_style.css
             self.styles.register(css, 'frame')

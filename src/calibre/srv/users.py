@@ -9,6 +9,7 @@ from threading import RLock
 
 import apsw
 
+from calibre import as_unicode
 from calibre.constants import config_dir
 from calibre.utils.config import to_json, from_json
 
@@ -48,9 +49,9 @@ def serialize_restriction(r):
 
 
 def validate_username(username):
-    if re.sub(r'[a-zA-Z_0-9 ]', '', username):
+    if re.sub(r'[-a-zA-Z_0-9 ]', '', username):
         return _('For maximum compatibility you should use only the letters A-Z,'
-                    ' the numbers 0-9 and spaces or underscores in the username')
+                    ' the numbers 0-9, spaces, underscores and hyphens in the username')
 
 
 def validate_password(pw):
@@ -68,6 +69,23 @@ def create_user_data(pw, readonly=False, restriction=None):
     }
 
 
+def connect(path, exc_class=ValueError):
+    try:
+        return apsw.Connection(path)
+    except apsw.CantOpenError as e:
+        pdir = os.path.dirname(path)
+        if os.path.isdir(pdir):
+            raise exc_class('Failed to open userdb database at {} with error: {}'.format(path, as_unicode(e)))
+        try:
+            os.makedirs(pdir)
+        except EnvironmentError as e:
+            raise exc_class('Failed to make directory for userdb database at {} with error: {}'.format(pdir, as_unicode(e)))
+        try:
+            return apsw.Connection(path)
+        except apsw.CantOpenError as e:
+            raise exc_class('Failed to open userdb database at {} with error: {}'.format(path, as_unicode(e)))
+
+
 class UserManager(object):
 
     lock = RLock()
@@ -76,7 +94,7 @@ class UserManager(object):
     def conn(self):
         with self.lock:
             if self._conn is None:
-                self._conn = apsw.Connection(self.path)
+                self._conn = connect(self.path)
                 with self._conn:
                     c = self._conn.cursor()
                     uv = next(c.execute('PRAGMA user_version'))[0]

@@ -1,3 +1,4 @@
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 
@@ -100,6 +101,7 @@ def create_adv_tab(self):
         l.addRow(text, le)
 
     w.g2.l = l = QFormLayout(w.g2)
+    l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
     self.none = le = QLineEdit(w)
     l.addRow(_("Any of these &unwanted words:"), le)
 
@@ -172,7 +174,7 @@ def create_date_tab(self, db):
     l.addLayout(h)
     self.date_field = df = add(_("&Search the"), QComboBox(w))
     vals = [((v['search_terms'] or [k])[0], v['name'] or k) for k, v in db.field_metadata.iteritems() if v.get('datatype', None) == 'datetime']
-    for k, v in sorted(vals, key=lambda (k, v): sort_key(v)):
+    for k, v in sorted(vals, key=lambda k_v: sort_key(k_v[1])):
         df.addItem(v, k)
     h.addWidget(df)
     self.dateop_date = dd = add(_("date column for books whose &date is "), QComboBox(w))
@@ -211,11 +213,11 @@ def create_date_tab(self, db):
     self.date_human = dh = a(QComboBox(w))
     for val, text in [('today', _('Today')), ('yesterday', _('Yesterday')), ('thismonth', _('This month'))]:
         dh.addItem(text, val)
-    self.date_year.valueChanged.connect(lambda : self.sel_date.setChecked(True))
-    self.date_month.currentIndexChanged.connect(lambda : self.sel_date.setChecked(True))
-    self.date_day.valueChanged.connect(lambda : self.sel_date.setChecked(True))
-    self.date_daysago.valueChanged.connect(lambda : self.sel_daysago.setChecked(True))
-    self.date_human.currentIndexChanged.connect(lambda : self.sel_human.setChecked(True))
+    connect_lambda(self.date_year.valueChanged, self, lambda self: self.sel_date.setChecked(True))
+    connect_lambda(self.date_month.currentIndexChanged, self, lambda self: self.sel_date.setChecked(True))
+    connect_lambda(self.date_day.valueChanged, self, lambda self: self.sel_date.setChecked(True))
+    connect_lambda(self.date_daysago.valueChanged, self, lambda self: self.sel_daysago.setChecked(True))
+    connect_lambda(self.date_human.currentIndexChanged, self, lambda self: self.sel_human.setChecked(True))
     self.sel_date.setChecked(True)
     h.addStretch(10)
 

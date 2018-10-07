@@ -2,7 +2,7 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from future_builtins import map
+from polyglot.builtins import map
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -199,6 +199,10 @@ class Rule(object):  # {{{
             return "contains(field('%s'), \"%s\", '1', '')"%(col, val)
         if action == 'does not match pattern':
             return "contains(field('%s'), \"%s\", '', '1')"%(col, val)
+        if action == 'contains':
+            return "contains(field('%s'), \"%s\", '1', '')"%(col, re.escape(val))
+        if action == 'does not contain':
+            return "contains(field('%s'), \"%s\", '', '1')"%(col, re.escape(val))
 
 # }}}
 

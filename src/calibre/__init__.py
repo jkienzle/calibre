@@ -12,6 +12,12 @@ if 'CALIBRE_SHOW_DEPRECATION_WARNINGS' not in os.environ:
     warnings.simplefilter('ignore', DeprecationWarning)
 try:
     os.getcwdu()
+except AttributeError:
+    os.getcwdu = os.getcwd
+    try:
+        os.getcwd()
+    except EnvironmentError:
+        os.chdir(os.path.expanduser('~'))
 except EnvironmentError:
     os.chdir(os.path.expanduser('~'))
 
@@ -342,9 +348,9 @@ def get_parsed_proxy(typ='http', debug=True):
     if proxy:
         pattern = re.compile((
             '(?:ptype://)?'
-            '(?:(?P<user>\w+):(?P<pass>.*)@)?'
-            '(?P<host>[\w\-\.]+)'
-            '(?::(?P<port>\d+))?').replace('ptype', typ)
+            '(?:(?P<user>\\w+):(?P<pass>.*)@)?'
+            '(?P<host>[\\w\\-\\.]+)'
+            '(?::(?P<port>\\d+))?').replace('ptype', typ)
         )
 
         match = pattern.match(proxies[typ])
@@ -543,14 +549,14 @@ def strftime(fmt, t=None):
         t[0] = replacement
     ans = None
     if iswindows:
-        if isinstance(fmt, unicode):
-            fmt = fmt.encode('mbcs')
-        fmt = fmt.replace(b'%e', b'%#d')
+        if isinstance(fmt, bytes):
+            fmt = fmt.decode('mbcs', 'replace')
+        fmt = fmt.replace(u'%e', u'%#d')
         ans = plugins['winutil'][0].strftime(fmt, t)
     else:
         ans = time.strftime(fmt, t).decode(preferred_encoding, 'replace')
     if early_year:
-        ans = ans.replace('_early year hack##', str(orig_year))
+        ans = ans.replace(u'_early year hack##', unicode(orig_year))
     return ans
 
 

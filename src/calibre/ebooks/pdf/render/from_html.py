@@ -8,7 +8,7 @@ __copyright__ = '2012, Kovid Goyal <kovid at kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import json, os
-from future_builtins import map
+from polyglot.builtins import map
 from math import floor
 from collections import defaultdict
 
@@ -24,6 +24,7 @@ from calibre.ebooks.pdf.render.common import (inch, cm, mm, pica, cicero,
                                               didot, PAPER_SIZES, current_log)
 from calibre.ebooks.pdf.render.engine import PdfDevice
 from calibre.ptempfile import PersistentTemporaryFile
+from calibre.utils.resources import load_hyphenator_dicts
 
 
 def get_page_size(opts, for_comic=False):  # {{{
@@ -159,8 +160,7 @@ class PDFWriter(QObject):
         self.view = QWebView()
         self.page = Page(opts, self.log)
         self.view.setPage(self.page)
-        self.view.setRenderHints(QPainter.Antialiasing|
-                    QPainter.TextAntialiasing|QPainter.SmoothPixmapTransform)
+        self.view.setRenderHints(QPainter.Antialiasing|QPainter.TextAntialiasing|QPainter.SmoothPixmapTransform)
         self.view.loadFinished.connect(self.render_html,
                 type=Qt.QueuedConnection)
         for x in (Qt.Horizontal, Qt.Vertical):
@@ -189,7 +189,7 @@ class PDFWriter(QObject):
                              xdpi=xdpi, ydpi=ydpi, errors=self.log.error,
                              debug=self.log.debug, compress=not
                              opts.uncompressed_pdf, opts=opts,
-                             mark_links=opts.pdf_mark_links)
+                             mark_links=opts.pdf_mark_links, page_margins=(ml, mr, mt, mb))
         self.footer = opts.pdf_footer_template
         if self.footer:
             self.footer = self.footer.strip()
@@ -214,6 +214,10 @@ class PDFWriter(QObject):
         self.margin_top, self.margin_bottom = map(lambda x:int(floor(x)), (mt, mb))
 
         self.painter = QPainter(self.doc)
+        try:
+            self.book_language = pdf_metadata.mi.languages[0]
+        except Exception:
+            self.book_language = 'eng'
         self.doc.set_metadata(title=pdf_metadata.title,
                               author=pdf_metadata.author,
                               tags=pdf_metadata.tags, mi=pdf_metadata.mi)
@@ -316,6 +320,16 @@ class PDFWriter(QObject):
                 self.loop.processEvents(self.loop.ExcludeUserInputEvents)
             evaljs('document.getElementById("MathJax_Message").style.display="none";')
 
+    def load_header_footer_images(self):
+        from calibre.utils.monotonic import monotonic
+        evaljs = self.view.page().mainFrame().evaluateJavaScript
+        st = monotonic()
+        while not evaljs('paged_display.header_footer_images_loaded()'):
+            self.loop.processEvents(self.loop.ExcludeUserInputEvents)
+            if monotonic() - st > 5:
+                self.log.warn('Header and footer images have not loaded in 5 seconds, ignoring')
+                break
+
     def get_sections(self, anchor_map, only_top_level=False):
         sections = defaultdict(list)
         ci = os.path.abspath(os.path.normcase(self.current_item))
@@ -335,6 +349,38 @@ class PDFWriter(QObject):
 
         return sections
 
+    def hyphenate(self, evaljs):
+        evaljs(u'''\
+        Hyphenator.config(
+            {
+            'minwordlength'    : 6,
+            // 'hyphenchar'     : '|',
+            'displaytogglebox' : false,
+            'remoteloading'    : false,
+            'doframes'         : true,
+            'defaultlanguage'  : 'en',
+            'storagetype'      : 'session',
+            'onerrorhandler'   : function (e) {
+                                    console.log(e);
+                                }
+            });
+        Hyphenator.hyphenate(document.body, "%s");
+        ''' % self.hyphenate_lang
+        )
+
+    def convert_page_margins(self, doc_margins):
+        ans = [0, 0, 0, 0]
+
+        def convert(name, idx, vertical=True):
+            m = doc_margins.get(name)
+            if m is None:
+                ans[idx] = getattr(self.doc.engine, '{}_margin'.format(name))
+            else:
+                ans[idx] = m
+
+        convert('left', 0, False), convert('top', 1), convert('right', 2, False), convert('bottom', 3)
+        return ans
+
     def do_paged_render(self):
         if self.paged_js is None:
             import uuid
@@ -343,6 +389,10 @@ class PDFWriter(QObject):
             self.paged_js += cc('ebooks.oeb.display.indexing')
             self.paged_js += cc('ebooks.oeb.display.paged')
             self.paged_js += cc('ebooks.oeb.display.mathjax')
+            if self.opts.pdf_hyphenate:
+                self.paged_js += P('viewer/hyphenate/Hyphenator.js', data=True).decode('utf-8')
+                hjs, self.hyphenate_lang = load_hyphenator_dicts({}, self.book_language)
+                self.paged_js += hjs
             self.hf_uuid = str(uuid.uuid4()).replace('-', '')
 
         self.view.page().mainFrame().addToJavaScriptWindowObject("py_bridge", self)
@@ -350,16 +400,36 @@ class PDFWriter(QObject):
         evaljs = self.view.page().mainFrame().evaluateJavaScript
         evaljs(self.paged_js)
         self.load_mathjax()
+        if self.opts.pdf_hyphenate:
+            self.hyphenate(evaljs)
+
+        margin_top, margin_bottom = self.margin_top, self.margin_bottom
+        page_margins = None
+        if self.opts.pdf_use_document_margins:
+            doc_margins = evaljs('document.documentElement.getAttribute("data-calibre-pdf-output-page-margins")')
+            try:
+                doc_margins = json.loads(doc_margins)
+            except Exception:
+                doc_margins = None
+            if doc_margins and isinstance(doc_margins, dict):
+                doc_margins = {k:float(v) for k, v in doc_margins.iteritems() if isinstance(v, (float, int)) and k in {'right', 'top', 'left', 'bottom'}}
+                if doc_margins:
+                    margin_top = margin_bottom = 0
+                    page_margins = self.convert_page_margins(doc_margins)
 
         amap = json.loads(evaljs('''
         document.body.style.backgroundColor = "white";
+        // Qt WebKit cannot handle opacity with the Pdf backend
+        s = document.createElement('style');
+        s.textContent = '* {opacity: 1 !important}';
+        document.documentElement.appendChild(s);
         paged_display.set_geometry(1, %d, %d, %d);
         paged_display.layout();
         paged_display.fit_images();
         ret = book_indexing.all_links_and_anchors();
         window.scrollTo(0, 0); // This is needed as getting anchor positions could have caused the viewport to scroll
         JSON.stringify(ret);
-        '''%(self.margin_top, 0, self.margin_bottom)))
+        '''%(margin_top, 0, margin_bottom)))
 
         if not isinstance(amap, dict):
             amap = {'links':[], 'anchors':{}}  # Some javascript error occurred
@@ -393,11 +463,13 @@ class PDFWriter(QObject):
         while True:
             set_section(col, sections, 'current_section')
             set_section(col, tl_sections, 'current_tl_section')
-            self.doc.init_page()
+            self.doc.init_page(page_margins)
             if self.header or self.footer:
-                evaljs('paged_display.update_header_footer(%d)'%self.current_page_num)
+                if evaljs('paged_display.update_header_footer(%d)'%self.current_page_num) is True:
+                    self.load_header_footer_images()
+
             self.painter.save()
-            mf.render(self.painter)
+            mf.render(self.painter, mf.ContentsLayer)
             self.painter.restore()
             try:
                 nsl = int(evaljs('paged_display.next_screen_location()'))
@@ -443,7 +515,6 @@ class ImagePDFWriter(object):
                               tags=pdf_metadata.tags, mi=pdf_metadata.mi)
         self.doc_title = pdf_metadata.title
         self.doc_author = pdf_metadata.author
-        page_rect = QRect(*self.doc.full_page_rect)
 
         for imgpath in items:
             self.log.debug('Processing %s...' % imgpath)
@@ -452,7 +523,7 @@ class ImagePDFWriter(object):
             with lopen(imgpath, 'rb') as f:
                 if not p.loadFromData(f.read()):
                     raise ValueError('Could not read image from: {}'.format(imgpath))
-            draw_image_page(page_rect,
+            draw_image_page(QRect(*self.doc.full_page_rect),
                     self.painter, p,
                     preserve_aspect_ratio=True)
             self.doc.end_page()

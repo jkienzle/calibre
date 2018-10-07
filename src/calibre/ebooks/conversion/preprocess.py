@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
+# flake8: noqa
 
 __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -314,7 +315,7 @@ class CSSPreProcessor(object):
         # are commented lines before the first @import or @charset rule. Since
         # the conversion will remove all stylesheets anyway, we don't lose
         # anything
-        data = re.sub(ur'/\*.*?\*/', u'', data, flags=re.DOTALL)
+        data = re.sub(unicode(r'/\*.*?\*/'), u'', data, flags=re.DOTALL)
 
         ans, namespaced = [], False
         for line in data.splitlines():
@@ -532,7 +533,7 @@ class HTMLPreProcessor(object):
         start_rules = []
         if is_pdftohtml:
             # Remove non breaking spaces
-            start_rules.append((re.compile(ur'\u00a0'), lambda match : ' '))
+            start_rules.append((re.compile(unicode(r'\u00a0')), lambda match : ' '))
 
         if not getattr(self.extra_opts, 'keep_ligatures', False):
             html = _ligpat.sub(lambda m:LIGATURES[m.group()], html)
@@ -663,6 +664,9 @@ class HTMLPreProcessor(object):
             from calibre.ebooks.conversion.utils import HeuristicProcessor
             preprocessor = HeuristicProcessor(self.extra_opts, self.log)
             html = preprocessor(html)
+
+        if is_pdftohtml:
+            html = html.replace('<!-- created by calibre\'s pdftohtml -->', '')
 
         if getattr(self.extra_opts, 'smarten_punctuation', False):
             html = smarten_punctuation(html, self.log)

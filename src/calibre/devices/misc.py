@@ -238,7 +238,7 @@ class TREKSTOR(USBMS):
             0x0067,  # This is for the Pyrus Mini
             0x006f,  # This is for the Pyrus Maxi
             0x003e,  # This is for the EBOOK_PLAYER_5M https://bugs.launchpad.net/bugs/792091
-            0x05cL,  # This is for the 4ink https://www.mobileread.com/forums/showthread.php?t=191318
+            0x05c,  # This is for the 4ink https://www.mobileread.com/forums/showthread.php?t=191318
             0x006c,  # This is for the 4ink https://www.mobileread.com/forums/showthread.php?t=218273
             0x006d,  # Another Pyrus? https://www.mobileread.com/forums/showthread.php?t=231982
             0x73,    # This is for the Pyrus 2 LED https://bugs.launchpad.net/bugs/1376018
@@ -573,7 +573,7 @@ class CERVANTES(USBMS):
     supported_platforms = ['windows', 'osx', 'linux']
     FORMATS = ['epub', 'fb2', 'mobi', 'doc', 'rtf', 'pdf', 'txt']
     VENDOR_ID   = [0x2a47]
-    PRODUCT_ID  = [0xad78, 0xad77, 0xad75]
+    PRODUCT_ID  = [0xad79, 0xad78, 0xad77, 0xad75]
     BCD         = [0x0110]
 
     EBOOK_DIR_MAIN = 'Books'

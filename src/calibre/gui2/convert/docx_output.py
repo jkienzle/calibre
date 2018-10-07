@@ -7,6 +7,7 @@ __docformat__ = 'restructuredtext en'
 from PyQt5.Qt import QFormLayout, QComboBox, QCheckBox, QLineEdit, QDoubleSpinBox, QSizePolicy
 
 from calibre.gui2.convert import Widget
+from calibre.ebooks.conversion.config import OPTIONS
 
 paper_size_model = None
 orientation_model = None
@@ -20,11 +21,7 @@ class PluginWidget(Widget):
     ICON = I('mimetypes/docx.png')
 
     def __init__(self, parent, get_option, get_help, db=None, book_id=None):
-        Widget.__init__(self, parent, [
-            'docx_page_size', 'docx_custom_page_size', 'docx_no_cover', 'docx_no_toc',
-            'docx_page_margin_left', 'docx_page_margin_top', 'docx_page_margin_right',
-            'docx_page_margin_bottom',
-        ])
+        Widget.__init__(self, parent, OPTIONS['output']['docx'])
         for x in get_option('docx_page_size').option.choices:
             self.opt_docx_page_size.addItem(x)
 
@@ -48,3 +45,5 @@ class PluginWidget(Widget):
         l.addRow(self.opt_docx_no_toc)
         self.opt_docx_no_cover = QCheckBox(_('Do not insert &cover as image at start of document'))
         l.addRow(self.opt_docx_no_cover)
+        self.opt_preserve_cover_aspect_ratio = QCheckBox(_('Preserve the aspect ratio of the image inserted as cover'))
+        l.addRow(self.opt_preserve_cover_aspect_ratio)

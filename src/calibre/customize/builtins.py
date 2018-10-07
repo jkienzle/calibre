@@ -24,7 +24,7 @@ class PML2PMLZ(FileTypePlugin):
         'This plugin is run every time you add '
         'a PML file to the library.')
     version = numeric_version
-    file_types = set(['pml'])
+    file_types = {'pml'}
     supported_platforms = ['windows', 'osx', 'linux']
     on_import = True
 
@@ -54,7 +54,7 @@ class TXT2TXTZ(FileTypePlugin):
         'containing Markdown or Textile references to images. The referenced '
         'images as well as the TXT file are added to the archive.')
     version = numeric_version
-    file_types = set(['txt', 'text'])
+    file_types = {'txt', 'text'}
     supported_platforms = ['windows', 'osx', 'linux']
     on_import = True
 
@@ -64,23 +64,23 @@ class TXT2TXTZ(FileTypePlugin):
         images = []
 
         # Textile
-        for m in re.finditer(ur'(?mu)(?:[\[{])?\!(?:\. )?(?P<path>[^\s(!]+)\s?(?:\(([^\)]+)\))?\!(?::(\S+))?(?:[\]}]|(?=\s|$))', txt):
+        for m in re.finditer(unicode(r'(?mu)(?:[\[{])?\!(?:\. )?(?P<path>[^\s(!]+)\s?(?:\(([^\)]+)\))?\!(?::(\S+))?(?:[\]}]|(?=\s|$))'), txt):
             path = m.group('path')
             if path and not os.path.isabs(path) and guess_type(path)[0] in OEB_IMAGES and os.path.exists(os.path.join(base_dir, path)):
                 images.append(path)
 
         # Markdown inline
-        for m in re.finditer(ur'(?mu)\!\[([^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*)\]\s*\((?P<path>[^\)]*)\)', txt):  # noqa
+        for m in re.finditer(unicode(r'(?mu)\!\[([^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*)\]\s*\((?P<path>[^\)]*)\)'), txt):  # noqa
             path = m.group('path')
             if path and not os.path.isabs(path) and guess_type(path)[0] in OEB_IMAGES and os.path.exists(os.path.join(base_dir, path)):
                 images.append(path)
 
         # Markdown reference
         refs = {}
-        for m in re.finditer(ur'(?mu)^(\ ?\ ?\ ?)\[(?P<id>[^\]]*)\]:\s*(?P<path>[^\s]*)$', txt):
+        for m in re.finditer(unicode(r'(?mu)^(\ ?\ ?\ ?)\[(?P<id>[^\]]*)\]:\s*(?P<path>[^\s]*)$'), txt):
             if m.group('id') and m.group('path'):
                 refs[m.group('id')] = m.group('path')
-        for m in re.finditer(ur'(?mu)\!\[([^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*)\]\s*\[(?P<id>[^\]]*)\]', txt):  # noqa
+        for m in re.finditer(unicode(r'(?mu)\!\[([^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*(\[[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*\])*[^\]\[]*)\]\s*\[(?P<id>[^\]]*)\]'), txt):  # noqa
             path = refs.get(m.group('id'), None)
             if path and not os.path.isabs(path) and guess_type(path)[0] in OEB_IMAGES and os.path.exists(os.path.join(base_dir, path)):
                 images.append(path)
@@ -132,7 +132,7 @@ plugins += [HTML2ZIP, PML2PMLZ, TXT2TXTZ, ArchiveExtract,]
 class ComicMetadataReader(MetadataReaderPlugin):
 
     name = 'Read comic metadata'
-    file_types = set(['cbr', 'cbz'])
+    file_types = {'cbr', 'cbz'}
     description = _('Extract cover from comic files')
 
     def customization_help(self, gui=False):
@@ -173,7 +173,7 @@ class ComicMetadataReader(MetadataReaderPlugin):
 class CHMMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read CHM metadata'
-    file_types  = set(['chm'])
+    file_types  = {'chm'}
     description = _('Read metadata from %s files') % 'CHM'
 
     def get_metadata(self, stream, ftype):
@@ -184,7 +184,7 @@ class CHMMetadataReader(MetadataReaderPlugin):
 class EPUBMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read EPUB metadata'
-    file_types  = set(['epub'])
+    file_types  = {'epub'}
     description = _('Read metadata from %s files')%'EPUB'
 
     def get_metadata(self, stream, ftype):
@@ -197,7 +197,7 @@ class EPUBMetadataReader(MetadataReaderPlugin):
 class FB2MetadataReader(MetadataReaderPlugin):
 
     name        = 'Read FB2 metadata'
-    file_types  = set(['fb2'])
+    file_types  = {'fb2', 'fbz'}
     description = _('Read metadata from %s files')%'FB2'
 
     def get_metadata(self, stream, ftype):
@@ -208,7 +208,7 @@ class FB2MetadataReader(MetadataReaderPlugin):
 class HTMLMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read HTML metadata'
-    file_types  = set(['html'])
+    file_types  = {'html'}
     description = _('Read metadata from %s files')%'HTML'
 
     def get_metadata(self, stream, ftype):
@@ -219,7 +219,7 @@ class HTMLMetadataReader(MetadataReaderPlugin):
 class HTMLZMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read HTMLZ metadata'
-    file_types  = set(['htmlz'])
+    file_types  = {'htmlz'}
     description = _('Read metadata from %s files') % 'HTMLZ'
     author      = 'John Schember'
 
@@ -231,7 +231,7 @@ class HTMLZMetadataReader(MetadataReaderPlugin):
 class IMPMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read IMP metadata'
-    file_types  = set(['imp'])
+    file_types  = {'imp'}
     description = _('Read metadata from %s files')%'IMP'
     author      = 'Ashish Kulkarni'
 
@@ -243,7 +243,7 @@ class IMPMetadataReader(MetadataReaderPlugin):
 class LITMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read LIT metadata'
-    file_types  = set(['lit'])
+    file_types  = {'lit'}
     description = _('Read metadata from %s files')%'LIT'
 
     def get_metadata(self, stream, ftype):
@@ -254,7 +254,7 @@ class LITMetadataReader(MetadataReaderPlugin):
 class LRFMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read LRF metadata'
-    file_types  = set(['lrf'])
+    file_types  = {'lrf'}
     description = _('Read metadata from %s files')%'LRF'
 
     def get_metadata(self, stream, ftype):
@@ -265,7 +265,7 @@ class LRFMetadataReader(MetadataReaderPlugin):
 class LRXMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read LRX metadata'
-    file_types  = set(['lrx'])
+    file_types  = {'lrx'}
     description = _('Read metadata from %s files')%'LRX'
 
     def get_metadata(self, stream, ftype):
@@ -276,7 +276,7 @@ class LRXMetadataReader(MetadataReaderPlugin):
 class MOBIMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read MOBI metadata'
-    file_types  = set(['mobi', 'prc', 'azw', 'azw3', 'azw4', 'pobi'])
+    file_types  = {'mobi', 'prc', 'azw', 'azw3', 'azw4', 'pobi'}
     description = _('Read metadata from %s files')%'MOBI'
 
     def get_metadata(self, stream, ftype):
@@ -287,7 +287,7 @@ class MOBIMetadataReader(MetadataReaderPlugin):
 class ODTMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read ODT metadata'
-    file_types  = set(['odt'])
+    file_types  = {'odt'}
     description = _('Read metadata from %s files')%'ODT'
 
     def get_metadata(self, stream, ftype):
@@ -298,7 +298,7 @@ class ODTMetadataReader(MetadataReaderPlugin):
 class DocXMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read DOCX metadata'
-    file_types  = set(['docx'])
+    file_types  = {'docx'}
     description = _('Read metadata from %s files')%'DOCX'
 
     def get_metadata(self, stream, ftype):
@@ -320,7 +320,7 @@ class OPFMetadataReader(MetadataReaderPlugin):
 class PDBMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read PDB metadata'
-    file_types  = set(['pdb', 'updb'])
+    file_types  = {'pdb', 'updb'}
     description = _('Read metadata from %s files') % 'PDB'
     author      = 'John Schember'
 
@@ -332,7 +332,7 @@ class PDBMetadataReader(MetadataReaderPlugin):
 class PDFMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read PDF metadata'
-    file_types  = set(['pdf'])
+    file_types  = {'pdf'}
     description = _('Read metadata from %s files')%'PDF'
 
     def get_metadata(self, stream, ftype):
@@ -345,7 +345,7 @@ class PDFMetadataReader(MetadataReaderPlugin):
 class PMLMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read PML metadata'
-    file_types  = set(['pml', 'pmlz'])
+    file_types  = {'pml', 'pmlz'}
     description = _('Read metadata from %s files') % 'PML'
     author      = 'John Schember'
 
@@ -357,7 +357,7 @@ class PMLMetadataReader(MetadataReaderPlugin):
 class RARMetadataReader(MetadataReaderPlugin):
 
     name = 'Read RAR metadata'
-    file_types = set(['rar'])
+    file_types = {'rar'}
     description = _('Read metadata from e-books in RAR archives')
 
     def get_metadata(self, stream, ftype):
@@ -368,7 +368,7 @@ class RARMetadataReader(MetadataReaderPlugin):
 class RBMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read RB metadata'
-    file_types  = set(['rb'])
+    file_types  = {'rb'}
     description = _('Read metadata from %s files')%'RB'
     author      = 'Ashish Kulkarni'
 
@@ -380,7 +380,7 @@ class RBMetadataReader(MetadataReaderPlugin):
 class RTFMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read RTF metadata'
-    file_types  = set(['rtf'])
+    file_types  = {'rtf'}
     description = _('Read metadata from %s files')%'RTF'
 
     def get_metadata(self, stream, ftype):
@@ -391,7 +391,7 @@ class RTFMetadataReader(MetadataReaderPlugin):
 class SNBMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read SNB metadata'
-    file_types  = set(['snb'])
+    file_types  = {'snb'}
     description = _('Read metadata from %s files') % 'SNB'
     author      = 'Li Fanxi'
 
@@ -403,7 +403,7 @@ class SNBMetadataReader(MetadataReaderPlugin):
 class TOPAZMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read Topaz metadata'
-    file_types  = set(['tpz', 'azw1'])
+    file_types  = {'tpz', 'azw1'}
     description = _('Read metadata from %s files')%'MOBI'
 
     def get_metadata(self, stream, ftype):
@@ -414,7 +414,7 @@ class TOPAZMetadataReader(MetadataReaderPlugin):
 class TXTMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read TXT metadata'
-    file_types  = set(['txt'])
+    file_types  = {'txt'}
     description = _('Read metadata from %s files') % 'TXT'
     author      = 'John Schember'
 
@@ -426,7 +426,7 @@ class TXTMetadataReader(MetadataReaderPlugin):
 class TXTZMetadataReader(MetadataReaderPlugin):
 
     name        = 'Read TXTZ metadata'
-    file_types  = set(['txtz'])
+    file_types  = {'txtz'}
     description = _('Read metadata from %s files') % 'TXTZ'
     author      = 'John Schember'
 
@@ -438,7 +438,7 @@ class TXTZMetadataReader(MetadataReaderPlugin):
 class ZipMetadataReader(MetadataReaderPlugin):
 
     name = 'Read ZIP metadata'
-    file_types = set(['zip', 'oebzip'])
+    file_types = {'zip', 'oebzip'}
     description = _('Read metadata from e-books in ZIP archives')
 
     def get_metadata(self, stream, ftype):
@@ -457,7 +457,7 @@ plugins += [x for x in list(locals().values()) if isinstance(x, type) and
 class EPUBMetadataWriter(MetadataWriterPlugin):
 
     name = 'Set EPUB metadata'
-    file_types = set(['epub'])
+    file_types = {'epub'}
     description = _('Set metadata in %s files')%'EPUB'
 
     def set_metadata(self, stream, mi, type):
@@ -476,7 +476,7 @@ class EPUBMetadataWriter(MetadataWriterPlugin):
 class FB2MetadataWriter(MetadataWriterPlugin):
 
     name = 'Set FB2 metadata'
-    file_types = set(['fb2'])
+    file_types = {'fb2', 'fbz'}
     description = _('Set metadata in %s files')%'FB2'
 
     def set_metadata(self, stream, mi, type):
@@ -487,7 +487,7 @@ class FB2MetadataWriter(MetadataWriterPlugin):
 class HTMLZMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set HTMLZ metadata'
-    file_types  = set(['htmlz'])
+    file_types  = {'htmlz'}
     description = _('Set metadata from %s files') % 'HTMLZ'
     author      = 'John Schember'
 
@@ -499,7 +499,7 @@ class HTMLZMetadataWriter(MetadataWriterPlugin):
 class LRFMetadataWriter(MetadataWriterPlugin):
 
     name = 'Set LRF metadata'
-    file_types = set(['lrf'])
+    file_types = {'lrf'}
     description = _('Set metadata in %s files')%'LRF'
 
     def set_metadata(self, stream, mi, type):
@@ -510,7 +510,7 @@ class LRFMetadataWriter(MetadataWriterPlugin):
 class MOBIMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set MOBI metadata'
-    file_types  = set(['mobi', 'prc', 'azw', 'azw3', 'azw4'])
+    file_types  = {'mobi', 'prc', 'azw', 'azw3', 'azw4'}
     description = _('Set metadata in %s files')%'MOBI'
     author      = 'Marshall T. Vandegrift'
 
@@ -522,7 +522,7 @@ class MOBIMetadataWriter(MetadataWriterPlugin):
 class PDBMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set PDB metadata'
-    file_types  = set(['pdb'])
+    file_types  = {'pdb'}
     description = _('Set metadata from %s files') % 'PDB'
     author      = 'John Schember'
 
@@ -534,7 +534,7 @@ class PDBMetadataWriter(MetadataWriterPlugin):
 class PDFMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set PDF metadata'
-    file_types  = set(['pdf'])
+    file_types  = {'pdf'}
     description = _('Set metadata in %s files') % 'PDF'
     author      = 'Kovid Goyal'
 
@@ -546,7 +546,7 @@ class PDFMetadataWriter(MetadataWriterPlugin):
 class RTFMetadataWriter(MetadataWriterPlugin):
 
     name = 'Set RTF metadata'
-    file_types = set(['rtf'])
+    file_types = {'rtf'}
     description = _('Set metadata in %s files')%'RTF'
 
     def set_metadata(self, stream, mi, type):
@@ -557,7 +557,7 @@ class RTFMetadataWriter(MetadataWriterPlugin):
 class TOPAZMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set TOPAZ metadata'
-    file_types  = set(['tpz', 'azw1'])
+    file_types  = {'tpz', 'azw1'}
     description = _('Set metadata in %s files')%'TOPAZ'
     author      = 'Greg Riker'
 
@@ -569,7 +569,7 @@ class TOPAZMetadataWriter(MetadataWriterPlugin):
 class TXTZMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set TXTZ metadata'
-    file_types  = set(['txtz'])
+    file_types  = {'txtz'}
     description = _('Set metadata from %s files') % 'TXTZ'
     author      = 'John Schember'
 
@@ -581,7 +581,7 @@ class TXTZMetadataWriter(MetadataWriterPlugin):
 class DocXMetadataWriter(MetadataWriterPlugin):
 
     name        = 'Set DOCX metadata'
-    file_types  = set(['docx'])
+    file_types  = {'docx'}
     description = _('Read metadata from %s files')%'DOCX'
 
     def set_metadata(self, stream, mi, type):
@@ -702,14 +702,14 @@ from calibre.devices.cybook.driver import CYBOOK, ORIZON, MUSE
 from calibre.devices.eb600.driver import (EB600, COOL_ER, SHINEBOOK, TOLINO,
                 POCKETBOOK360, GER2, ITALICA, ECLICTO, DBOOK, INVESBOOK,
                 BOOQ, ELONEX, POCKETBOOK301, MENTOR, POCKETBOOK602,
-                POCKETBOOK701, POCKETBOOK360P, PI2, POCKETBOOK622, POCKETBOOKHD)
+                POCKETBOOK701, POCKETBOOK740, POCKETBOOK360P, PI2, POCKETBOOK622,
+                POCKETBOOKHD)
 from calibre.devices.iliad.driver import ILIAD
 from calibre.devices.irexdr.driver import IREXDR1000, IREXDR800
 from calibre.devices.jetbook.driver import (JETBOOK, MIBUK, JETBOOK_MINI,
         JETBOOK_COLOR)
 from calibre.devices.kindle.driver import (KINDLE, KINDLE2, KINDLE_DX,
         KINDLE_FIRE)
-from calibre.devices.apple.driver import ITUNES
 from calibre.devices.nook.driver import NOOK, NOOK_COLOR
 from calibre.devices.prs505.driver import PRS505
 from calibre.devices.prst1.driver import PRST1
@@ -748,7 +748,7 @@ plugins += [
     JETBOOK, JETBOOK_MINI, MIBUK, JETBOOK_COLOR,
     SHINEBOOK,
     POCKETBOOK360, POCKETBOOK301, POCKETBOOK602, POCKETBOOK701, POCKETBOOK360P,
-    POCKETBOOK622, PI2, POCKETBOOKHD,
+    POCKETBOOK622, PI2, POCKETBOOKHD, POCKETBOOK740,
     KINDLE, KINDLE2, KINDLE_DX, KINDLE_FIRE,
     NOOK, NOOK_COLOR,
     PRS505, PRST1,
@@ -801,7 +801,6 @@ plugins += [
     NEXTBOOK,
     ADAM,
     MOOVYBOOK, COBY, EX124G, WAYTEQ, WOXTER, POCKETBOOK626, SONYDPTS1,
-    ITUNES,
     BOEYE_BEX,
     BOEYE_BDX,
     MTP_DEVICE,
@@ -817,14 +816,13 @@ from calibre.ebooks.metadata.sources.google import GoogleBooks
 from calibre.ebooks.metadata.sources.amazon import Amazon
 from calibre.ebooks.metadata.sources.edelweiss import Edelweiss
 from calibre.ebooks.metadata.sources.openlibrary import OpenLibrary
-from calibre.ebooks.metadata.sources.isbndb import ISBNDB
 from calibre.ebooks.metadata.sources.overdrive import OverDrive
 from calibre.ebooks.metadata.sources.douban import Douban
 from calibre.ebooks.metadata.sources.ozon import Ozon
 from calibre.ebooks.metadata.sources.google_images import GoogleImages
 from calibre.ebooks.metadata.sources.big_book_search import BigBookSearch
 
-plugins += [GoogleBooks, GoogleImages, Amazon, Edelweiss, OpenLibrary, ISBNDB, OverDrive, Douban, Ozon, BigBookSearch]
+plugins += [GoogleBooks, GoogleImages, Amazon, Edelweiss, OpenLibrary, OverDrive, Douban, Ozon, BigBookSearch]
 
 # }}}
 
@@ -909,6 +907,12 @@ class ActionTagMapper(InterfaceActionBase):
     description = _('Filter/transform the tags for books in the library')
 
 
+class ActionAuthorMapper(InterfaceActionBase):
+    name = 'Author Mapper'
+    actual_plugin = 'calibre.gui2.actions.author_mapper:AuthorMapAction'
+    description = _('Transform the authors for books in the library')
+
+
 class ActionTemplateTester(InterfaceActionBase):
     name = 'Template Tester'
     actual_plugin = 'calibre.gui2.actions.show_template_tester:ShowTemplateTesterAction'
@@ -949,7 +953,7 @@ class ActionSendToDevice(InterfaceActionBase):
 class ActionConnectShare(InterfaceActionBase):
     name = 'Connect Share'
     actual_plugin = 'calibre.gui2.actions.device:ConnectShareAction'
-    description = _('Send books via email or the web. Also connect to iTunes or'
+    description = _('Send books via email or the web. Also connect to'
             ' folders on your computer as if they are devices')
 
 
@@ -1039,6 +1043,12 @@ class ActionMarkBooks(InterfaceActionBase):
     description = _('Temporarily mark books')
 
 
+class ActionVirtualLibrary(InterfaceActionBase):
+    name = 'Virtual Library'
+    actual_plugin = 'calibre.gui2.actions.virtual_library:VirtualLibraryAction'
+    description = _('Change the current Virtual library')
+
+
 class ActionStore(InterfaceActionBase):
     name = 'Store'
     author = 'John Schember'
@@ -1072,7 +1082,8 @@ plugins += [ActionAdd, ActionFetchAnnotations, ActionGenerateCatalog,
         ActionAddToLibrary, ActionEditCollections, ActionMatchBooks, ActionChooseLibrary,
         ActionCopyToLibrary, ActionTweakEpub, ActionUnpackBook, ActionNextMatch, ActionStore,
         ActionPluginUpdater, ActionPickRandom, ActionEditToC, ActionSortBy,
-        ActionMarkBooks, ActionEmbed, ActionTemplateTester, ActionTagMapper]
+        ActionMarkBooks, ActionEmbed, ActionTemplateTester, ActionTagMapper, ActionAuthorMapper,
+        ActionVirtualLibrary]
 
 # }}}
 
@@ -1119,7 +1130,7 @@ class Columns(PreferencesPlugin):
 class Toolbar(PreferencesPlugin):
     name = 'Toolbar'
     icon = I('wizard.png')
-    gui_name = _('Toolbars')
+    gui_name = _('Toolbars & menus')
     category = 'Interface'
     gui_category = _('Interface')
     category_order = 1
@@ -1366,24 +1377,6 @@ class StoreAmazonKindleStore(StoreBase):
     affiliate = False
 
 
-class StoreSonyStore(StoreBase):
-    name = 'SONY Reader Store'
-    description = u'SONY Reader books.'
-    author = 'Kovid Goyal'
-    actual_plugin = 'calibre.gui2.store.stores.sony_plugin:SonyStore'
-
-    headquarters = 'US'
-    formats = ['SONY']
-    affiliate = False
-
-
-class StoreSonyAUStore(StoreSonyStore):
-    name = 'SONY Reader (Australia) Store'
-    description = u'SONY Reader books (Australia).'
-    actual_plugin = 'calibre.gui2.store.stores.sony_au_plugin:SonyStore'
-    headquarters = 'AU'
-
-
 class StoreAmazonAUKindleStore(StoreBase):
     name = 'Amazon AU Kindle'
     author = u'Kovid Goyal'
@@ -1522,7 +1515,6 @@ class StoreBeamEBooksDEStore(StoreBase):
     drm_free_only = True
     headquarters = 'DE'
     formats = ['EPUB', 'MOBI', 'PDF']
-    affiliate = True
 
 
 class StoreBiblioStore(StoreBase):
@@ -1533,18 +1525,6 @@ class StoreBiblioStore(StoreBase):
 
     headquarters = 'BG'
     formats = ['EPUB, PDF']
-
-
-class StoreCdpStore(StoreBase):
-    name = 'Cdp.pl'
-    author = u'Tomasz Długosz'
-    description = u'E-booki w wielu formatach zabezpieczone znakiem wodnym RuneMark'
-    actual_plugin = 'calibre.gui2.store.stores.cdp_plugin:CdpStore'
-
-    drm_free_only = True
-    headquarters = 'PL'
-    formats = ['EPUB', 'MOBI', 'PDF']
-    affiliate = True
 
 
 class StoreChitankaStore(StoreBase):
@@ -1670,18 +1650,6 @@ class StoreKoboStore(StoreBase):
     affiliate = True
 
 
-class StoreKoobeStore(StoreBase):
-    name = 'Koobe'
-    author = u'Tomasz Długosz'
-    description = u'Księgarnia internetowa oferuje ebooki (książki elektroniczne) w postaci plików epub, mobi i pdf.'
-    actual_plugin = 'calibre.gui2.store.stores.koobe_plugin:KoobeStore'
-
-    drm_free_only = True
-    headquarters = 'PL'
-    formats = ['EPUB', 'MOBI', 'PDF']
-    affiliate = True
-
-
 class StoreLegimiStore(StoreBase):
     name = 'Legimi'
     author = u'Tomasz Długosz'
@@ -1758,16 +1726,6 @@ class StoreNextoStore(StoreBase):
     affiliate = True
 
 
-class StoreNookUKStore(StoreBase):
-    name = 'Nook UK'
-    author = 'Charles Haley'
-    description = u'Barnes & Noble S.A.R.L, a subsidiary of Barnes & Noble, Inc., a leading retailer of content, digital media and educational products, is proud to bring the award-winning NOOK reading experience and a leading digital bookstore to the UK.'  # noqa
-    actual_plugin = 'calibre.gui2.store.stores.nook_uk_plugin:NookUKStore'
-
-    headquarters = 'UK'
-    formats = ['NOOK']
-
-
 class StoreOpenBooksStore(StoreBase):
     name = 'Open Books'
     description = u'Comprehensive listing of DRM free e-books from a variety of sources provided by users of calibre.'
@@ -1832,6 +1790,18 @@ class StoreSmashwordsStore(StoreBase):
     affiliate = True
 
 
+class StoreSwiatEbookowStore(StoreBase):
+    name = u'Świat Ebooków'
+    author = u'Tomasz Długosz'
+    description = u'Ebooki maje tę zaletę, że są zawsze i wszędzie tam, gdzie tylko nas dopadnie ochota na czytanie.'
+    actual_plugin = 'calibre.gui2.store.stores.swiatebookow_plugin:SwiatEbookowStore'
+
+    drm_free_only = True
+    headquarters = 'PL'
+    formats = ['EPUB', 'MOBI', 'PDF']
+    affiliate = True
+
+
 class StoreVirtualoStore(StoreBase):
     name = 'Virtualo'
     author = u'Tomasz Długosz'
@@ -1841,17 +1811,6 @@ class StoreVirtualoStore(StoreBase):
     headquarters = 'PL'
     formats = ['EPUB', 'MOBI', 'PDF']
     affiliate = True
-
-
-class StoreWaterstonesUKStore(StoreBase):
-    name = 'Waterstones UK'
-    author = 'Charles Haley'
-    description = u'Waterstone\'s mission is to be the leading Bookseller on the High Street and online providing customers the widest choice, great value and expert advice from a team passionate about Bookselling.'  # noqa
-    actual_plugin = 'calibre.gui2.store.stores.waterstones_uk_plugin:WaterstonesUKStore'
-
-    headquarters = 'UK'
-    formats = ['EPUB', 'PDF']
-    affiliate = False
 
 
 class StoreWeightlessBooksStore(StoreBase):
@@ -1922,7 +1881,6 @@ plugins += [
     StoreBeamEBooksDEStore,
     StoreBiblioStore,
     StoreChitankaStore,
-    StoreCdpStore,
     StoreEbookNLStore,
     StoreEbookpointStore,
     StoreEbookscomStore,
@@ -1933,7 +1891,6 @@ plugins += [
     StoreGoogleBooksStore,
     StoreGutenbergStore,
     StoreKoboStore,
-    StoreKoobeStore,
     StoreLegimiStore,
     StoreLibreDEStore,
     StoreLitResStore,
@@ -1941,16 +1898,14 @@ plugins += [
     StoreMillsBoonUKStore,
     StoreMobileReadStore,
     StoreNextoStore,
-    StoreNookUKStore,
     StoreOpenBooksStore,
     StoreOzonRUStore,
     StorePragmaticBookshelfStore,
     StorePublioStore,
     StoreRW2010Store,
     StoreSmashwordsStore,
-    StoreSonyStore, StoreSonyAUStore,
+    StoreSwiatEbookowStore,
     StoreVirtualoStore,
-    StoreWaterstonesUKStore,
     StoreWeightlessBooksStore,
     StoreWHSmithUKStore,
     StoreWolneLekturyStore,

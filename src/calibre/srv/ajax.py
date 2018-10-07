@@ -7,7 +7,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 
 from functools import partial
-from future_builtins import zip
+from polyglot.builtins import zip
 from itertools import cycle
 
 from calibre import force_unicode
@@ -475,7 +475,7 @@ def books_in(ctx, rd, encoded_category, encoded_item, library_id):
         try:
             dname, ditem = map(decode_name, (encoded_category, encoded_item))
         except:
-            raise HTTPNotFound('Invalid encoded param: %r' % (encoded_category, encoded_item))
+            raise HTTPNotFound('Invalid encoded param: %r (%r)' % (encoded_category, encoded_item))
         num, offset = get_pagination(rd.query)
         sort, sort_order = rd.query.get('sort', 'title'), rd.query.get('sort_order')
         sort_order = ensure_val(sort_order, 'asc', 'desc')
@@ -536,11 +536,11 @@ def search_result(ctx, rd, db, query, num, offset, sort, sort_order, vl=''):
         if sfield not in skeys:
             raise HTTPNotFound('%s is not a valid sort field'%sort)
 
-    ids = ctx.search(rd, db, query, vl=vl)
+    ids, parse_error = ctx.search(rd, db, query, vl=vl, report_restriction_errors=True)
     ids = db.multisort(fields=multisort, ids_to_sort=ids)
     total_num = len(ids)
     ids = ids[offset:offset+num]
-    return {
+    ans = {
         'total_num': total_num, 'sort_order':sort_order,
         'offset':offset, 'num':len(ids), 'sort':sort,
         'base_url':ctx.url_for(search, library_id=db.server_library_id),
@@ -549,6 +549,9 @@ def search_result(ctx, rd, db, query, num, offset, sort, sort_order, vl=''):
         'book_ids':ids,
         'vl': vl,
     }
+    if parse_error is not None:
+        ans['bad_restriction'] = unicode(parse_error)
+    return ans
 
 
 @endpoint('/ajax/search/{library_id=None}', postprocess=json)

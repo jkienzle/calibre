@@ -80,9 +80,8 @@ class OptionRecommendation(object):
             raise ValueError('OpRec: %s: Recommended value not in choices'%
                              self.option.name)
         if not (isinstance(self.recommended_value, (int, float, str, unicode)) or self.recommended_value is None):
-            raise ValueError('OpRec: %s:'%self.option.name +
-                             repr(self.recommended_value) +
-                             ' is not a string or a number')
+            raise ValueError('OpRec: %s:'%self.option.name + repr(
+                self.recommended_value) + ' is not a string or a number')
 
 
 class DummyReporter(object):
@@ -137,6 +136,8 @@ class InputFormatPlugin(Plugin):
     type = _('Conversion input')
     can_be_disabled = False
     supported_platforms = ['windows', 'osx', 'linux']
+    commit_name = None  # unique name under which options for this plugin are saved
+    ui_data = None
 
     #: Set of file types for which this plugin should be run
     #: For example: ``set(['azw', 'mobi', 'prc'])``
@@ -165,7 +166,7 @@ class InputFormatPlugin(Plugin):
     #: Options shared by all Input format plugins. Do not override
     #: in sub-classes. Use :attr:`options` instead. Every option must be an
     #: instance of :class:`OptionRecommendation`.
-    common_options = set([
+    common_options = {
         OptionRecommendation(name='input_encoding',
             recommended_value=None, level=OptionRecommendation.LOW,
             help=_('Specify the character encoding of the input document. If '
@@ -173,9 +174,7 @@ class InputFormatPlugin(Plugin):
                    'document itself. Particularly useful for documents that '
                    'do not declare an encoding or that have erroneous '
                    'encoding declarations.')
-        ),
-
-    ])
+        )}
 
     #: Options to customize the behavior of this plugin. Every option must be an
     #: instance of :class:`OptionRecommendation`.
@@ -286,6 +285,8 @@ class OutputFormatPlugin(Plugin):
     type = _('Conversion output')
     can_be_disabled = False
     supported_platforms = ['windows', 'osx', 'linux']
+    commit_name = None  # unique name under which options for this plugin are saved
+    ui_data = None
 
     #: The file type (extension without leading period) that this
     #: plugin outputs
@@ -294,14 +295,13 @@ class OutputFormatPlugin(Plugin):
     #: Options shared by all Input format plugins. Do not override
     #: in sub-classes. Use :attr:`options` instead. Every option must be an
     #: instance of :class:`OptionRecommendation`.
-    common_options = set([
+    common_options = {
         OptionRecommendation(name='pretty_print',
             recommended_value=False, level=OptionRecommendation.LOW,
             help=_('If specified, the output plugin will try to create output '
             'that is as human readable as possible. May not have any effect '
             'for some output plugins.')
-        ),
-        ])
+        )}
 
     #: Options to customize the behavior of this plugin. Every option must be an
     #: instance of :class:`OptionRecommendation`.
@@ -341,6 +341,13 @@ class OutputFormatPlugin(Plugin):
     def is_periodical(self):
         return self.oeb.metadata.publication_type and \
             unicode(self.oeb.metadata.publication_type[0]).startswith('periodical:')
+
+    def specialize_options(self, log, opts, input_fmt):
+        '''
+        Can be used to change the values of conversion options, as used by the
+        conversion pipeline.
+        '''
+        pass
 
     def specialize_css_for_output(self, log, opts, item, stylizer):
         '''

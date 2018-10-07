@@ -64,8 +64,18 @@ class UpdateEditorGeometry(object):
             new_width += r.width()
 
         # Compute the maximum we can show if we consume the entire viewport
-        max_width = (self.table_widget.horizontalScrollBar().geometry().width() -
-                     self.table_widget.verticalHeader().width())
+        pin_view = self.table_widget.pin_view
+        is_pin_view, p = False, editor.parent()
+        while p is not None:
+            if p is pin_view:
+                is_pin_view = True
+                break
+            p = p.parent()
+        if is_pin_view:
+            max_width = pin_view.horizontalScrollBar().geometry().width()
+        else:
+            view = self.table_widget
+            max_width = view.horizontalScrollBar().geometry().width() - view.verticalHeader().width()
         # What we have to display might not fit. If so, adjust down
         new_width = new_width if new_width < max_width else max_width
 
@@ -113,9 +123,14 @@ class DateTimeEdit(QDateTimeEdit):  # {{{
         m = QMenu(self)
         m.addAction(_('Set date to undefined') + '\t' + QKeySequence(Qt.Key_Minus).toString(QKeySequence.NativeText),
                     self.clear_date)
+        m.addAction(_('Set date to today') + '\t' + QKeySequence(Qt.Key_Equal).toString(QKeySequence.NativeText),
+                    self.today_date)
         m.addSeparator()
         populate_standard_spinbox_context_menu(self, m)
         m.popup(ev.globalPos())
+
+    def today_date(self):
+        self.setDateTime(QDateTime.currentDateTime())
 
     def clear_date(self):
         self.setDateTime(UNDEFINED_QDATETIME)
@@ -125,8 +140,8 @@ class DateTimeEdit(QDateTimeEdit):  # {{{
             ev.accept()
             self.clear_date()
         elif ev.key() == Qt.Key_Equal:
+            self.today_date()
             ev.accept()
-            self.setDateTime(QDateTime.currentDateTime())
         else:
             return QDateTimeEdit.keyPressEvent(self, ev)
 # }}}
@@ -155,6 +170,7 @@ def make_clearing_spinbox(spinbox):
             else:
                 return spinbox.keyPressEvent(self, ev)
     return SpinBox
+
 
 ClearingSpinBox = make_clearing_spinbox(QSpinBox)
 ClearingDoubleSpinBox = make_clearing_spinbox(QDoubleSpinBox)

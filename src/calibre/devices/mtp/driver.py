@@ -64,7 +64,7 @@ class MTP_DEVICE(BASE):
             p.defaults['format_map'] = self.FORMATS
             p.defaults['send_to'] = ['Calibre_Companion', 'Books',
                     'eBooks/import', 'eBooks', 'wordplayer/calibretransfer',
-                    'sdcard/ebooks', 'kindle']
+                    'sdcard/ebooks', 'kindle', 'NOOK']
             p.defaults['send_template'] = '{title} - {authors}'
             p.defaults['blacklist'] = []
             p.defaults['history'] = {}
@@ -572,6 +572,6 @@ if __name__ == '__main__':
         dev.set_progress_reporter(prints)
         dev.open(cd, None)
         dev.filesystem_cache.dump()
-        print ('Prefix for main mem:', dev.prefix_for_location(None))
+        print('Prefix for main mem:', dev.prefix_for_location(None))
     finally:
         dev.shutdown()

@@ -11,12 +11,12 @@ from functools import partial, wraps
 from urlparse import urlparse
 
 from PyQt5.Qt import (
-    QObject, QApplication, QDialog, QGridLayout, QLabel, QSize, Qt,
-    QDialogButtonBox, QIcon, QInputDialog, QUrl, pyqtSignal)
+    QObject, QApplication, QDialog, QGridLayout, QLabel, QSize, Qt, QCheckBox,
+    QDialogButtonBox, QIcon, QInputDialog, QUrl, pyqtSignal, QVBoxLayout)
 
 from calibre import prints, isbytestring
 from calibre.constants import cache_dir, iswindows
-from calibre.ptempfile import PersistentTemporaryDirectory, TemporaryDirectory
+from calibre.ptempfile import TemporaryDirectory
 from calibre.ebooks.oeb.base import urlnormalize
 from calibre.ebooks.oeb.polish.main import SUPPORTED, tweak_polish
 from calibre.ebooks.oeb.polish.container import get_container as _gc, clone_container, guess_type, OEB_DOCS, OEB_STYLES
@@ -27,7 +27,7 @@ from calibre.ebooks.oeb.polish.replace import rename_files, replace_file, get_re
 from calibre.ebooks.oeb.polish.split import split, merge, AbortError, multisplit
 from calibre.ebooks.oeb.polish.toc import remove_names_from_toc, create_inline_toc
 from calibre.ebooks.oeb.polish.utils import link_stylesheets, setup_cssutils_serialization as scs
-from calibre.gui2 import error_dialog, choose_files, question_dialog, info_dialog, choose_save_file, open_url, choose_dir
+from calibre.gui2 import error_dialog, choose_files, question_dialog, info_dialog, choose_save_file, open_url, choose_dir, add_to_recent_docs
 from calibre.gui2.dialogs.confirm_delete import confirm
 from calibre.gui2.tweak_book import (
     set_current_container, current_container, tprefs, actions, editors,
@@ -49,6 +49,7 @@ from calibre.gui2.tweak_book.widgets import (
 from calibre.utils.config import JSONConfig
 from calibre.utils.icu import numeric_sort_key
 from calibre.utils.imghdr import identify
+from calibre.utils.tdir_in_cache import tdir_in_cache
 
 _diff_dialogs = []
 last_used_transform_rules = []
@@ -296,7 +297,9 @@ class Boss(QObject):
         self.container_count = -1
         if self.tdir:
             shutil.rmtree(self.tdir, ignore_errors=True)
-        self.tdir = PersistentTemporaryDirectory()
+        # We use the cache dir rather than the temporary dir to try and prevent
+        # temp file cleaners from nuking ebooks. See https://bugs.launchpad.net/bugs/1740460
+        self.tdir = tdir_in_cache('ee')
         self._edit_file_on_open = edit_file
         self._clear_notify_data = clear_notify_data
         self.gui.blocking_job('open_book', _('Opening book, please wait...'), self.book_opened, get_container, path, tdir=self.mkdtemp())
@@ -345,8 +348,7 @@ class Boss(QObject):
             self.gui.update_recent_books()
             if iswindows:
                 try:
-                    from win32com.shell import shell, shellcon
-                    shell.SHAddToRecentDocs(shellcon.SHARD_PATHW, path)
+                    add_to_recent_docs(path)
                 except Exception:
                     import traceback
                     traceback.print_exc()
@@ -434,7 +436,7 @@ class Boss(QObject):
         completion_worker().clear_caches('names')
 
     def add_file(self):
-        if not self.ensure_book(_('You must first open a book to tweak, before trying to create new files in it.')):
+        if not self.ensure_book(_('You must first open a book to edit, before trying to create new files in it.')):
             return
         self.commit_dirty_opf()
         d = NewFileDialog(self.gui)
@@ -449,8 +451,11 @@ class Boss(QObject):
         self.add_savepoint(_('Before: Add file %s') % self.gui.elided_text(file_name))
         c = current_container()
         adata = data.replace(b'%CURSOR%', b'') if using_template else data
+        spine_index = c.index_in_spine(self.currently_editing or '')
+        if spine_index is not None:
+            spine_index += 1
         try:
-            added_name = c.add_file(file_name, adata)
+            added_name = c.add_file(file_name, adata, spine_index=spine_index)
         except:
             self.rewind_savepoint()
             raise
@@ -470,7 +475,7 @@ class Boss(QObject):
         return added_name
 
     def add_files(self):
-        if not self.ensure_book(_('You must first open a book to tweak, before trying to create new files in it.')):
+        if not self.ensure_book(_('You must first open a book to edit, before trying to create new files in it.')):
             return
 
         files = choose_files(self.gui, 'tweak-book-bulk-import-files', _('Choose files'))
@@ -761,11 +766,34 @@ class Boss(QObject):
         :param to_container: A container object to compare the current container to. If None, the previously checkpointed container is used
         '''
         self.commit_all_editors_to_container()
-        d = self.create_diff_dialog()
-        d.revert_requested.connect(partial(self.revert_requested, self.global_undo.previous_container))
+        k = {} if allow_revert else {'revert_msg': None}
+        d = self.create_diff_dialog(**k)
+        previous_container = self.global_undo.previous_container
+        connect_lambda(d.revert_requested, self, lambda self: self.revert_requested(previous_container))
         other = to_container or self.global_undo.previous_container
         d.container_diff(other, self.global_undo.current_container,
                          names=(self.global_undo.label_for_container(other), self.global_undo.label_for_container(self.global_undo.current_container)))
+
+    def ask_to_show_current_diff(self, name, title, msg, allow_revert=True, to_container=None):
+        if tprefs.get('skip_ask_to_show_current_diff_for_' + name):
+            return
+        d = QDialog(self.gui)
+        k = QVBoxLayout(d)
+        d.setWindowTitle(title)
+        k.addWidget(QLabel(msg))
+        k.confirm = cb = QCheckBox(_('Show this popup again'))
+        k.addWidget(cb)
+        cb.setChecked(True)
+        connect_lambda(cb.toggled, d, lambda d, checked: tprefs.set('skip_ask_to_show_current_diff_for_' + name, not checked))
+        d.bb = bb = QDialogButtonBox(QDialogButtonBox.Close, d)
+        k.addWidget(bb)
+        bb.accepted.connect(d.accept)
+        bb.rejected.connect(d.reject)
+        d.b = b = bb.addButton(_('See what &changed'), bb.AcceptRole)
+        b.setIcon(QIcon(I('diff.png'))), b.setAutoDefault(False)
+        bb.button(bb.Close).setDefault(True)
+        if d.exec_() == d.Accepted:
+            self.show_current_diff(allow_revert=allow_revert, to_container=to_container)
 
     def compare_book(self):
         self.commit_all_editors_to_container()
@@ -820,6 +848,7 @@ class Boss(QObject):
                 fix_all_html(current_container())
                 self.update_editors_from_container()
                 self.set_modified()
+            self.ask_to_show_current_diff('html-fix', _('Fixing done'), _('All HTML files fixed'))
 
     def pretty_print(self, current):
         if current:
@@ -832,6 +861,7 @@ class Boss(QObject):
                 self.update_editors_from_container()
                 self.set_modified()
                 QApplication.alert(self.gui)
+            self.ask_to_show_current_diff('beautify', _('Beautified'), _('All files beautified'))
 
     def mark_selected_text(self):
         ed = self.gui.central.current_editor
@@ -1445,6 +1475,9 @@ class Boss(QObject):
                 _('Editing files of type %s is not supported' % mime), show=True)
         return self.edit_file(name, syntax)
 
+    def edit_next_file(self, backwards=False):
+        self.gui.file_list.edit_next_file(self.currently_editing, backwards)
+
     def quick_open(self):
         if not self.ensure_book(_('No book is currently open. You must first open a book to edit.')):
             return
@@ -1510,7 +1543,8 @@ class Boss(QObject):
             actions['go-to-line-number'].setEnabled(ed.has_line_numbers)
             actions['fix-html-current'].setEnabled(ed.syntax == 'html')
             name = editor_name(ed)
-            if name is not None and getattr(ed, 'syntax', None) == 'html':
+            mime = current_container().mime_map.get(name)
+            if name is not None and (getattr(ed, 'syntax', None) == 'html' or mime == 'image/svg+xml'):
                 if self.gui.preview.show(name):
                     # The file being displayed by the preview has changed.
                     # Set the preview's position to the current cursor
@@ -1598,14 +1632,14 @@ class Boss(QObject):
             d.l.addWidget(d.bb, 1, 0, 1, 2)
             d.do_save = None
 
-            def endit(x):
+            def endit(d, x):
                 d.do_save = x
                 d.accept()
             b = d.bb.addButton(_('&Save and Quit'), QDialogButtonBox.ActionRole)
             b.setIcon(QIcon(I('save.png')))
-            b.clicked.connect(lambda *args: endit(True))
+            connect_lambda(b.clicked, d, lambda d: endit(d, True))
             b = d.bb.addButton(_('&Quit without saving'), QDialogButtonBox.ActionRole)
-            b.clicked.connect(lambda *args: endit(False))
+            connect_lambda(b.clicked, d, lambda d: endit(d, False))
             d.resize(d.sizeHint())
             if d.exec_() != d.Accepted or d.do_save is None:
                 return False

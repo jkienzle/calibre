@@ -10,7 +10,7 @@ __docformat__ = 'restructuredtext en'
 import re
 from functools import partial
 from datetime import datetime
-from future_builtins import zip
+from polyglot.builtins import zip
 
 from calibre.constants import preferred_encoding, ispy3
 from calibre.ebooks.metadata import author_to_author_sort, title_sort
@@ -36,6 +36,7 @@ def single_text(x):
         x = x.decode(preferred_encoding, 'replace')
     x = x.strip()
     return x if x else None
+
 
 series_index_pat = re.compile(r'(.*)\s+\[([.0-9]+)\]$')
 
@@ -528,8 +529,7 @@ class Writer(object):
         elif field.is_many_many:
             self.set_books_func = many_many
         elif field.is_many:
-            self.set_books_func = (self.set_books_for_enum if dt ==
-                                   'enumeration' else many_one)
+            self.set_books_func = (self.set_books_for_enum if dt == 'enumeration' else many_one)
         else:
             self.set_books_func = (one_one_in_books if field.metadata['table'] == 'books' else one_one_in_other)
             if self.name in {'timestamp', 'uuid', 'sort'}:
@@ -552,5 +552,3 @@ class Writer(object):
         if not book_id_val_map:
             return set()
         return many_one(book_id_val_map, db, field, False)
-
-

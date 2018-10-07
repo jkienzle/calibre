@@ -21,6 +21,8 @@ from calibre.gui2.dialogs.saved_search_editor import SavedSearchEditor
 from calibre.gui2.dialogs.search import SearchDialog
 from calibre.utils.icu import primary_sort_key
 
+QT_HIDDEN_CLEAR_ACTION = '_q_qlineeditclearaction'
+
 
 class AsYouType(unicode):
 
@@ -109,8 +111,10 @@ class SearchBox2(QComboBox):  # {{{
         self.line_edit = SearchLineEdit(self)
         self.setLineEdit(self.line_edit)
         if add_clear_action:
-            self.clear_action = self.add_action('clear_left.png')
-            self.clear_action.triggered.connect(self.clear_clicked)
+            self.lineEdit().setClearButtonEnabled(True)
+            ac = self.findChild(QAction, QT_HIDDEN_CLEAR_ACTION)
+            if ac is not None:
+                ac.triggered.connect(self.clear_clicked)
 
         c = self.line_edit.completer()
         c.setCompletionMode(c.PopupCompletion)
@@ -537,7 +541,9 @@ class SavedSearchBoxMixin(object):  # {{{
 
     def init_saved_seach_box_mixin(self):
         self.saved_search.changed.connect(self.saved_searches_changed)
-        self.search.clear_action.triggered.connect(self.saved_search.clear)
+        ac = self.search.findChild(QAction, QT_HIDDEN_CLEAR_ACTION)
+        if ac is not None:
+            ac.triggered.connect(self.saved_search.clear)
         self.save_search_button.clicked.connect(
                                 self.saved_search.save_search_button_clicked)
         self.copy_search_button.clicked.connect(
@@ -599,6 +605,7 @@ class SavedSearchBoxMixin(object):  # {{{
         from calibre.gui2.dialogs.saved_search_editor import AddSavedSearch
         d = AddSavedSearch(parent=self, search=self.search.current_text)
         if d.exec_() == d.Accepted:
+            self.current_db.new_api.ensure_has_search_category(fail_on_existing=False)
             self.do_rebuild_saved_searches()
 
     def get_saved_search_text(self):

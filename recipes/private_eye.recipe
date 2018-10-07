@@ -131,7 +131,7 @@ class PrivateEyeRecipe(BasicNewsRecipe):
                     day = ''.join(c for c in day if c.isdigit())
                     date = datetime.strptime(
                         " ".join((day, month, year)), "%d %B %Y")
-                    date = date - timedelta(12)
+                    date = date - timedelta(11)
                     self.publication_date = datetime.strftime(
                         date, "%d %B %Y").lstrip("0")
                     self.log.debug("Publication date: %s" % self.publication_date)
@@ -145,7 +145,7 @@ class PrivateEyeRecipe(BasicNewsRecipe):
             self.log.warning("Publication date not found")
 
         # Online articles
-        online = soup.find('div', {'id': 'block-left', 'class': 'article'})
+        online = soup.find('div', {'id': 'block-left'})
 
         headline = online.find('span', {'class': 'headline'})
         if headline:
@@ -165,7 +165,7 @@ class PrivateEyeRecipe(BasicNewsRecipe):
                     current_section = piece.string
                 elif tag_class == ('a', 'header'):
                     self.add_article(title, url, r"\r\n".join(descriptions))
-                    title = piece.string.rstrip(u' »').strip()
+                    title = self.tag_to_string(piece).rstrip(u' »').strip()
                     url = self.fix_url(piece.get('href', ''))
                     descriptions = []
                 else:
@@ -198,7 +198,7 @@ class PrivateEyeRecipe(BasicNewsRecipe):
                     url = self.fix_url(title_tag.get('href', ''))
             desc_tag = more.find('a', {'class': 'header'})
             if desc_tag:
-                descriptions.append(desc_tag.string)
+                descriptions.append(self.tag_to_string(desc_tag))
                 if not url:
                     url = self.fix_url(desc_tag.get('href', ''))
             self.add_article(title, url, r"\r\n".join(descriptions))

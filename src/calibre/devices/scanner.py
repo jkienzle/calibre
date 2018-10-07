@@ -1,3 +1,4 @@
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 '''
@@ -90,8 +91,8 @@ class LibUSBScanner(object):
                 self()
             for i in xrange(3):
                 gc.collect()
-            print 'Mem consumption increased by:', memory() - start, 'MB',
-            print 'after', num, 'repeats'
+            print('Mem consumption increased by:', memory() - start, 'MB', end=' ')
+            print('after', num, 'repeats')
 
 
 class LinuxScanner(object):
@@ -166,60 +167,6 @@ class LinuxScanner(object):
         return ans
 
 
-class FreeBSDScanner(object):
-
-    def __call__(self):
-        ans = set([])
-        import dbus
-
-        try:
-            bus = dbus.SystemBus()
-            manager = dbus.Interface(bus.get_object('org.freedesktop.Hal',
-                          '/org/freedesktop/Hal/Manager'), 'org.freedesktop.Hal.Manager')
-            paths = manager.FindDeviceStringMatch('freebsd.driver','da')
-            for path in paths:
-                obj = bus.get_object('org.freedesktop.Hal', path)
-                objif = dbus.Interface(obj, 'org.freedesktop.Hal.Device')
-                parentdriver = None
-                while parentdriver != 'umass':
-                    try:
-                        obj = bus.get_object('org.freedesktop.Hal',
-                              objif.GetProperty('info.parent'))
-                        objif = dbus.Interface(obj, 'org.freedesktop.Hal.Device')
-                        try:
-                            parentdriver = objif.GetProperty('freebsd.driver')
-                        except dbus.exceptions.DBusException as e:
-                            continue
-                    except dbus.exceptions.DBusException as e:
-                        break
-                if parentdriver != 'umass':
-                    continue
-                dev = []
-                try:
-                    dev.append(objif.GetProperty('usb.vendor_id'))
-                    dev.append(objif.GetProperty('usb.product_id'))
-                    dev.append(objif.GetProperty('usb.device_revision_bcd'))
-                except dbus.exceptions.DBusException as e:
-                    continue
-                try:
-                    dev.append(objif.GetProperty('info.vendor'))
-                except:
-                    dev.append('')
-                try:
-                    dev.append(objif.GetProperty('info.product'))
-                except:
-                    dev.append('')
-                try:
-                    dev.append(objif.GetProperty('usb.serial'))
-                except:
-                    dev.append('')
-                dev.append(path)
-                ans.add(tuple(dev))
-        except dbus.exceptions.DBusException as e:
-            print >>sys.stderr, "Execution failed:", e
-        return ans
-
-
 if islinux:
     linux_scanner = LinuxScanner()
 
@@ -236,7 +183,7 @@ if False and isosx:
     osx_scanner = usbobserver.get_usb_devices
 
 if isfreebsd:
-    freebsd_scanner = FreeBSDScanner()
+    freebsd_scanner = libusb_scanner
 
 ''' NetBSD support currently not written yet '''
 if isnetbsd:

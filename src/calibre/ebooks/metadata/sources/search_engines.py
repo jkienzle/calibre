@@ -8,7 +8,6 @@ import json
 import re
 import time
 from collections import defaultdict, namedtuple
-from future_builtins import map
 from urllib import quote_plus, urlencode
 from urlparse import parse_qs
 
@@ -18,7 +17,7 @@ from calibre import browser as _browser, prints, random_user_agent
 from calibre.utils.monotonic import monotonic
 from calibre.utils.random_ua import accept_header_for_ua
 
-current_version = (1, 0, 0)
+current_version = (1, 0, 1)
 minimum_calibre_version = (2, 80, 0)
 
 
@@ -230,7 +229,11 @@ def google_search(terms, site=None, br=None, log=prints, safe_search=False, dump
     root = query(br, url, 'google', dump_raw, timeout=timeout)
     ans = []
     for div in root.xpath('//*[@id="search"]//*[@id="rso"]//*[@class="g"]'):
-        a = div.xpath('descendant::h3[@class="r"]/a[@href]')[0]
+        try:
+            a = div.xpath('descendant::h3[@class="r"]/a[@href]')[0]
+        except IndexError:
+            log('Ignoring div with no descendant')
+            continue
         title = tostring(a)
         try:
             c = div.xpath('descendant::div[@class="s"]//a[@class="fl"]')[0]

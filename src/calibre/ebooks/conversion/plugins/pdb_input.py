@@ -14,7 +14,8 @@ class PDBInput(InputFormatPlugin):
     name        = 'PDB Input'
     author      = 'John Schember'
     description = 'Convert PDB to HTML'
-    file_types  = set(['pdb', 'updb'])
+    file_types  = {'pdb', 'updb'}
+    commit_name = 'pdb_input'
 
     def convert(self, stream, options, file_ext, log,
                 accelerators):

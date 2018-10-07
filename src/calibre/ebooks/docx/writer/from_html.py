@@ -168,19 +168,19 @@ class Block(object):
                 next_block.list_tag = self.list_tag
 
     def add_text(self, text, style, ignore_leading_whitespace=False, html_parent=None, is_parent_style=False, bookmark=None, link=None, lang=None):
-        ts = self.styles_manager.create_text_style(style, is_parent_style=is_parent_style)
         ws = style['white-space']
+        preserve_whitespace = ws in {'pre', 'pre-wrap', '-o-pre-wrap'}
+        ts = self.styles_manager.create_text_style(style, is_parent_style=is_parent_style)
         if self.runs and ts == self.runs[-1].style and link == self.runs[-1].link and lang == self.runs[-1].lang:
             run = self.runs[-1]
         else:
             run = TextRun(self.namespace, ts, self.html_block if html_parent is None else html_parent, lang=lang)
             self.runs.append(run)
-        preserve_whitespace = ws in {'pre', 'pre-wrap'}
         if ignore_leading_whitespace and not preserve_whitespace:
             text = text.lstrip()
-        if ws == 'pre-line':
+        if preserve_whitespace or ws == 'pre-line':
             for text in text.splitlines():
-                run.add_text(text, False, bookmark=bookmark, link=link)
+                run.add_text(text, preserve_whitespace, bookmark=bookmark, link=link)
                 bookmark = None
                 run.add_break()
         else:
@@ -251,6 +251,7 @@ class Block(object):
 class Blocks(object):
 
     def __init__(self, namespace, styles_manager, links_manager):
+        self.top_bookmark = None
         self.namespace = namespace
         self.styles_manager = styles_manager
         self.links_manager = links_manager
@@ -372,6 +373,9 @@ class Blocks(object):
         if self.pos > 0 and self.pos < len(self.all_blocks):
             # Insert a page break corresponding to the start of the html file
             self.all_blocks[self.pos].page_break_before = True
+            if self.top_bookmark is not None:
+                self.all_blocks[self.pos].bookmarks.add(self.top_bookmark)
+        self.top_bookmark = None
         self.block_map = {}
 
     def apply_page_break_after(self):
@@ -457,7 +461,7 @@ class Convert(object):
         self.blocks.resolve_language()
 
         if self.cover_img is not None:
-            self.cover_img = self.images_manager.create_cover_markup(self.cover_img, *page_size(self.opts))
+            self.cover_img = self.images_manager.create_cover_markup(self.cover_img, self.opts.preserve_cover_aspect_ratio, *page_size(self.opts))
         self.lists_manager.finalize(all_blocks)
         self.styles_manager.finalize(all_blocks)
         self.write()
@@ -472,67 +476,74 @@ class Convert(object):
         self.current_lang = lang_for_tag(item.data) or self.styles_manager.document_lang
         for i, body in enumerate(XPath('//h:body')(item.data)):
             with self.blocks:
-                self.links_manager.bookmark_for_anchor(self.links_manager.top_anchor, self.current_item, body)
+                self.blocks.top_bookmark = self.links_manager.bookmark_for_anchor(self.links_manager.top_anchor, self.current_item, body)
                 self.process_tag(body, stylizer, is_first_tag=i == 0)
 
     def process_tag(self, html_tag, stylizer, is_first_tag=False, float_spec=None):
         tagname = barename(html_tag.tag)
-        if tagname in {'script', 'style', 'title', 'meta'}:
-            return
         tag_style = stylizer.style(html_tag)
-        if tag_style.is_hidden:
-            return
-
-        previous_link = self.current_link
-        if tagname == 'a' and html_tag.get('href'):
-            self.current_link = (self.current_item, html_tag.get('href'), html_tag.get('title'))
-        previous_lang = self.current_lang
-        tag_lang = lang_for_tag(html_tag)
-        if tag_lang:
-            self.current_lang = tag_lang
-
+        ignore_tag_contents = tagname in {'script', 'style', 'title', 'meta'} or tag_style.is_hidden
         display = tag_style._get('display')
-        is_float = tag_style['float'] in {'left', 'right'} and not is_first_tag
-        if float_spec is None and is_float:
-            float_spec = FloatSpec(self.docx.namespace, html_tag, tag_style)
+        is_block = False
 
-        if display in {'inline', 'inline-block'} or tagname == 'br':  # <br> has display:block but we dont want to start a new paragraph
-            if is_float and float_spec.is_dropcaps:
-                self.add_block_tag(tagname, html_tag, tag_style, stylizer, float_spec=float_spec)
-                float_spec = None
+        if not ignore_tag_contents:
+            previous_link = self.current_link
+            if tagname == 'a' and html_tag.get('href'):
+                self.current_link = (self.current_item, html_tag.get('href'), html_tag.get('title'))
+            previous_lang = self.current_lang
+            tag_lang = lang_for_tag(html_tag)
+            if tag_lang:
+                self.current_lang = tag_lang
+
+            is_float = tag_style['float'] in {'left', 'right'} and not is_first_tag
+            if float_spec is None and is_float:
+                float_spec = FloatSpec(self.docx.namespace, html_tag, tag_style)
+
+            if display in {'inline', 'inline-block'} or tagname == 'br':  # <br> has display:block but we dont want to start a new paragraph
+                if is_float and float_spec.is_dropcaps:
+                    self.add_block_tag(tagname, html_tag, tag_style, stylizer, float_spec=float_spec)
+                    float_spec = None
+                else:
+                    self.add_inline_tag(tagname, html_tag, tag_style, stylizer)
+            elif display == 'list-item':
+                self.add_block_tag(tagname, html_tag, tag_style, stylizer, is_list_item=True)
+            elif display.startswith('table') or display == 'inline-table':
+                if display == 'table-cell':
+                    self.blocks.start_new_cell(html_tag, tag_style)
+                    self.add_block_tag(tagname, html_tag, tag_style, stylizer, is_table_cell=True)
+                elif display == 'table-row':
+                    self.blocks.start_new_row(html_tag, tag_style)
+                elif display in {'table', 'inline-table'}:
+                    self.blocks.end_current_block()
+                    self.blocks.start_new_table(html_tag, tag_style)
             else:
-                self.add_inline_tag(tagname, html_tag, tag_style, stylizer)
-        elif display == 'list-item':
-            self.add_block_tag(tagname, html_tag, tag_style, stylizer, is_list_item=True)
-        elif display.startswith('table') or display == 'inline-table':
-            if display == 'table-cell':
-                self.blocks.start_new_cell(html_tag, tag_style)
-                self.add_block_tag(tagname, html_tag, tag_style, stylizer, is_table_cell=True)
-            elif display == 'table-row':
-                self.blocks.start_new_row(html_tag, tag_style)
-            elif display in {'table', 'inline-table'}:
-                self.blocks.end_current_block()
-                self.blocks.start_new_table(html_tag, tag_style)
-        else:
-            if tagname == 'img' and is_float:
-                # Image is floating so dont start a new paragraph for it
-                self.add_inline_tag(tagname, html_tag, tag_style, stylizer)
-            else:
-                if tagname == 'hr':
-                    for edge in 'right bottom left'.split():
-                        tag_style.set('border-%s-style' % edge, 'none')
-                self.add_block_tag(tagname, html_tag, tag_style, stylizer, float_spec=float_spec)
+                if tagname == 'img' and is_float:
+                    # Image is floating so dont start a new paragraph for it
+                    self.add_inline_tag(tagname, html_tag, tag_style, stylizer)
+                else:
+                    if tagname == 'hr':
+                        for edge in 'right bottom left'.split():
+                            tag_style.set('border-%s-style' % edge, 'none')
+                    self.add_block_tag(tagname, html_tag, tag_style, stylizer, float_spec=float_spec)
 
-        for child in html_tag.iterchildren('*'):
-            self.process_tag(child, stylizer, float_spec=float_spec)
+            for child in html_tag.iterchildren():
+                if isinstance(getattr(child, 'tag', None), basestring):
+                    self.process_tag(child, stylizer, float_spec=float_spec)
+                else:  # Comment/PI/etc.
+                    tail = getattr(child, 'tail', None)
+                    if tail:
+                        block = self.create_block_from_parent(html_tag, stylizer)
+                        block.add_text(tail, tag_style, is_parent_style=False, link=self.current_link, lang=self.current_lang)
 
-        is_block = html_tag in self.blocks.open_html_blocks
-        self.blocks.finish_tag(html_tag)
-        if is_block and tag_style['page-break-after'] == 'avoid':
-            self.blocks.all_blocks[-1].keep_next = True
+            is_block = html_tag in self.blocks.open_html_blocks
+            self.blocks.finish_tag(html_tag)
+            if is_block and tag_style['page-break-after'] == 'avoid':
+                self.blocks.all_blocks[-1].keep_next = True
 
-        self.current_link = previous_link
-        self.current_lang = previous_lang
+            self.current_link = previous_link
+            self.current_lang = previous_lang
+
+        # Now, process the tail if any
 
         if display == 'table-row':
             return  # We ignore the tail for these tags

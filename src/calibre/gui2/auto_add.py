@@ -9,16 +9,16 @@ __docformat__ = 'restructuredtext en'
 
 import os, tempfile, shutil, time
 from threading import Thread, Event
-from future_builtins import map
+from polyglot.builtins import map
 
 from PyQt5.Qt import (QFileSystemWatcher, QObject, Qt, pyqtSignal, QTimer, QApplication, QCursor)
 
 from calibre import prints
-from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.db.adding import filter_filename, compile_rule
 from calibre.ebooks import BOOK_EXTENSIONS
 from calibre.gui2 import gprefs
 from calibre.gui2.dialogs.duplicates import DuplicatesQuestion
+from calibre.utils.tdir_in_cache import tdir_in_cache
 
 AUTO_ADDED = frozenset(BOOK_EXTENSIONS) - {'pdr', 'mbp', 'tan'}
 
@@ -69,17 +69,20 @@ class Worker(Thread):
         return allowed
 
     def run(self):
-        self.tdir = PersistentTemporaryDirectory('_auto_adder')
-        while self.keep_running:
-            self.wake_up.wait()
-            self.wake_up.clear()
-            if not self.keep_running:
-                break
-            try:
-                self.auto_add()
-            except:
-                import traceback
-                traceback.print_exc()
+        self.tdir = tdir_in_cache('aa')
+        try:
+            while self.keep_running:
+                self.wake_up.wait()
+                self.wake_up.clear()
+                if not self.keep_running:
+                    break
+                try:
+                    self.auto_add()
+                except:
+                    import traceback
+                    traceback.print_exc()
+        finally:
+            shutil.rmtree(self.tdir, ignore_errors=True)
 
     def auto_add(self):
         from calibre.utils.ipc.simple_worker import fork_job, WorkerError
@@ -251,6 +254,12 @@ class AutoAdder(QObject):
             if gprefs.get('tag_map_on_add_rules'):
                 from calibre.ebooks.metadata.tag_mapper import map_tags
                 mi.tags = map_tags(mi.tags, gprefs['tag_map_on_add_rules'])
+            if gprefs.get('author_map_on_add_rules'):
+                from calibre.ebooks.metadata.author_mapper import map_authors, compile_rules
+                new_authors = map_authors(mi.authors, compile_rules(gprefs['author_map_on_add_rules']))
+                if new_authors != mi.authors:
+                    mi.authors = new_authors
+                    mi.author_sort = gui.current_db.new_api.author_sort_from_authors(mi.authors)
             mi = [mi]
             dups, ids = m.add_books(paths,
                     [os.path.splitext(fname)[1][1:].upper()], mi,

@@ -8,7 +8,6 @@ __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import os, textwrap, json
-from functools import partial
 
 from PyQt5.Qt import (QWidget, QDialog, QLabel, QGridLayout, QComboBox, QSize,
         QLineEdit, QIntValidator, QDoubleValidator, QFrame, Qt, QIcon, QHBoxLayout,
@@ -79,6 +78,8 @@ class ConditionEditor(QWidget):  # {{{
             'single'   : (
                 (_('is'), 'is'),
                 (_('is not'), 'is not'),
+                (_('contains'), 'contains'),
+                (_('does not contain'), 'does not contain'),
                 (_('matches pattern'), 'matches pattern'),
                 (_('does not match pattern'), 'does not match pattern'),
                 (_('is set'), 'is set'),
@@ -125,7 +126,7 @@ class ConditionEditor(QWidget):  # {{{
         self.column_box.addItem('', '')
         for key in sorted(
                 conditionable_columns(fm),
-                key=lambda(key): sort_key(fm[key]['name'])):
+                key=lambda key: sort_key(fm[key]['name'])):
             self.column_box.addItem(fm[key]['name'], key)
         self.column_box.setCurrentIndex(0)
 
@@ -427,7 +428,7 @@ class RuleEditor(QDialog):  # {{{
                 b.setMinimumContentsLength(15)
 
         for key in sorted(displayable_columns(fm),
-                          key=lambda(k): sort_key(fm[k]['name']) if k != color_row_key else 0):
+                          key=lambda k: sort_key(fm[k]['name']) if k != color_row_key else 0):
             if key == color_row_key and self.rule_kind != 'color':
                 continue
             name = all_columns_string if key == color_row_key else fm[key]['name']
@@ -573,8 +574,8 @@ class RuleEditor(QDialog):  # {{{
         m = self.remove_button.menu()
         m.clear()
         for name in self.icon_file_names:
-            m.addAction(QIcon(os.path.join(self.icon_folder, name)), name).triggered.connect(partial(
-                self.remove_image, name))
+            ac = m.addAction(QIcon(os.path.join(self.icon_folder, name)), name)
+            connect_lambda(ac.triggered, self, lambda self: self.remove_image(self.sender().text()))
 
     def remove_image(self, name):
         try:
@@ -1127,7 +1128,7 @@ if __name__ == '__main__':
 
         kind, col, r = d.rule
 
-        print ('Column to be colored:', col)
+        print('Column to be colored:', col)
         print ('Template:')
         print (r.template)
     else:

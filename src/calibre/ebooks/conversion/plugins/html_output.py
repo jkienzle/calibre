@@ -20,8 +20,9 @@ class HTMLOutput(OutputFormatPlugin):
     name = 'HTML Output'
     author = 'Fabian Grassl'
     file_type = 'zip'
+    commit_name = 'html_output'
 
-    options = set([
+    options = {
         OptionRecommendation(name='template_css',
             help=_('CSS file used for the output instead of the default file')),
 
@@ -36,9 +37,9 @@ class HTMLOutput(OutputFormatPlugin):
                 'specified directory. WARNING: The contents of the directory '
                 'will be deleted.')
         ),
-    ])
+    }
 
-    recommendations = set([('pretty_print', True, OptionRecommendation.HIGH)])
+    recommendations = {('pretty_print', True, OptionRecommendation.HIGH)}
 
     def generate_toc(self, oeb_book, ref_url, output_dir):
         '''

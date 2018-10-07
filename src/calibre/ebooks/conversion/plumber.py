@@ -131,8 +131,8 @@ OptionRecommendation(name='input_profile',
                    'conversion system information on how to interpret '
                    'various information in the input document. For '
                    'example resolution dependent lengths (i.e. lengths in '
-                   'pixels). Choices are:')+
-                        ', '.join([x.short_name for x in input_profiles()])
+                   'pixels). Choices are:')+ ', '.join([
+                       x.short_name for x in input_profiles()])
         ),
 
 OptionRecommendation(name='output_profile',
@@ -142,8 +142,8 @@ OptionRecommendation(name='output_profile',
                    'tells the conversion system how to optimize the '
                    'created document for the specified device (such as by resizing images for the device screen size). In some cases, '
                    'an output profile can be used to optimize the output for a particular device, but this is rarely necessary. '
-                   'Choices are:') +
-                           ', '.join([x.short_name for x in output_profiles()])
+                   'Choices are:') + ', '.join([
+                       x.short_name for x in output_profiles()])
         ),
 
 OptionRecommendation(name='base_font_size',
@@ -151,7 +151,7 @@ OptionRecommendation(name='base_font_size',
             help=_('The base font size in pts. All font sizes in the produced book '
                    'will be rescaled based on this size. By choosing a larger '
                    'size you can make the fonts in the output bigger and vice '
-                   'versa. By default, the base font size is chosen based on '
+                   'versa. By default, when the value is zero, the base font size is chosen based on '
                    'the output profile you chose.'
                    )
         ),
@@ -828,6 +828,14 @@ OptionRecommendation(name='search_replace',
                     return f, os.path.splitext(f)[1].lower()[1:]
         return html_files[-1], os.path.splitext(html_files[-1])[1].lower()[1:]
 
+    def get_all_options(self):
+        ans = {}
+        for group in (self.input_options, self.pipeline_options,
+                      self.output_options, self.all_format_options):
+            for rec in group:
+                ans[rec.option] = rec.recommended_value
+        return ans
+
     def get_option_by_name(self, name):
         for group in (self.input_options, self.pipeline_options,
                       self.output_options, self.all_format_options):
@@ -840,6 +848,16 @@ OptionRecommendation(name='search_replace',
         help = getattr(rec, 'help', None)
         if help is not None:
             return help.replace('%default', str(rec.recommended_value))
+
+    def get_all_help(self):
+        ans = {}
+        for group in (self.input_options, self.pipeline_options,
+                      self.output_options, self.all_format_options):
+            for rec in group:
+                help = getattr(rec, 'help', None)
+                if help is not None:
+                    ans[rec.option.name] = help
+        return ans
 
     def merge_plugin_recs(self, plugin):
         for name, val, level in plugin.recommendations:
@@ -897,8 +915,7 @@ OptionRecommendation(name='search_replace',
                     try:
                         val = parse_date(val, assume_utc=x=='timestamp')
                     except:
-                        self.log.exception(_('Failed to parse date/time') + ' ' +
-                                unicode(val))
+                        self.log.exception(_('Failed to parse date/time') + ' ' + unicode(val))
                         continue
                 setattr(mi, x, val)
 
@@ -1082,6 +1099,7 @@ OptionRecommendation(name='search_replace',
         self.input_plugin.report_progress = ir
         if self.for_regex_wizard:
             self.input_plugin.for_viewer = True
+        self.output_plugin.specialize_options(self.log, self.opts, self.input_fmt)
         with self.input_plugin:
             self.oeb = self.input_plugin(stream, self.opts,
                                         self.input_fmt, self.log,
@@ -1096,7 +1114,7 @@ OptionRecommendation(name='search_replace',
                 self.oeb = create_oebbook(
                     self.log, self.oeb, self.opts,
                     encoding=self.input_plugin.output_encoding,
-                    for_regex_wizard=self.for_regex_wizard)
+                    for_regex_wizard=self.for_regex_wizard, removed_items=getattr(self.input_plugin, 'removed_items_to_ignore', ()))
             if self.for_regex_wizard:
                 return
             self.input_plugin.postprocess_book(self.oeb, self.opts, self.log)
@@ -1190,8 +1208,8 @@ OptionRecommendation(name='search_replace',
             UnsmartenPunctuation()(self.oeb, self.opts)
 
         mobi_file_type = getattr(self.opts, 'mobi_file_type', 'old')
-        needs_old_markup = (self.output_plugin.file_type == 'lit' or
-                    (self.output_plugin.file_type == 'mobi' and mobi_file_type == 'old'))
+        needs_old_markup = (self.output_plugin.file_type == 'lit' or (
+            self.output_plugin.file_type == 'mobi' and mobi_file_type == 'old'))
         transform_css_rules = ()
         if self.opts.transform_css_rules:
             transform_css_rules = self.opts.transform_css_rules
@@ -1269,7 +1287,7 @@ def set_regex_wizard_callback(f):
 
 
 def create_oebbook(log, path_or_stream, opts, reader=None,
-        encoding='utf-8', populate=True, for_regex_wizard=False, specialize=None):
+        encoding='utf-8', populate=True, for_regex_wizard=False, specialize=None, removed_items=()):
     '''
     Create an OEBBook.
     '''
@@ -1285,9 +1303,23 @@ def create_oebbook(log, path_or_stream, opts, reader=None,
         oeb = specialize(oeb) or oeb
     # Read OEB Book into OEBBook
     log('Parsing all content...')
+    oeb.removed_items_to_ignore = removed_items
     if reader is None:
         from calibre.ebooks.oeb.reader import OEBReader
         reader = OEBReader
 
     reader()(oeb, path_or_stream)
     return oeb
+
+
+def create_dummy_plumber(input_format, output_format):
+    from calibre.utils.logging import Log
+    input_format = input_format.lower()
+    output_format = output_format.lower()
+    output_path = 'dummy.'+output_format
+    log = Log()
+    log.outputs = []
+    input_file = 'dummy.'+input_format
+    if input_format in ARCHIVE_FMTS:
+        input_file = 'dummy.html'
+    return Plumber(input_file, output_path, log)

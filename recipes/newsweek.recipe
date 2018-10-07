@@ -31,7 +31,7 @@ class Newsweek(BasicNewsRecipe):
             'block-openadstream', 'block-ibtmedia-social', 'issue-next',
             'most-popular', 'ibt-media-stories', 'user-btn-group',
             'trial-link', 'trc_related_container',
-            'block-ibtmedia-top-stories'
+            'block-ibtmedia-top-stories', 'videocontent', 'newsletter-signup',
         ),
         dict(id=['taboola-below-main-column', 'piano-root',
                  'block-nw-magazine-magazine-more-from-issue']),
@@ -40,7 +40,7 @@ class Newsweek(BasicNewsRecipe):
 
     def parse_index(self):
         root = self.index_to_soup(
-            'http://www.newsweek.com/archive', as_tree=True)
+            'https://www.newsweek.com/archive', as_tree=True)
         li = root.xpath(
             '//ul[contains(@class, "magazine-archive-items")]/li')[0]
         a = li.xpath('descendant::a[@href]')[0]
@@ -49,31 +49,48 @@ class Newsweek(BasicNewsRecipe):
         img = li.xpath('descendant::a[@href]/img[@src]')[0]
         self.cover_url = img.get('src')
         root = self.index_to_soup(url, as_tree=True)
-        div = root.xpath(
-            '//div[@id="block-nw-magazine-magazine-cover-story"]')[0]
-        a = div.xpath('descendant::a[@href]')[0]
-        index = [('Cover', [{'title': 'Cover story', 'url': href_to_url(a)}])]
+        features = []
+        href_xpath = 'descendant::*[local-name()="h1" or local-name()="h2" or local-name()="h3" or local-name()="h4"]/a[@href]'
+        try:
+            div = root.xpath('//div[@id="block-nw-magazine-magazine-features"]')[0]
+        except IndexError:
+            pass
+        else:
+            for a in div.xpath(href_xpath):
+                title = self.tag_to_string(a)
+                article = a.xpath('ancestor::article')[0]
+                desc = ''
+                s = article.xpath('descendant::div[@class="summary"]')
+                if s:
+                    desc = self.tag_to_string(s[0])
+                features.append({'title': title, 'url': href_to_url(a), 'description': desc})
+                self.log(title, href_to_url(a))
+
+        index = []
+        if features:
+            index.append(('Features', features))
         sections = defaultdict(list)
-        div = root.xpath(
-            '//div[@id="block-nw-magazine-magazine-issue-story-list"]')[0]
-        for a in div.xpath('descendant::h3/a[@href and contains(@class, "article-link")]'):
-            title = self.tag_to_string(a)
-            li = a.xpath('ancestor::li')[0]
-            desc = ''
-            s = li.xpath('descendant::div[@class="summary"]')
-            if s:
-                desc = self.tag_to_string(s[0])
-            sec = li.xpath('descendant::div[@class="category"]')
-            if sec:
-                sec = self.tag_to_string(sec[0])
-            else:
-                sec = 'Articles'
-            sections[sec].append(
-                {'title': title, 'url': href_to_url(a), 'description': desc})
-            self.log(title, url)
-            if desc:
-                self.log('\t' + desc)
-            self.log('')
+        for block in ('magazine-magazine-issue-story-list', 'editors-pick'):
+            div = root.xpath(
+                '//div[@id="block-nw-{}"]'.format(block))[0]
+            for a in div.xpath(href_xpath):
+                title = self.tag_to_string(a)
+                article = a.xpath('ancestor::article')[0]
+                desc = ''
+                s = article.xpath('descendant::div[@class="summary"]')
+                if s:
+                    desc = self.tag_to_string(s[0])
+                sec = article.xpath('descendant::div[@class="category"]')
+                if sec:
+                    sec = self.tag_to_string(sec[0])
+                else:
+                    sec = 'Articles'
+                sections[sec].append(
+                    {'title': title, 'url': href_to_url(a), 'description': desc})
+                self.log(title, href_to_url(a))
+                if desc:
+                    self.log('\t' + desc)
+                self.log('')
         for k in sorted(sections):
             index.append((k, sections[k]))
         return index

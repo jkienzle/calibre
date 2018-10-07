@@ -6,7 +6,7 @@ Provides platform independent temporary files that persist even after
 being closed.
 """
 import tempfile, os, atexit
-from future_builtins import map
+from polyglot.builtins import map
 
 from calibre.constants import (__version__, __appname__, filesystem_encoding,
         get_unicode_windows_env_var, iswindows, get_windows_temp_path, isosx)
@@ -292,4 +292,3 @@ def better_mktemp(*args, **kwargs):
     fd, path = tempfile.mkstemp(*args, **kwargs)
     os.close(fd)
     return path
-

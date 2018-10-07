@@ -380,7 +380,7 @@ class FieldMetadata(object):
                 'int', 'float', 'bool', 'series', 'composite', 'enumeration'])
 
     # search labels that are not db columns
-    search_items = ['all', 'search']
+    search_items = ['all', 'search', 'vl']
     __calibre_serializable__ = True
 
     def __init__(self):
@@ -628,8 +628,10 @@ class FieldMetadata(object):
                                 'is_category':True,    'is_csp': False}
         self._add_search_terms_to_map(label, st)
 
-    def add_search_category(self, label, name):
+    def add_search_category(self, label, name, fail_on_existing=True):
         if label in self._tb_cats:
+            if not fail_on_existing:
+                return
             raise ValueError('Duplicate user field [%s]'%(label))
         self._tb_cats[label] = {'table':None,        'column':None,
                                 'datatype':None,     'is_multiple':{},

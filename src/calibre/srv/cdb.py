@@ -4,19 +4,26 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+import os
+from base64 import standard_b64decode
 from functools import partial
+from io import BytesIO
 
-from calibre import as_unicode
+from calibre import as_unicode, sanitize_file_name_unicode
 from calibre.db.cli import module_for_cmd
-from calibre.srv.errors import HTTPBadRequest, HTTPNotFound, HTTPForbidden
-from calibre.srv.routes import endpoint, msgpack_or_json
-from calibre.srv.utils import get_library_data
+from calibre.ebooks.metadata.meta import get_metadata
+from calibre.srv.changes import books_added, books_deleted, metadata
+from calibre.srv.errors import HTTPBadRequest, HTTPForbidden, HTTPNotFound
+from calibre.srv.metadata import book_as_json
+from calibre.srv.routes import endpoint, json, msgpack_or_json
+from calibre.srv.utils import get_db, get_library_data
+from calibre.utils.imghdr import what
 from calibre.utils.serialize import MSGPACK_MIME, json_loads, msgpack_loads
 
 receive_data_methods = {'GET', 'POST'}
 
 
-@endpoint('/cdb/cmd/{which}/{version=0}', postprocess=msgpack_or_json, methods=receive_data_methods)
+@endpoint('/cdb/cmd/{which}/{version=0}', postprocess=msgpack_or_json, methods=receive_data_methods, cache_control='no-cache')
 def cdb_run(ctx, rd, which, version):
     try:
         m = module_for_cmd(which)
@@ -33,6 +40,7 @@ def cdb_run(ctx, rd, which, version):
         raise HTTPForbidden('Cannot use the command-line db interface with a user who has per library restrictions')
     raw = rd.read()
     ct = rd.inheaders.get('Content-Type', all=True)
+    ct = {x.lower().partition(';')[0] for x in ct}
     try:
         if MSGPACK_MIME in ct:
             args = msgpack_loads(raw)
@@ -50,3 +58,108 @@ def cdb_run(ctx, rd, which, version):
         import traceback
         return {'err': as_unicode(err), 'tb': traceback.format_exc()}
     return {'result': result}
+
+
+@endpoint('/cdb/add-book/{job_id}/{add_duplicates}/{filename}/{library_id=None}',
+          needs_db_write=True, postprocess=json, methods=receive_data_methods, cache_control='no-cache')
+def cdb_add_book(ctx, rd, job_id, add_duplicates, filename, library_id):
+    '''
+    Add a file as a new book. The file contents must be in the body of the request.
+
+    The response will also have the title/authors/languages read from the
+    metadata of the file/filename. It will contain a `book_id` field specifying the id of the newly added book,
+    or if add_duplicates is not specified and a duplicate was found, no book_id will be present. It will also
+    return the value of `job_id` as the `id` field and `filename` as the `filename` field.
+    '''
+    db = get_db(ctx, rd, library_id)
+    if ctx.restriction_for(rd, db):
+        raise HTTPForbidden('Cannot use the add book interface with a user who has per library restrictions')
+    if not filename:
+        raise HTTPBadRequest('An empty filename is not allowed')
+    sfilename = sanitize_file_name_unicode(filename)
+    fmt = os.path.splitext(sfilename)[1]
+    fmt = fmt[1:] if fmt else None
+    if not fmt:
+        raise HTTPBadRequest('An filename with no extension is not allowed')
+    if isinstance(rd.request_body_file, BytesIO):
+        raise HTTPBadRequest('A request body containing the file data must be specified')
+    add_duplicates = add_duplicates in ('y', '1')
+    path = os.path.join(rd.tdir, sfilename)
+    rd.request_body_file.name = path
+    rd.request_body_file.seek(0)
+    mi = get_metadata(rd.request_body_file, stream_type=fmt, use_libprs_metadata=True)
+    rd.request_body_file.seek(0)
+    ids, duplicates = db.add_books([(mi, {fmt: rd.request_body_file})], add_duplicates=add_duplicates)
+    ans = {'title': mi.title, 'authors': mi.authors, 'languages': mi.languages, 'filename': filename, 'id': job_id}
+    if ids:
+        ans['book_id'] = ids[0]
+        ctx.notify_changes(db.backend.library_path, books_added(ids))
+    return ans
+
+
+@endpoint('/cdb/delete-books/{book_ids}/{library_id=None}',
+          needs_db_write=True, postprocess=json, methods=receive_data_methods, cache_control='no-cache')
+def cdb_delete_book(ctx, rd, book_ids, library_id):
+    db = get_db(ctx, rd, library_id)
+    if ctx.restriction_for(rd, db):
+        raise HTTPForbidden('Cannot use the delete book interface with a user who has per library restrictions')
+    try:
+        ids = {int(x) for x in book_ids.split(',')}
+    except Exception:
+        raise HTTPBadRequest('invalid book_ids: {}'.format(book_ids))
+    db.remove_books(ids)
+    ctx.notify_changes(db.backend.library_path, books_deleted(ids))
+    return {}
+
+
+@endpoint('/cdb/set-cover/{book_id}/{library_id=None}', types={'book_id': int},
+            needs_db_write=True, postprocess=json, methods=receive_data_methods, cache_control='no-cache')
+def cdb_set_cover(ctx, rd, book_id, library_id):
+    db = get_db(ctx, rd, library_id)
+    if ctx.restriction_for(rd, db):
+        raise HTTPForbidden('Cannot use the add book interface with a user who has per library restrictions')
+    rd.request_body_file.seek(0)
+    dirtied = db.set_cover({book_id: rd.request_body_file})
+    ctx.notify_changes(db.backend.library_path, metadata(dirtied))
+    return tuple(dirtied)
+
+
+@endpoint('/cdb/set-fields/{book_id}/{library_id=None}', types={'book_id': int},
+          needs_db_write=True, postprocess=msgpack_or_json, methods=receive_data_methods, cache_control='no-cache')
+def cdb_set_fields(ctx, rd, book_id, library_id):
+    db = get_db(ctx, rd, library_id)
+    if ctx.restriction_for(rd, db):
+        raise HTTPForbidden('Cannot use the set fields interface with a user who has per library restrictions')
+    raw = rd.read()
+    ct = rd.inheaders.get('Content-Type', all=True)
+    ct = {x.lower().partition(';')[0] for x in ct}
+    try:
+        if MSGPACK_MIME in ct:
+            data = msgpack_loads(raw)
+        elif 'application/json' in ct:
+            data = json_loads(raw)
+        else:
+            raise HTTPBadRequest('Only JSON or msgpack requests are supported')
+        changes, loaded_book_ids = data['changes'], frozenset(map(int, data['loaded_book_ids']))
+    except Exception:
+        raise HTTPBadRequest('Invalid encoded data')
+    dirtied = set()
+    cdata = changes.pop('cover', False)
+    if cdata is not False:
+        if cdata is not None:
+            try:
+                cdata = standard_b64decode(cdata.split(',', 1)[-1].encode('ascii'))
+            except Exception:
+                raise HTTPBadRequest('Cover data is not valid base64 encoded data')
+            try:
+                fmt = what(None, cdata)
+            except Exception:
+                fmt = None
+            if fmt not in ('jpeg', 'png'):
+                raise HTTPBadRequest('Cover data must be either JPEG or PNG')
+        dirtied |= db.set_cover({book_id: cdata})
+
+    for field, value in changes.iteritems():
+        dirtied |= db.set_field(field, {book_id: value})
+    ctx.notify_changes(db.backend.library_path, metadata(dirtied))
+    return {bid: book_as_json(db, book_id) for bid in (dirtied & loaded_book_ids) | {book_id}}

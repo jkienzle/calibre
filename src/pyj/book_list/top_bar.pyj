@@ -66,7 +66,7 @@ def set_left_data(container, title='calibre', icon='heart', action=None, tooltip
                     animation_iteration_count='5', animation_play_state='running' if run_animation else 'paused'
                 )
                 set_css(a.firstChild, color=get_color('heart'))
-                a.setAttribute('href', 'http://calibre-ebook.com/donate')
+                a.setAttribute('href', 'https://calibre-ebook.com/donate')
                 a.setAttribute('target', 'donate-to-calibre')
             if action is not None:
                 a.addEventListener('click', def(event): event.preventDefault(), action();)
@@ -100,6 +100,13 @@ def add_button(container, icon, action=None, tooltip=''):
                 right.lastChild.addEventListener('click', def(event):
                     event.preventDefault(), action()
                 )
+
+def clear_buttons(container):
+    bars = get_bars(container)
+    for i, bar in enumerate(bars):
+        right = bar.firstChild.nextSibling
+        clear(right)
+
 
 def set_button_visibility(container, icon, visible):
     for bar in get_bars(container):

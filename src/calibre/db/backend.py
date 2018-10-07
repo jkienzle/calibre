@@ -8,10 +8,11 @@ __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 # Imports {{{
-import os, shutil, uuid, json, glob, time, cPickle, hashlib, errno, sys
+import os, shutil, uuid, json, glob, time, hashlib, errno, sys
 from functools import partial
 
 import apsw
+from polyglot.builtins import reraise
 
 from calibre import isbytestring, force_unicode, prints, as_unicode
 from calibre.constants import (iswindows, filesystem_encoding,
@@ -23,6 +24,7 @@ from calibre.db.delete_service import delete_service
 from calibre.db.errors import NoSuchFormat
 from calibre.library.field_metadata import FieldMetadata
 from calibre.ebooks.metadata import title_sort, author_to_author_sort
+from calibre.utils import pickle_binary_string, unpickle_binary_string
 from calibre.utils.icu import sort_key
 from calibre.utils.config import to_json, from_json, prefs, tweaks
 from calibre.utils.date import utcfromtimestamp, parse_date
@@ -48,8 +50,8 @@ Differences in semantics from pysqlite:
     3. There is no executescript
 
 '''
-CUSTOM_DATA_TYPES = frozenset(['rating', 'text', 'comments', 'datetime',
-    'int', 'float', 'bool', 'series', 'composite', 'enumeration'])
+CUSTOM_DATA_TYPES = frozenset(('rating', 'text', 'comments', 'datetime',
+    'int', 'float', 'bool', 'series', 'composite', 'enumeration'))
 WINDOWS_RESERVED_NAMES = frozenset('CON PRN AUX NUL COM1 COM2 COM3 COM4 COM5 COM6 COM7 COM8 COM9 LPT1 LPT2 LPT3 LPT4 LPT5 LPT6 LPT7 LPT8 LPT9'.split())
 
 
@@ -356,8 +358,7 @@ class DB(object):
         if not exists:
             # Be more strict when creating new libraries as the old calculation
             # allowed for max path lengths of 265 chars.
-            if (iswindows and len(self.library_path) >
-                    self.WINDOWS_LIBRARY_PATH_LIMIT):
+            if (iswindows and len(self.library_path) > self.WINDOWS_LIBRARY_PATH_LIMIT):
                 raise ValueError(_(
                     'Path to library too long. Must be less than'
                     ' %d characters.')%self.WINDOWS_LIBRARY_PATH_LIMIT)
@@ -444,8 +445,7 @@ class DB(object):
                     progress_callback(_('creating custom column ') + f['label'], i)
                     self.create_custom_column(f['label'], f['name'],
                             f['datatype'],
-                            (f['is_multiple'] is not None and
-                                len(f['is_multiple']) > 0),
+                            (f['is_multiple'] is not None and len(f['is_multiple']) > 0),
                             f['is_editable'], f['display'])
 
         defs = self.prefs.defaults
@@ -471,6 +471,7 @@ class DB(object):
         ('uuid', False), ('comments', True), ('id', False), ('pubdate', False),
         ('last_modified', False), ('size', False), ('languages', False),
         ]
+        defs['popup_book_display_fields'] = [('title', True)] + [(f[0], True) for f in defs['book_display_fields'] if f[0] != 'title']
         defs['qv_display_fields'] = [('title', True), ('authors', True), ('series', True)]
         defs['virtual_libraries'] = {}
         defs['virtual_lib_on_startup'] = defs['cs_virtual_lib_on_startup'] = ''
@@ -479,6 +480,7 @@ class DB(object):
         defs['field_under_covers_in_grid'] = 'title'
         defs['cover_browser_title_template'] = '{title}'
         defs['cover_browser_subtitle_field'] = 'rating'
+        defs['styled_columns'] = {}
 
         # Migrate the bool tristate tweak
         defs['bools_are_tristate'] = \
@@ -906,7 +908,7 @@ class DB(object):
         import re
         if not label:
             raise ValueError(_('No label was provided'))
-        if re.match('^\w*$', label) is None or not label[0].isalpha() or label.lower() != label:
+        if re.match(r'^\w*$', label) is None or not label[0].isalpha() or label.lower() != label:
             raise ValueError(_('The label must contain only lower case letters, digits and underscores, and start with a letter'))
         if datatype not in CUSTOM_DATA_TYPES:
             raise ValueError('%r is not a supported data type'%datatype)
@@ -1213,9 +1215,9 @@ class DB(object):
 
     @property
     def custom_tables(self):
-        return set([x[0] for x in self.conn.get(
+        return {x[0] for x in self.conn.get(
             'SELECT name FROM sqlite_master WHERE type="table" AND '
-            '(name GLOB "custom_column_*" OR name GLOB "books_custom_column_*")')])
+            '(name GLOB "custom_column_*" OR name GLOB "books_custom_column_*")')}
 
     @classmethod
     def exists_at(cls, path):
@@ -1625,7 +1627,7 @@ class DB(object):
             except EnvironmentError as err:
                 if err.errno == errno.EEXIST:
                     # Parent directory already exists, re-raise original exception
-                    raise exc_info[0], exc_info[1], exc_info[2]
+                    reraise(*exc_info)
                 raise
             finally:
                 del exc_info
@@ -1693,7 +1695,10 @@ class DB(object):
     def conversion_options(self, book_id, fmt):
         for (data,) in self.conn.get('SELECT data FROM conversion_options WHERE book=? AND format=?', (book_id, fmt.upper())):
             if data:
-                return cPickle.loads(bytes(data))
+                try:
+                    return unpickle_binary_string(bytes(data))
+                except Exception:
+                    pass
 
     def has_conversion_options(self, ids, fmt='PIPE'):
         ids = frozenset(ids)
@@ -1710,7 +1715,8 @@ class DB(object):
             [(book_id, fmt.upper()) for book_id in book_ids])
 
     def set_conversion_options(self, options, fmt):
-        options = [(book_id, fmt.upper(), buffer(cPickle.dumps(data, -1))) for book_id, data in options.iteritems()]
+        options = [(book_id, fmt.upper(), buffer(pickle_binary_string(data.encode('utf-8') if isinstance(data, unicode) else data)))
+                for book_id, data in options.iteritems()]
         self.executemany('INSERT OR REPLACE INTO conversion_options(book,format,data) VALUES (?,?,?)', options)
 
     def get_top_level_move_items(self, all_paths):
@@ -1784,14 +1790,13 @@ class DB(object):
         self.executemany('INSERT INTO data (book,format,uncompressed_size,name) VALUES (?,?,?,?)', vals)
 
     def backup_database(self, path):
-        # We have to open a new connection to self.dbpath, until this issue is fixed:
-        # https://github.com/rogerbinns/apsw/issues/199
         dest_db = apsw.Connection(path)
-        source = apsw.Connection(self.dbpath)
-        with dest_db.backup('main', source, 'main') as b:
+        with dest_db.backup('main', self.conn, 'main') as b:
             while not b.done:
-                b.step(100)
-        source.close()
+                try:
+                    b.step(100)
+                except apsw.BusyError:
+                    pass
         dest_db.cursor().execute('DELETE FROM metadata_dirtied; VACUUM;')
         dest_db.close()
 

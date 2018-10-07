@@ -74,7 +74,7 @@ class PRST1(USBMS):
         'series, tags, authors',
         _('Upload separate cover thumbnails for books') +
         ':::'+_('Normally, the SONY readers get the cover image from the'
-                ' ebook file itself. With this option, calibre will send a '
+                ' e-book file itself. With this option, calibre will send a '
                 'separate cover image to the reader, useful if you are '
                 'sending DRMed books in which you cannot change the cover.'),
         _('Refresh separate covers when using automatic management') +
@@ -332,9 +332,9 @@ class PRST1(USBMS):
         return long(row[0])
 
     def get_database_min_id(self, source_id):
-        sequence_min = 0L
+        sequence_min = 0
         if source_id == 1:
-            sequence_min = 4294967296L
+            sequence_min = 4294967296
 
         return sequence_min
 

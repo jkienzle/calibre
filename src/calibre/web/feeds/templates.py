@@ -11,7 +11,7 @@ from lxml.html.builder import HTML, HEAD, TITLE, STYLE, DIV, BODY, \
         STRONG, BR, SPAN, A, HR, UL, LI, H2, H3, IMG, P as PT, \
         TABLE, TD, TR
 
-from calibre import preferred_encoding, strftime, isbytestring
+from calibre import strftime, isbytestring
 
 
 def CLASS(*args, **kwargs):  # class is a reserved word in Python
@@ -88,8 +88,6 @@ class IndexTemplate(Template):
 
     def _generate(self, title, masthead, datefmt, feeds, extra_css=None, style=None):
         self.IS_HTML = False
-        if isinstance(datefmt, unicode):
-            datefmt = datefmt.encode(preferred_encoding)
         date = strftime(datefmt)
         head = HEAD(TITLE(title))
         if style:
@@ -164,7 +162,7 @@ class FeedTemplate(Template):
                 ),
                 CLASS('calibre_feed_image')))
         if getattr(feed, 'description', None):
-            d = DIV(feed.description, CLASS('calibre_feed_description',
+            d = DIV(clean_xml_chars(feed.description), CLASS('calibre_feed_description',
                 'calibre_rescale_80'))
             d.append(BR())
             div.append(d)
@@ -245,11 +243,7 @@ class NavBarTemplate(Template):
 class TouchscreenIndexTemplate(Template):
 
     def _generate(self, title, masthead, datefmt, feeds, extra_css=None, style=None):
-
         self.IS_HTML = False
-
-        if isinstance(datefmt, unicode):
-            datefmt = datefmt.encode(preferred_encoding)
         date = '%s, %s %s, %s' % (strftime('%A'), strftime('%B'), strftime('%d').lstrip('0'), strftime('%Y'))
         masthead_p = etree.Element("p")
         masthead_p.set("style","text-align:center")
@@ -284,6 +278,7 @@ class TouchscreenIndexTemplate(Template):
 class TouchscreenFeedTemplate(Template):
 
     def _generate(self, f, feeds, cutoff, extra_css=None, style=None):
+        from calibre.utils.cleantext import clean_xml_chars
 
         def trim_title(title,clip=18):
             if len(title)>clip:
@@ -353,7 +348,7 @@ class TouchscreenFeedTemplate(Template):
                 ),
                 CLASS('calibre_feed_image')))
         if getattr(feed, 'description', None):
-            d = DIV(feed.description, CLASS('calibre_feed_description',
+            d = DIV(clean_xml_chars(feed.description), CLASS('calibre_feed_description',
                 'calibre_rescale_80'))
             d.append(BR())
             div.append(d)

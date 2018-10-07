@@ -9,7 +9,7 @@ __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
 import os
 from functools import partial
 from itertools import product
-from future_builtins import map
+from polyglot.builtins import map
 
 from PyQt5.Qt import (
     QDockWidget, Qt, QLabel, QIcon, QAction, QApplication, QWidget, QEvent,
@@ -45,7 +45,8 @@ from calibre.gui2.tweak_book.manage_fonts import ManageFonts
 from calibre.gui2.tweak_book.function_replace import DebugOutput
 from calibre.gui2.tweak_book.editor.widget import register_text_editor_actions
 from calibre.gui2.tweak_book.editor.insert_resource import InsertImage
-from calibre.utils.icu import character_name, sort_key
+from calibre.utils.icu import sort_key, ord_string
+from calibre.utils.unicode_names import character_name_from_code
 from calibre.utils.localization import localize_user_manual_link
 
 
@@ -219,7 +220,7 @@ class CursorPositionWidget(QWidget):  # {{{
             self.la.setText('')
         else:
             try:
-                name = character_name(character) if character and tprefs['editor_show_char_under_cursor'] else None
+                name = character_name_from_code(ord_string(character)[0]) if character and tprefs['editor_show_char_under_cursor'] else None
             except Exception:
                 name = None
             text = _('Line: {0} : {1}').format(line, col)
@@ -271,7 +272,7 @@ class Main(MainWindow):
         self.status_bar.addPermanentWidget(self.boss.save_manager.status_widget)
         self.cursor_position_widget = CursorPositionWidget(self)
         self.status_bar.addPermanentWidget(self.cursor_position_widget)
-        self.status_bar_default_msg = la = QLabel(_('{0} {1} created by {2}').format(__appname__, get_version(), 'Kovid Goyal'))
+        self.status_bar_default_msg = la = QLabel(' ' + _('{0} {1} created by {2}').format(__appname__, get_version(), 'Kovid Goyal'))
         la.base_template = unicode(la.text())
         self.status_bar.addWidget(la)
         f = self.status_bar.font()
@@ -336,6 +337,11 @@ class Main(MainWindow):
         self.action_open_book = treg('document_open.png', _('&Open book'), self.boss.open_book, 'open-book', 'Ctrl+O', _('Open a new book'))
         self.action_open_book_folder = treg('mimetypes/dir.png', _('Open &folder (unzipped EPUB) as book'), partial(self.boss.open_book, open_folder=True),
                                             'open-folder-as-book', (), _('Open a folder (unzipped EPUB) as a book'))
+        self.action_edit_next_file = treg('arrow-down.png', _('Edit &next file'), partial(self.boss.edit_next_file, backwards=False),
+                'edit-next-file', 'Ctrl+Alt+Down', _('Edit the next file in the spine'))
+        self.action_edit_previous_file = treg('arrow-up.png', _('Edit &previous file'), partial(self.boss.edit_next_file, backwards=True),
+                'edit-previous-file', 'Ctrl+Alt+Up', _('Edit the previous file in the spine'))
+        # Qt does not generate shortcut overrides for cmd+arrow on os x which
         # Qt does not generate shortcut overrides for cmd+arrow on os x which
         # means these shortcuts interfere with editing
         self.action_global_undo = treg('back.png', _('&Revert to before'), self.boss.do_global_undo, 'global-undo', () if isosx else 'Ctrl+Left',
@@ -418,11 +424,15 @@ class Main(MainWindow):
             'embed-fonts.png', _('&Embed referenced fonts'), partial(
                 self.boss.polish, 'embed', _('Embed fonts')), 'embed-fonts', (), _('Embed referenced fonts'))
         self.action_smarten_punctuation = treg(
-            'smarten-punctuation.png', _('&Smarten punctuation'), partial(
-                self.boss.polish, 'smarten_punctuation', _('Smarten punctuation')), 'smarten-punctuation', (), _('Smarten punctuation'))
+            'smarten-punctuation.png', _('&Smarten punctuation (works best for English)'), partial(
+                self.boss.polish, 'smarten_punctuation', _('Smarten punctuation')),
+            'smarten-punctuation', (), _('Smarten punctuation'))
         self.action_remove_unused_css = treg(
             'edit-clear.png', _('Remove &unused CSS rules'), partial(
                 self.boss.polish, 'remove_unused_css', _('Remove unused CSS rules')), 'remove-unused-css', (), _('Remove unused CSS rules'))
+        self.action_upgrade_book_internals = treg(
+            'arrow-up.png', _('&Upgrade book internals'), partial(
+                self.boss.polish, 'upgrade_book', _('Upgrade book internals')), 'upgrade-book', (), _('Upgrade book internals'))
 
         # Preview actions
         group = _('Preview')
@@ -571,6 +581,7 @@ class Main(MainWindow):
         er.addAction(self.action_get_ext_resources)
         e.addAction(self.action_check_book)
         e.addAction(self.action_reports)
+        e.addAction(self.action_upgrade_book_internals)
 
         e = b.addMenu(_('&View'))
         t = e.addMenu(_('Tool&bars'))

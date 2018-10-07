@@ -6,7 +6,7 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2014, Kovid Goyal <kovid at kovidgoyal.net>'
 
-import cPickle, os, sys
+import os, sys
 from collections import defaultdict, OrderedDict
 from itertools import chain
 from threading import Thread
@@ -48,7 +48,8 @@ _country_map = None
 def country_map():
     global _country_map
     if _country_map is None:
-        _country_map = cPickle.loads(P('localization/iso3166.pickle', data=True, allow_user_override=False))
+        from calibre.utils.serialize import msgpack_loads
+        _country_map = msgpack_loads(P('localization/iso3166.calibre_msgpack', data=True, allow_user_override=False))
     return _country_map
 
 
@@ -58,14 +59,15 @@ class AddDictionary(QDialog):  # {{{
         QDialog.__init__(self, parent)
         self.setWindowTitle(_('Add a dictionary'))
         self.l = l = QFormLayout(self)
+        l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
         self.setLayout(l)
 
         self.la = la = QLabel('<p>' + _(
         '''{0} supports the use of LibreOffice dictionaries for spell checking. You can
             download more dictionaries from <a href="{1}">the LibreOffice extensions repository</a>.
             The dictionary will download as an .oxt file. Simply specify the path to the
-            downloaded .oxt file here to add the dictionary to {0}.'''.format(
-                __appname__, 'http://extensions.libreoffice.org/extension-center?getCategories=Dictionary&getCompatibility=any&sort_on=positive_ratings'))+'<p>')  # noqa
+            downloaded .oxt file here to add the dictionary to {0}.''').format(
+                __appname__, 'http://extensions.libreoffice.org/extension-center?getCategories=Dictionary&getCompatibility=any&sort_on=positive_ratings')+'<p>')  # noqa
         la.setWordWrap(True)
         la.setOpenExternalLinks(True)
         la.setMinimumWidth(450)
@@ -597,6 +599,7 @@ class ManageDictionaries(Dialog):  # {{{
 class WordsModel(QAbstractTableModel):
 
     word_ignored = pyqtSignal(object, object)
+    counts_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         QAbstractTableModel.__init__(self, parent)
@@ -699,8 +702,13 @@ class WordsModel(QAbstractTableModel):
         self.beginResetModel()
         self.do_filter()
         self.do_sort()
-        self.counts = (len([None for w, recognized in spell_map.iteritems() if not recognized]), len(self.words))
+        self.update_counts(emit_signal=False)
         self.endResetModel()
+
+    def update_counts(self, emit_signal=True):
+        self.counts = (len([None for w, recognized in self.spell_map.iteritems() if not recognized]), len(self.words))
+        if emit_signal:
+            self.counts_changed.emit()
 
     def filter_item(self, x):
         if self.show_only_misspelt and self.spell_map[x]:
@@ -721,6 +729,7 @@ class WordsModel(QAbstractTableModel):
             self.spell_map[w] = dictionaries.recognized(*w)
             self.update_word(w)
             self.word_ignored.emit(*w)
+            self.update_counts()
 
     def ignore_words(self, rows):
         words = {self.word_for_row(r) for r in rows}
@@ -731,6 +740,7 @@ class WordsModel(QAbstractTableModel):
             self.spell_map[w] = dictionaries.recognized(*w)
             self.update_word(w)
             self.word_ignored.emit(*w)
+            self.update_counts()
 
     def add_word(self, row, udname):
         w = self.word_for_row(row)
@@ -739,6 +749,7 @@ class WordsModel(QAbstractTableModel):
                 self.spell_map[w] = dictionaries.recognized(*w)
                 self.update_word(w)
                 self.word_ignored.emit(*w)
+                self.update_counts()
 
     def add_words(self, dicname, rows):
         words = {self.word_for_row(r) for r in rows}
@@ -749,6 +760,7 @@ class WordsModel(QAbstractTableModel):
             self.spell_map[w] = dictionaries.recognized(*w)
             self.update_word(w)
             self.word_ignored.emit(*w)
+            self.update_counts()
 
     def remove_word(self, row):
         w = self.word_for_row(row)
@@ -756,6 +768,7 @@ class WordsModel(QAbstractTableModel):
             if dictionaries.remove_from_user_dictionaries(*w):
                 self.spell_map[w] = dictionaries.recognized(*w)
                 self.update_word(w)
+                self.update_counts()
 
     def replace_word(self, w, new_word):
         # Hack to deal with replacement words that are actually multiple words,
@@ -777,6 +790,7 @@ class WordsModel(QAbstractTableModel):
             self.words[new_key] = self.words[w]
             self.spell_map[new_key] = dictionaries.recognized(*new_key)
             self.update_word(new_key)
+            self.update_counts()
         row = self.row_for_word(w)
         if row > -1:
             self.beginRemoveRows(QModelIndex(), row, row)
@@ -921,7 +935,7 @@ class SpellCheck(Dialog):
         b = self.bb.addButton(_('&Refresh'), self.bb.ActionRole)
         b.setToolTip('<p>' + _('Re-scan the book for words, useful if you have edited the book since opening this dialog'))
         b.setIcon(QIcon(I('view-refresh.png')))
-        b.clicked.connect(partial(self.refresh, change_request=None))
+        connect_lambda(b.clicked, self, lambda self: self.refresh(change_request=None))
         b = self.bb.addButton(_('&Undo last change'), self.bb.ActionRole)
         b.setToolTip('<p>' + _('Undo the last spell check word replacement, if any'))
         b.setIcon(QIcon(I('edit-undo.png')))
@@ -940,15 +954,11 @@ class SpellCheck(Dialog):
         self.main = m = QWidget(self)
         s.addWidget(m)
         m.l = l = QVBoxLayout(m)
-        m.h1 = h = QHBoxLayout()
-        l.addLayout(h)
         self.filter_text = t = QLineEdit(self)
         t.setPlaceholderText(_('Filter the list of words'))
         t.textChanged.connect(self.do_filter)
-        m.fc = b = QToolButton(m)
-        b.setIcon(QIcon(I('clear_left.png'))), b.setToolTip(_('Clear filter'))
-        b.clicked.connect(t.clear)
-        h.addWidget(t), h.addWidget(b)
+        t.setClearButtonEnabled(True)
+        l.addWidget(t)
 
         m.h2 = h = QHBoxLayout()
         l.addLayout(h)
@@ -963,6 +973,7 @@ class SpellCheck(Dialog):
         hh = self.words_view.horizontalHeader()
         h.addWidget(w)
         self.words_model = m = WordsModel(self)
+        m.counts_changed.connect(self.update_summary)
         w.setModel(m)
         m.dataChanged.connect(self.current_word_changed)
         m.modelReset.connect(self.current_word_changed)
@@ -1104,6 +1115,11 @@ class SpellCheck(Dialog):
                     self.suggested_list.setCurrentItem(item)
                     self.suggested_word.setText(s)
                     word_suggested = True
+                if s is current_word:
+                    f = item.font()
+                    f.setItalic(True)
+                    item.setFont(f)
+                    item.setToolTip(_('The original word'))
             if not word_suggested:
                 self.suggested_word.setText(current_word)
 

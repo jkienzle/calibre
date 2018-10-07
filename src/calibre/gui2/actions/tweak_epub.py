@@ -6,7 +6,6 @@ __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import time
-from functools import partial
 
 from PyQt5.Qt import QTimer, QDialog, QDialogButtonBox, QCheckBox, QVBoxLayout, QLabel, Qt
 
@@ -37,7 +36,8 @@ class Choose(QDialog):
         self.buts = buts = []
         for fmt in fmts:
             b = bb.addButton(fmt.upper(), bb.AcceptRole)
-            b.clicked.connect(partial(self.chosen, fmt))
+            b.setObjectName(fmt)
+            connect_lambda(b.clicked, self, lambda self: self.chosen(self.sender().objectName()))
             buts.append(b)
 
         self.fmt = None
@@ -126,6 +126,16 @@ class TweakEpubAction(InterfaceAction):
                 tweakable_fmts = {fmts[0]}
 
         fmt = tuple(tweakable_fmts)[0]
+        self.ebook_edit_format(book_id, fmt)
+
+    def ebook_edit_format(self, book_id, fmt):
+        '''
+        Also called from edit_metadata formats list.  In that context,
+        SUPPORTED check was already done.
+        '''
+        db = self.gui.library_view.model().db
+        from calibre.gui2.tweak_book import tprefs
+        tprefs.refresh()  # In case they were changed in a Tweak Book process
         path = db.new_api.format_abspath(book_id, fmt)
         if path is None:
             return error_dialog(self.gui, _('File missing'), _(

@@ -54,8 +54,14 @@ class Worker(Thread):
             func = partial(encode_jpeg, quality=self.jpeg_quality)
         path = self.container.get_file_path_for_processing(name)
         before = os.path.getsize(path)
+        with lopen(path, 'rb') as f:
+            old_data = f.read()
         func(path)
         after = os.path.getsize(path)
+        if after >= before:
+            with lopen(path, 'wb') as f:
+                f.write(old_data)
+            after = before
         self.results[name] = (True, (before, after))
 
 
@@ -85,24 +91,29 @@ def compress_images(container, report=None, names=None, jpeg_quality=None, progr
     [Worker(abort, 'CompressImage%d' % i, queue, results, container, jpeg_quality, pc) for i in xrange(min(detect_ncpus(), len(images)))]
     queue.join()
     before_total = after_total = 0
+    changed = False
     for name, (ok, res) in results.iteritems():
         name = force_unicode(name, filesystem_encoding)
         if ok:
             before, after = res
             if before != after:
-                before_total += before
-                after_total += after
-                if report:
+                changed = True
+            before_total += before
+            after_total += after
+            if report:
+                if before != after:
                     report(_('{0} compressed from {1} to {2} bytes [{3:.1%} reduction]').format(
                         name, human_readable(before), human_readable(after), (before - after)/before))
+                else:
+                    report(_('{0} could not be further compressed').format(name))
         else:
             report(_('Failed to process {0} with error:').format(name))
             report(res)
     if report:
-        if before_total > 0:
+        if changed:
             report('')
             report(_('Total image filesize reduced from {0} to {1} [{2:.1%} reduction]').format(
                 human_readable(before_total), human_readable(after_total), (before_total - after_total)/before_total))
         else:
             report(_('Images are already fully optimized'))
-    return before_total > 0, results
+    return changed, results

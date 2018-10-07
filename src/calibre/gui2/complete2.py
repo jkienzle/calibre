@@ -9,11 +9,14 @@ __docformat__ = 'restructuredtext en'
 
 import weakref
 
-import sip
 from PyQt5.Qt import (
     QLineEdit, QAbstractListModel, Qt, pyqtSignal, QObject, QKeySequence,
     QApplication, QListView, QPoint, QModelIndex, QFont, QFontInfo,
     QStyleOptionComboBox, QStyle, QComboBox, QTimer)
+try:
+    from PyQt5 import sip
+except ImportError:
+    import sip
 
 from calibre.constants import isosx, get_osx_version
 from calibre.utils.icu import sort_key, primary_startswith, primary_contains
@@ -155,8 +158,7 @@ class Completer(QListView):  # {{{
         if widget is None:
             return
         screen = QApplication.desktop().availableGeometry(widget)
-        h = (p.sizeHintForRow(0) * min(self.max_visible_items, m.rowCount()) +
-                3) + 3
+        h = (p.sizeHintForRow(0) * min(self.max_visible_items, m.rowCount()) + 3) + 3
         hsb = p.horizontalScrollBar()
         if hsb and hsb.isVisible():
             h += hsb.sizeHint().height()
@@ -198,9 +200,9 @@ class Completer(QListView):  # {{{
 
     def debug_event(self, ev):
         from calibre.gui2 import event_type_name
-        print ('Event:', event_type_name(ev))
+        print('Event:', event_type_name(ev))
         if ev.type() in (ev.KeyPress, ev.ShortcutOverride, ev.KeyRelease):
-            print ('\tkey:', QKeySequence(ev.key()).toString())
+            print('\tkey:', QKeySequence(ev.key()).toString())
 
     def eventFilter(self, obj, e):
         'Redirect key presses from the popup to the widget'
@@ -266,7 +268,7 @@ class Completer(QListView):  # {{{
             # See https://bugreports.qt-project.org/browse/QTBUG-41806
             e.accept()
             return True
-        elif etype == e.MouseButtonPress and not self.rect().contains(self.mapFromGlobal(e.globalPos())):
+        elif etype == e.MouseButtonPress and hasattr(e, 'globalPos') and not self.rect().contains(self.mapFromGlobal(e.globalPos())):
             # A click outside the popup, close it
             if isinstance(widget, QComboBox):
                 # This workaround is needed to ensure clicking on the drop down
@@ -517,6 +519,7 @@ class EditWithComplete(EnComboBox):
             if c.isVisible():
                 return True
         return EnComboBox.eventFilter(self, obj, e)
+
 
 if __name__ == '__main__':
     from PyQt5.Qt import QDialog, QVBoxLayout

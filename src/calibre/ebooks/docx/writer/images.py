@@ -10,7 +10,7 @@ import os
 import posixpath
 from collections import namedtuple
 from functools import partial
-from future_builtins import map
+from polyglot.builtins import map
 
 from lxml import etree
 
@@ -94,10 +94,16 @@ class ImagesManager(object):
         else:
             parent = html_img.getparent()
             if len(parent) == 1 and not (parent.text or '').strip() and not (html_img.tail or '').strip():
-                # We have an inline image alone inside a block
                 pstyle = stylizer.style(parent)
-                if pstyle['text-align'] in ('center', 'right') and 'block' in pstyle['display']:
-                    floating = pstyle['text-align']
+                if 'block' in pstyle['display']:
+                    # We have an inline image alone inside a block
+                    as_block = True
+                    floating = pstyle['float']
+                    if floating not in {'left', 'right'}:
+                        floating = None
+                        if pstyle['text-align'] in ('center', 'right'):
+                            floating = pstyle['text-align']
+                    floating = floating or 'left'
         fake_margins = floating is None
         self.count += 1
         img = self.images[href]
@@ -178,9 +184,16 @@ class ImagesManager(object):
         finally:
             item.unload_data_from_memory(False)
 
-    def create_cover_markup(self, img, width, height):
+    def create_cover_markup(self, img, preserve_aspect_ratio, width, height):
         self.count += 1
         makeelement, namespaces = self.document_relationships.namespace.makeelement, self.document_relationships.namespace.namespaces
+        if preserve_aspect_ratio:
+            if img.width >= img.height:
+                ar = img.height / img.width
+                height = ar * width
+            else:
+                ar = img.width / img.height
+                width = ar * height
 
         root = etree.Element('root', nsmap=namespaces)
         ans = makeelement(root, 'w:drawing', append=False)

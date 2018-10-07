@@ -16,6 +16,7 @@ from read_book.goto import create_goto_panel
 from read_book.prefs.font_size import create_font_size_panel
 from read_book.prefs.main import create_prefs_panel
 from read_book.toc import create_toc_panel
+from read_book.word_actions import create_word_actions_panel
 from session import get_device_uuid
 from widgets import create_button, create_spinner
 
@@ -136,7 +137,10 @@ class SyncBook:  # {{{
             return
         self.overlay.hide()
         if load_type is not 'load':
-            error_dialog(_('Failed to fetch sync data'), _('Failed to download last read data from server, click "Show details" for more information.'), xhr.error_html)
+            if xhr.responseText is 'login required for sync':
+                error_dialog(_('Failed to fetch sync data'), _('You must setup user accounts and login to use the sync functionality'))
+            else:
+                error_dialog(_('Failed to fetch sync data'), _('Failed to download last read data from server, click "Show details" for more information.'), xhr.error_html)
             return
         data = JSON.parse(xhr.responseText)
         book = self.overlay.view.book
@@ -282,39 +286,6 @@ class MainOverlay:
 
 # }}}
 
-# ControlsOverlay {{{
-
-class ControlsOverlay:
-
-    def __init__(self, overlay):
-        self.overlay = overlay
-
-    def show(self, container):
-        self.container_id = container.getAttribute('id')
-        def msg(txt):
-            return set_css(E.div(txt), padding='1ex 1em', text_align='center', margin='auto')
-        container.appendChild(E.div(
-            style=f'overflow: hidden; width: 100vw; height: 100vh; text-align: center; font-size: 1.3rem; font-weight: bold; background: {get_color("window-background")};' +
-                  'display:flex; flex-direction: column; align-items: stretch',
-            E.div(
-                msg(_('Tap for controls')),
-                style='height: 25vh; display:flex; align-items: center; border-bottom: solid 2px currentColor',
-            ),
-            E.div(
-                style="display: flex; align-items: stretch; flex-grow: 10",
-                E.div(
-                    msg(_('Tap to turn back')),
-                    style='width: 25vw; display:flex; align-items: center; border-right: solid 2px currentColor',
-                ),
-                E.div(
-                    msg(_('Tap to turn page')),
-                    style='width: 75vw; display:flex; align-items: center',
-                )
-            )
-        ))
-
-# }}}
-
 class TOCOverlay: # {{{
 
     def __init__(self, overlay, create_func, title):
@@ -342,6 +313,26 @@ class TOCOverlay: # {{{
             self.overlay.view.goto_named_destination(dest, frag)
 # }}}
 
+class WordActionsOverlay:  # {{{
+
+    def __init__(self, word, overlay):
+        self.word = word
+        self.overlay = overlay
+
+    def on_container_click(self, evt):
+        pass  # Dont allow panel to be closed by a click
+
+    def show(self, container):
+        container.style.backgroundColor = get_color('window-background')
+        container.appendChild(E.div(
+            style='padding: 1ex 1em; border-bottom: solid 1px currentColor; display:flex; justify-content: space-between',
+            E.h2(_('Lookup: {}').format(self.word)),
+                E.div(svgicon('close'), style='cursor:pointer', onclick=def(event):event.preventDefault(), event.stopPropagation(), self.overlay.hide_current_panel(event);, class_='simple-link'),
+            ))
+        container.appendChild(E.div())
+        create_word_actions_panel(container, self.word, self.overlay.hide)
+# }}}
+
 class PrefsOverlay: # {{{
 
     def __init__(self, overlay):
@@ -363,13 +354,15 @@ class PrefsOverlay: # {{{
 
 # }}}
 
-class FontSizeOverlay:
+class FontSizeOverlay:  # {{{
 
     def __init__(self, overlay):
         self.overlay = overlay
 
     def show(self, container):
         create_font_size_panel(container, self.overlay.hide_current_panel)
+# }}}
+
 
 class Overlay:
 
@@ -411,10 +404,6 @@ class Overlay:
 
     def hide_loading_message(self):
         self.panels = [p for p in self.panels if not isinstance(p, LoadingMessage)]
-        self.show_current_panel()
-
-    def show_controls_help(self):
-        self.panels.push(ControlsOverlay(self))
         self.show_current_panel()
 
     def hide_current_panel(self):
@@ -475,4 +464,9 @@ class Overlay:
     def show_font_size_chooser(self):
         self.hide_current_panel()
         self.panels.push(FontSizeOverlay(self))
+        self.show_current_panel()
+
+    def show_word_actions(self, word):
+        self.hide_current_panel()
+        self.panels.push(WordActionsOverlay(word, self))
         self.show_current_panel()

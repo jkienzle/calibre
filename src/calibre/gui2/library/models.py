@@ -9,7 +9,7 @@ import functools, re, os, traceback, errno, time
 from collections import defaultdict, namedtuple
 from itertools import groupby
 
-from PyQt5.Qt import (QAbstractTableModel, Qt, pyqtSignal, QIcon, QImage,
+from PyQt5.Qt import (QAbstractTableModel, Qt, pyqtSignal, QIcon, QImage, QFont,
         QModelIndex, QDateTime, QColor, QPixmap, QPainter, QApplication)
 
 from calibre import fit_image, force_unicode
@@ -55,7 +55,7 @@ def default_image():
 
 
 def group_numbers(numbers):
-    for k, g in groupby(enumerate(sorted(numbers)), lambda (i, x):i - x):
+    for k, g in groupby(enumerate(sorted(numbers)), lambda i_x:i_x[0] - i_x[1]):
         first = None
         for last in g:
             if first is None:
@@ -175,6 +175,14 @@ class BooksModel(QAbstractTableModel):  # {{{
 
     def __init__(self, parent=None, buffer=40):
         QAbstractTableModel.__init__(self, parent)
+        base_font = parent.font() if parent else QApplication.instance().font()
+        self.bold_font = QFont(base_font)
+        self.bold_font.setBold(True)
+        self.italic_font = QFont(base_font)
+        self.italic_font.setItalic(True)
+        self.bi_font = QFont(self.bold_font)
+        self.bi_font.setItalic(True)
+        self.styled_columns = {}
         self.orig_headers = {
                         'title'     : _("Title"),
                         'ondevice'   : _("On Device"),
@@ -258,6 +266,21 @@ class BooksModel(QAbstractTableModel):  # {{{
                 self.dataChanged.emit(self.index(row, col), self.index(row,
                     col))
 
+    def change_column_font(self, colname, font_type):
+        if colname in self.column_map and font_type in ('normal', 'bold', 'italic', 'bi'):
+            db = self.db.new_api
+            old = db.pref('styled_columns', {})
+            old.pop(colname, None)
+            self.styled_columns.pop(colname, None)
+            if font_type != 'normal':
+                self.styled_columns[colname] = getattr(self, '{}_font'.format(font_type))
+                old[colname] = font_type
+            self.db.new_api.set_pref('styled_columns', old)
+            col = self.column_map.index(colname)
+            for row in xrange(self.rowCount(QModelIndex())):
+                self.dataChanged.emit(self.index(row, col), self.index(row,
+                    col))
+
     def is_custom_column(self, cc_label):
         try:
             return cc_label in self.custom_columns
@@ -280,6 +303,10 @@ class BooksModel(QAbstractTableModel):  # {{{
 
     def set_database(self, db):
         self.ids_to_highlight = []
+
+        if db:
+            style_map = {'bold': self.bold_font, 'bi': self.bi_font, 'italic': self.italic_font}
+            self.styled_columns = {k: style_map.get(v, None) for k, v in db.new_api.pref('styled_columns', {}).iteritems()}
         self.alignment_map = {}
         self.ids_to_highlight_set = set()
         self.current_highlighted_idx = None
@@ -614,7 +641,7 @@ class BooksModel(QAbstractTableModel):  # {{{
             if not fmts:
                 fmts = ''
             db_formats = set(fmts.lower().split(','))
-            available_formats = set([f.lower() for f in formats])
+            available_formats = {f.lower() for f in formats}
             u = available_formats.intersection(db_formats)
             for f in formats:
                 if f.lower() in u:
@@ -670,7 +697,7 @@ class BooksModel(QAbstractTableModel):  # {{{
             if not fmts:
                 fmts = ''
             db_formats = set(fmts.lower().split(','))
-            available_formats = set([f.lower() for f in formats])
+            available_formats = {f.lower() for f in formats}
             u = available_formats.intersection(db_formats)
             for f in formats:
                 if f.lower() in u:
@@ -934,11 +961,9 @@ class BooksModel(QAbstractTableModel):  # {{{
             self.column_color.mi = None
             return None
         elif role == Qt.DecorationRole:
+            default_icon = None
             if self.column_to_dc_decorator_map[col] is not None:
-                ccicon = self.column_to_dc_decorator_map[index.column()](index.row())
-                if ccicon is not None:
-                    return ccicon
-
+                default_icon = self.column_to_dc_decorator_map[index.column()](index.row())
             rules = self.db.prefs['column_icon_rules']
             if rules:
                 key = self.column_map[col]
@@ -960,15 +985,19 @@ class BooksModel(QAbstractTableModel):  # {{{
                                   self.icon_template_cache)
                     if ccicon is not None:
                         return ccicon
-                    if need_icon_with_text:
+                    if need_icon_with_text and default_icon is None:
                         self.icon_cache[id_][cache_index] = self.bool_blank_icon
                         return self.bool_blank_icon
                     self.icon_cache[id_][cache_index] = None
+            return default_icon
         elif role == Qt.TextAlignmentRole:
             cname = self.column_map[index.column()]
             ans = Qt.AlignVCenter | ALIGNMENT_MAP[self.alignment_map.get(cname,
                 'left')]
             return (ans)
+        elif role == Qt.FontRole and self.styled_columns:
+            cname = self.column_map[index.column()]
+            return self.styled_columns.get(cname)
         # elif role == Qt.ToolTipRole and index.isValid():
         #    if self.column_map[index.column()] in self.editable_cols:
         #        return (_("Double click to <b>edit</b> me<br><br>"))
@@ -1075,7 +1104,7 @@ class BooksModel(QAbstractTableModel):  # {{{
             return True
 
         id = self.db.id(row)
-        books_to_refresh = set([id])
+        books_to_refresh = {id}
         books_to_refresh |= self.db.set_custom(id, val, extra=s_index,
                            label=label, num=None, append=False, notify=True,
                            allow_case_change=True)
@@ -1122,9 +1151,9 @@ class BooksModel(QAbstractTableModel):  # {{{
                 return False
             val = (int(value) if column == 'rating' else
                     value if column in ('timestamp', 'pubdate')
-                    else re.sub(ur'\s', u' ', unicode(value or '').strip()))
+                    else re.sub(u'\\s', u' ', unicode(value or '').strip()))
             id = self.db.id(row)
-            books_to_refresh = set([id])
+            books_to_refresh = {id}
             if column == 'rating':
                 val = max(0, min(int(val or 0), 10))
                 self.db.set_rating(id, val)
@@ -1214,7 +1243,7 @@ class OnDeviceSearch(SearchQueryParser):  # {{{
         if location not in self.USABLE_LOCATIONS:
             return set([])
         matches = set([])
-        all_locs = set(self.USABLE_LOCATIONS) - set(['all', 'tags'])
+        all_locs = set(self.USABLE_LOCATIONS) - {'all', 'tags'}
         locations = all_locs if location == 'all' else [location]
         q = {
              'title' : lambda x : getattr(x, 'title').lower(),

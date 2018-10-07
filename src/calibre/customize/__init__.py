@@ -1,4 +1,5 @@
 from __future__ import with_statement
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 
@@ -276,8 +277,8 @@ class Plugin(object):  # {{{
         if self.plugin_path is not None:
             from calibre.utils.zipfile import ZipFile
             zf = ZipFile(self.plugin_path)
-            extensions = set([x.rpartition('.')[-1].lower() for x in
-                zf.namelist()])
+            extensions = {x.rpartition('.')[-1].lower() for x in
+                zf.namelist()}
             zip_safe = True
             for ext in ('pyd', 'so', 'dll', 'dylib'):
                 if ext in extensions:
@@ -476,16 +477,14 @@ class CatalogPlugin(Plugin):  # {{{
 
     type = _('Catalog generator')
 
-    #: CLI parser options specific to this plugin, declared as namedtuple Option::
+    #: CLI parser options specific to this plugin, declared as namedtuple Option:
     #:
-    #:  from collections import namedtuple
-    #:  Option = namedtuple('Option', 'option, default, dest, help')
-    #:  cli_options = [Option('--catalog-title',
-    #:                       default = 'My Catalog',
-    #:                       dest = 'catalog_title',
-    #:                       help = (_('Title of generated catalog. \nDefault:') + " '" +
-    #:                       '%default' + "'"))]
-    #:  cli_options parsed in calibre.db.cli.cmd_catalog:option_parser()
+    #:   from collections import namedtuple
+    #:   Option = namedtuple('Option', 'option, default, dest, help')
+    #:   cli_options = [Option('--catalog-title', default = 'My Catalog',
+    #:   dest = 'catalog_title', help = (_('Title of generated catalog. \nDefault:') + " '" + '%default' + "'"))]
+    #:   cli_options parsed in calibre.db.cli.cmd_catalog:option_parser()
+    #:
     cli_options = []
 
     def _field_sorter(self, key):
@@ -508,11 +507,10 @@ class CatalogPlugin(Plugin):  # {{{
 
     def get_output_fields(self, db, opts):
         # Return a list of requested fields
-        all_std_fields = set(
-                          ['author_sort','authors','comments','cover','formats',
+        all_std_fields = {'author_sort','authors','comments','cover','formats',
                            'id','isbn','library_name','ondevice','pubdate','publisher',
                            'rating','series_index','series','size','tags','timestamp',
-                           'title_sort','title','uuid','languages','identifiers'])
+                           'title_sort','title','uuid','languages','identifiers'}
         all_custom_fields = set(db.custom_field_keys())
         for field in list(all_custom_fields):
             fm = db.field_metadata[field]
@@ -565,7 +563,7 @@ class CatalogPlugin(Plugin):  # {{{
                 try:
                     resources.extract(file, self.resources_path)
                 except:
-                    print " customize:__init__.initialize(): %s not found in %s" % (file, os.path.basename(self.plugin_path))
+                    print(" customize:__init__.initialize(): %s not found in %s" % (file, os.path.basename(self.plugin_path)))
                     continue
             resources.close()
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env python2
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2015, Kovid Goyal <kovid at kovidgoyal.net>
-
-from future_builtins import map
+from __future__ import print_function
+from polyglot.builtins import map
 import sys, locale, codecs, os, importlib, collections
 
 __appname__   = u'calibre'
-numeric_version = (3, 4, 0)
+numeric_version = (3, 32, 0)
 __version__   = u'.'.join(map(unicode, numeric_version))
 __author__    = u"Kovid Goyal <kovid@kovidgoyal.net>"
 
@@ -39,9 +39,9 @@ isworker = 'CALIBRE_WORKER' in os.environ or 'CALIBRE_SIMPLE_WORKER' in os.envir
 if isworker:
     os.environ.pop('CALIBRE_FORCE_ANSI', None)
 FAKE_PROTOCOL, FAKE_HOST = 'https', 'calibre-internal.invalid'
-VIEWER_APP_UID = 'com.calibre-ebook.viewer'
-EDITOR_APP_UID = 'com.calibre-ebook.edit-book'
-MAIN_APP_UID = 'com.calibre-ebook.main-gui'
+VIEWER_APP_UID = u'com.calibre-ebook.viewer'
+EDITOR_APP_UID = u'com.calibre-ebook.edit-book'
+MAIN_APP_UID = u'com.calibre-ebook.main-gui'
 try:
     preferred_encoding = locale.getpreferredencoding()
     codecs.lookup(preferred_encoding)
@@ -95,15 +95,29 @@ def debug():
     DEBUG = True
 
 
-_cache_dir = None
-
-
 def _get_cache_dir():
+    import errno
     confcache = os.path.join(config_dir, u'caches')
+    try:
+        os.makedirs(confcache)
+    except EnvironmentError as err:
+        if err.errno != errno.EEXIST:
+            raise
     if isportable:
         return confcache
     if 'CALIBRE_CACHE_DIRECTORY' in os.environ:
-        return os.path.abspath(os.environ['CALIBRE_CACHE_DIRECTORY'])
+        if iswindows:
+            ans = get_unicode_windows_env_var(u'CALIBRE_CACHE_DIRECTORY')
+        else:
+            ans = os.path.abspath(os.environ['CALIBRE_CACHE_DIRECTORY'])
+            if isinstance(ans, bytes):
+                ans = ans.decode(filesystem_encoding)
+        try:
+            os.makedirs(ans)
+            return ans
+        except EnvironmentError as err:
+            if err.errno == errno.EEXIST:
+                return ans
 
     if iswindows:
         w = plugins['winutil'][0]
@@ -122,19 +136,19 @@ def _get_cache_dir():
                 candidate = candidate.decode(filesystem_encoding)
             except ValueError:
                 candidate = confcache
-    if not os.path.exists(candidate):
-        try:
-            os.makedirs(candidate)
-        except:
+    try:
+        os.makedirs(candidate)
+    except EnvironmentError as err:
+        if err.errno != errno.EEXIST:
             candidate = confcache
     return candidate
 
 
 def cache_dir():
-    global _cache_dir
-    if _cache_dir is None:
-        _cache_dir = _get_cache_dir()
-    return _cache_dir
+    ans = getattr(cache_dir, 'ans', None)
+    if ans is None:
+        ans = cache_dir.ans = _get_cache_dir()
+    return ans
 
 # plugins {{{
 
@@ -154,7 +168,7 @@ class Plugins(collections.Mapping):
                 'chm_extra',
                 'icu',
                 'speedup',
-                'monotonic',
+                'unicode_names',
                 'zlib2',
                 'html',
                 'freetype',
@@ -168,11 +182,15 @@ class Plugins(collections.Mapping):
                 'certgen',
                 'lzma_binding',
             ]
+        if not ispy3:
+            plugins.extend([
+                'monotonic',
+            ])
         if iswindows:
             plugins.extend(['winutil', 'wpd', 'winfonts'])
         if isosx:
             plugins.append('usbobserver')
-        if islinux or isosx:
+        if isfreebsd or ishaiku or islinux or isosx:
             plugins.append('libusb')
             plugins.append('libmtp')
         self.plugins = frozenset(plugins)
@@ -216,7 +234,7 @@ if plugins is None:
 
 # config_dir {{{
 
-CONFIG_DIR_MODE = 0700
+CONFIG_DIR_MODE = 0o700
 
 if 'CALIBRE_CONFIG_DIRECTORY' in os.environ:
     config_dir = os.path.abspath(os.environ['CALIBRE_CONFIG_DIRECTORY'])
@@ -242,7 +260,7 @@ else:
     if not os.path.exists(config_dir) or \
             not os.access(config_dir, os.W_OK) or not \
             os.access(config_dir, os.X_OK):
-        print 'No write acces to', config_dir, 'using a temporary dir instead'
+        print('No write acces to', config_dir, 'using a temporary dir instead')
         import tempfile, atexit
         config_dir = tempfile.mkdtemp(prefix='calibre-config-')
 
@@ -277,89 +295,39 @@ def get_version():
 def get_portable_base():
     'Return path to the directory that contains calibre-portable.exe or None'
     if isportable:
-        return os.path.dirname(os.path.dirname(os.environ['CALIBRE_PORTABLE_BUILD']))
+        return os.path.dirname(os.path.dirname(get_unicode_windows_env_var(u'CALIBRE_PORTABLE_BUILD')))
 
 
 def get_unicode_windows_env_var(name):
-    import ctypes
-    name = unicode(name)
-    n = ctypes.windll.kernel32.GetEnvironmentVariableW(name, None, 0)
-    if n == 0:
-        return None
-    buf = ctypes.create_unicode_buffer(u'\0'*n)
-    ctypes.windll.kernel32.GetEnvironmentVariableW(name, buf, n)
-    return buf.value
+    getenv = plugins['winutil'][0].getenv
+    return getenv(unicode(name))
 
 
 def get_windows_username():
     '''
-    Return the user name of the currently loggen in user as a unicode string.
+    Return the user name of the currently logged in user as a unicode string.
     Note that usernames on windows are case insensitive, the case of the value
     returned depends on what the user typed into the login box at login time.
     '''
-    import ctypes
-    try:
-        advapi32 = ctypes.windll.advapi32
-        GetUserName = getattr(advapi32, u'GetUserNameW')
-    except AttributeError:
-        pass
-    else:
-        buf = ctypes.create_unicode_buffer(257)
-        n = ctypes.c_int(257)
-        if GetUserName(buf, ctypes.byref(n)):
-            return buf.value
-
-    return get_unicode_windows_env_var(u'USERNAME')
+    username = plugins['winutil'][0].username
+    return username()
 
 
 def get_windows_temp_path():
-    import ctypes
-    n = ctypes.windll.kernel32.GetTempPathW(0, None)
-    if n == 0:
-        return None
-    buf = ctypes.create_unicode_buffer(u'\0'*n)
-    ctypes.windll.kernel32.GetTempPathW(n, buf)
-    ans = buf.value
-    return ans if ans else None
+    temp_path = plugins['winutil'][0].temp_path
+    return temp_path()
 
 
 def get_windows_user_locale_name():
-    import ctypes
-    k32 = ctypes.windll.kernel32
-    n = 255
-    buf = ctypes.create_unicode_buffer(u'\0'*n)
-    n = k32.GetUserDefaultLocaleName(buf, n)
-    if n == 0:
-        return None
-    return u'_'.join(buf.value.split(u'-')[:2])
-
-
-number_formats = None
+    locale_name = plugins['winutil'][0].locale_name
+    return locale_name()
 
 
 def get_windows_number_formats():
-    # This can be changed to use localeconv() once we switch to Visual Studio
-    # 2015 as localeconv() in that version has unicode variants for all strings.
-    global number_formats
-    if number_formats is None:
-        import ctypes
-        from ctypes.wintypes import DWORD
-        k32 = ctypes.windll.kernel32
-        n = 25
-        buf = ctypes.create_unicode_buffer(u'\0'*n)
-        k32.GetNumberFormatEx.argtypes = [ctypes.c_wchar_p, DWORD, ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
-        k32.GetNumberFormatEx.restype = ctypes.c_int
-        if k32.GetNumberFormatEx(None, 0, u'123456.7', None, buf, n) == 0:
-            raise ctypes.WinError()
-        src = buf.value
-        thousands_sep, decimal_point = u',.'
-        idx = src.find(u'6')
-        if idx > -1 and src[idx+1] != u'7':
-            decimal_point = src[idx+1]
-            src = src[:idx]
-        for c in src:
-            if c not in u'123456':
-                thousands_sep = c
-                break
-        number_formats = (thousands_sep, decimal_point)
-    return number_formats
+    ans = getattr(get_windows_number_formats, 'ans', None)
+    if ans is None:
+        localeconv = plugins['winutil'][0].localeconv
+        d = localeconv()
+        thousands_sep, decimal_point = d['thousands_sep'], d['decimal_point']
+        ans = get_windows_number_formats.ans = thousands_sep, decimal_point
+    return ans

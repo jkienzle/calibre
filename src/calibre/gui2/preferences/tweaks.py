@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
@@ -26,6 +27,27 @@ from PyQt5.Qt import (
     QSizePolicy, QGroupBox, QWidget, QPushButton, QSplitter, pyqtSignal)
 
 ROOT = QModelIndex()
+
+
+def format_doc(doc):
+    current_indent = default_indent = None
+    lines = ['']
+    for line in doc.splitlines():
+        if not line.strip():
+            lines.append('')
+            continue
+        line = line[1:]
+        indent = len(line) - len(line.lstrip())
+        if indent != current_indent:
+            lines.append('')
+        if default_indent is None:
+            default_indent = indent
+        current_indent = indent
+        if indent == default_indent:
+            lines[-1] += ' ' + line
+        else:
+            lines.append('    ' + line.strip())
+    return '\n'.join(lines).lstrip()
 
 
 class AdaptSQP(SearchQueryParser):
@@ -56,11 +78,10 @@ class Tweak(object):  # {{{
         translate = _
         self.name = translate(name)
         self.doc = doc.strip()
-        if self.doc:
-            self.doc = translate(self.doc)
+        self.doc = ' ' + self.doc
         self.var_names = var_names
         if self.var_names:
-            self.doc = u"%s: %s\n\n%s"%(_('ID'), self.var_names[0], self.doc)
+            self.doc = u"%s: %s\n\n%s"%(_('ID'), self.var_names[0], format_doc(self.doc))
         self.default_values = OrderedDict()
         for x in var_names:
             self.default_values[x] = defaults[x]
@@ -135,7 +156,7 @@ class Tweaks(QAbstractListModel, AdaptSQP):  # {{{
             ans.setBold(True)
             return ans
         if role == Qt.ToolTipRole:
-            tt = _('This tweak has it default value')
+            tt = _('This tweak has its default value')
             if tweak.is_customized:
                 tt = '<p>'+_('This tweak has been customized')
                 tt += '<pre>'
@@ -151,7 +172,7 @@ class Tweaks(QAbstractListModel, AdaptSQP):  # {{{
         try:
             exec(custom, g, l)
         except:
-            print 'Failed to load custom tweaks file'
+            print('Failed to load custom tweaks file')
             import traceback
             traceback.print_exc()
         dl, dg = {}, {}
@@ -175,14 +196,22 @@ class Tweaks(QAbstractListModel, AdaptSQP):  # {{{
 
     def read_tweak(self, lines, pos, defaults, custom):
         name = lines[pos][2:].strip()
-        doc, var_names = [], []
+        doc, stripped_doc, leading, var_names = [], [], [], []
         while True:
             pos += 1
             line = lines[pos]
             if not line.startswith('#'):
                 break
-            doc.append(line[1:].strip())
-        doc = '\n'.join(doc)
+            line = line[1:]
+            doc.append(line.rstrip())
+            stripped_doc.append(line.strip())
+            leading.append(line[:len(line) - len(line.lstrip())])
+        translate = _
+        stripped_doc = translate('\n'.join(stripped_doc).strip())
+        final_doc = []
+        for prefix, line in zip(leading, stripped_doc.splitlines()):
+            final_doc.append(prefix + line)
+        doc = '\n'.join(final_doc)
         while True:
             try:
                 line = lines[pos]
@@ -394,7 +423,6 @@ class ConfigWidget(ConfigWidgetBase):
         hb.l = l2 = QVBoxLayout(hb)
         self.help = h = QPlainTextEdit(self)
         l2.addWidget(h)
-        h.setLineWrapMode(QPlainTextEdit.NoWrap)
         h.setReadOnly(True)
         g.addWidget(hb, 1, 0, 1, 3)
 

@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import with_statement
+from __future__ import print_function
 
 __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -87,11 +88,8 @@ class Listener(Thread):  # {{{
 # }}}
 
 
-_gui = None
-
-
 def get_gui():
-    return _gui
+    return getattr(get_gui, 'ans', None)
 
 
 def add_quick_start_guide(library_view, refresh_cover_browser=None):
@@ -138,7 +136,6 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
     shutting_down = False
 
     def __init__(self, opts, parent=None, gui_debug=None):
-        global _gui
         MainWindow.__init__(self, opts, parent=parent, disable_automatic_gc=True)
         self.setWindowIcon(QApplication.instance().windowIcon())
         self.jobs_pointer = Pointer(self)
@@ -147,7 +144,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         self.proceed_question = ProceedQuestion(self)
         self.job_error_dialog = JobError(self)
         self.keyboard = Manager(self)
-        _gui = self
+        get_gui.ans = self
         self.opts = opts
         self.device_connected = None
         self.gui_debug = gui_debug
@@ -269,17 +266,19 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         self.tb_wrapper = textwrap.TextWrapper(width=40)
         self.viewers = collections.deque()
         self.system_tray_icon = None
-        if config['systray_icon']:
+        do_systray = config['systray_icon'] or opts.start_in_tray
+        if do_systray:
             self.system_tray_icon = factory(app_id='com.calibre-ebook.gui').create_system_tray_icon(parent=self, title='calibre')
         if self.system_tray_icon is not None:
             self.system_tray_icon.setIcon(QIcon(I('lt.png', allow_user_override=False)))
             if not (iswindows or isosx):
-                self.system_tray_icon.setIcon(QIcon.fromTheme('calibre-gui', self.system_tray_icon.icon()))
+                self.system_tray_icon.setIcon(QIcon.fromTheme('calibre-tray', self.system_tray_icon.icon()))
             self.system_tray_icon.setToolTip(self.jobs_button.tray_tooltip())
             self.system_tray_icon.setVisible(True)
             self.jobs_button.tray_tooltip_updated.connect(self.system_tray_icon.setToolTip)
-        elif config['systray_icon']:
-            prints('Failed to create system tray icon, your desktop environment probably does not support the StatusNotifier spec')
+        elif do_systray:
+            prints('Failed to create system tray icon, your desktop environment probably'
+                   ' does not support the StatusNotifier spec https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/')
         self.system_tray_menu = QMenu(self)
         self.toggle_to_tray_action = self.system_tray_menu.addAction(QIcon(I('page.png')), '')
         self.toggle_to_tray_action.triggered.connect(self.system_tray_icon_activated)
@@ -615,6 +614,13 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         m.research()
         self.tags_view.recount()
 
+    def handle_cli_args(self, args):
+        if isinstance(args, basestring):
+            args = [args]
+        files = [os.path.abspath(p) for p in args if not os.path.isdir(p) and os.access(p, os.R_OK)]
+        if files:
+            self.iactions['Add Books'].add_filesystem_book(files)
+
     def another_instance_wants_to_talk(self):
         try:
             msg = self.listener.queue.get_nowait()
@@ -633,9 +639,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
                                  det_msg='Invalid msg: %r' % msg, show=True)
                 argv = ()
             if isinstance(argv, (list, tuple)) and len(argv) > 1:
-                files = [os.path.abspath(p) for p in argv[1:] if not os.path.isdir(p) and os.access(p, os.R_OK)]
-                if files:
-                    self.iactions['Add Books'].add_filesystem_book(files)
+                self.handle_cli_args(argv[1:])
             self.setWindowState(self.windowState() & ~Qt.WindowMinimized|Qt.WindowActive)
             self.show_windows()
             self.raise_()
@@ -661,7 +665,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
                 import traceback
                 traceback.print_exc()
         else:
-            print msg
+            print(msg)
 
     def current_view(self):
         '''Convenience method that returns the currently visible view '''
@@ -974,7 +978,7 @@ class Main(MainWindow, MainWindowMixin, DeviceMixin, EmailMixin,  # {{{
         if write_settings:
             self.write_settings()
         self.check_messages_timer.stop()
-        if hasattr(self, 'update_checker'):
+        if getattr(self, 'update_checker', None):
             self.update_checker.shutdown()
         self.listener.close()
         self.job_manager.server.close()

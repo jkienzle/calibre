@@ -13,7 +13,7 @@ from urlparse import parse_qs
 import repr as reprlib
 from email.utils import formatdate
 from operator import itemgetter
-from future_builtins import map
+from polyglot.builtins import map
 from urllib import quote as urlquote
 from binascii import hexlify, unhexlify
 
@@ -375,6 +375,24 @@ class RotatingStream(object):
             self.rename(src, dest)
         self.rename(self.filename, '%s.%d' % (self.filename, 1))
         self.set_output()
+
+    def clear(self):
+        if self.filename in ('/dev/stdout', '/dev/stderr'):
+            return
+        self.stream.close()
+        failed = {}
+        try:
+            os.remove(self.filename)
+        except EnvironmentError as e:
+            failed[self.filename] = e
+        import glob
+        for f in glob.glob(self.filename + '.*'):
+            try:
+                os.remove(f)
+            except EnvironmentError as e:
+                failed[f] = e
+        self.set_output()
+        return failed
 
 
 class RotatingLog(ServerLog):

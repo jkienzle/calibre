@@ -11,7 +11,7 @@ import os, traceback, random, shutil, operator
 from io import BytesIO
 from collections import defaultdict, Set, MutableSet
 from functools import wraps, partial
-from future_builtins import zip
+from polyglot.builtins import zip
 from time import time
 
 from calibre import isbytestring, as_unicode
@@ -20,7 +20,7 @@ from calibre.customize.ui import run_plugins_on_import, run_plugins_on_postimpor
 from calibre.db import SPOOL_SIZE, _get_next_series_num_for_list
 from calibre.db.categories import get_categories
 from calibre.db.locking import create_locks, DowngradeLockError, SafeReadLock
-from calibre.db.errors import NoSuchFormat
+from calibre.db.errors import NoSuchFormat, NoSuchBook
 from calibre.db.fields import create_field, IDENTITY, InvalidLinkTable
 from calibre.db.search import Search
 from calibre.db.tables import VirtualTable
@@ -35,6 +35,7 @@ from calibre.ptempfile import (base_dir, PersistentTemporaryFile,
 from calibre.utils.config import prefs, tweaks
 from calibre.utils.date import now as nowf, utcnow, UNDEFINED_DATE
 from calibre.utils.icu import sort_key
+from calibre.utils.localization import canonicalize_lang
 
 
 def api(f):
@@ -160,6 +161,11 @@ class Cache(object):
         will happen.'''
         return SafeReadLock(self.read_lock)
 
+    @write_api
+    def ensure_has_search_category(self, fail_on_existing=True):
+        if len(self._search_api.saved_searches.names()) > 0:
+            self.field_metadata.add_search_category(label='search', name=_('Searches'), fail_on_existing=fail_on_existing)
+
     def _initialize_dynamic_categories(self):
         # Reconstruct the user categories, putting them into field_metadata
         fm = self.field_metadata
@@ -183,9 +189,7 @@ class Cache(object):
                     self.field_metadata.add_user_category(label=u'@' + cat, name=cat)
                 except ValueError:
                     traceback.print_exc()
-
-        if len(self._search_api.saved_searches.names()) > 0:
-            self.field_metadata.add_search_category(label='search', name=_('Searches'))
+        self._ensure_has_search_category()
 
         self.field_metadata.add_grouped_search_terms(
                                     self._pref('grouped_search_terms', {}))
@@ -543,7 +547,7 @@ class Cache(object):
         '''
         af = self.fields['authors']
         if author_ids is None:
-            author_ids = tuple(af.table.id_map)
+            return {aid:af.author_data(aid) for aid in af.table.id_map}
         return {aid:af.author_data(aid) for aid in author_ids if aid in af.table.id_map}
 
     @read_api
@@ -724,7 +728,7 @@ class Cache(object):
         '''
         Copy the format ``fmt`` to the file like object ``dest``. If the
         specified format does not exist, raises :class:`NoSuchFormat` error.
-        dest can also be a path, in which case the format is copied to it, iff
+        dest can also be a path (to a file), in which case the format is copied to it, iff
         the path is different from the current path (taking case sensitivity
         into account).
         '''
@@ -746,8 +750,8 @@ class Cache(object):
         Instead use, :meth:`copy_format_to`.
 
         Currently used only in calibredb list, the viewer, edit book,
-        compare_format to original format, open with and the catalogs (via
-        get_data_as_dict()).
+        compare_format to original format, open with, bulk metadata edit and
+        the catalogs (via get_data_as_dict()).
 
         Apart from the viewer, open with and edit book, I don't believe any of
         the others do any file write I/O with the results of this call.
@@ -1336,10 +1340,9 @@ class Cache(object):
                 user_mi = mi.get_all_user_metadata(make_copy=False)
                 fm = self.field_metadata
                 for key in user_mi.iterkeys():
-                    if (key in fm and
-                            user_mi[key]['datatype'] == fm[key]['datatype'] and
-                            (user_mi[key]['datatype'] != 'text' or
-                            user_mi[key]['is_multiple'] == fm[key]['is_multiple'])):
+                    if (key in fm and user_mi[key]['datatype'] == fm[key]['datatype'] and (
+                        user_mi[key]['datatype'] != 'text' or (
+                            user_mi[key]['is_multiple'] == fm[key]['is_multiple']))):
                         val = mi.get(key, None)
                         if force_changes or val is not None:
                             protected_set_field(key, val)
@@ -1377,7 +1380,7 @@ class Cache(object):
     @api
     def add_format(self, book_id, fmt, stream_or_path, replace=True, run_hooks=True, dbapi=None):
         '''
-        Add a format to the specified book. Return True of the format was added successfully.
+        Add a format to the specified book. Return True if the format was added successfully.
 
         :param replace: If True replace existing format, otherwise if the format already exists, return False.
         :param run_hooks: If True, file type plugins are run on the format before and after being added.
@@ -1393,6 +1396,8 @@ class Cache(object):
             fmt = check_ebook_format(stream_or_path, fmt)
 
         with self.write_lock:
+            if not self._has_id(book_id):
+                raise NoSuchBook(book_id)
             fmt = (fmt or '').upper()
             self.format_metadata_cache[book_id].pop(fmt, None)
             try:
@@ -1931,12 +1936,13 @@ class Cache(object):
         author_map = defaultdict(set)
         for aid, author in at.id_map.iteritems():
             author_map[icu_lower(author)].add(aid)
-        return (author_map, at.col_book_map.copy(), self.fields['title'].table.book_col_map.copy())
+        return (author_map, at.col_book_map.copy(), self.fields['title'].table.book_col_map.copy(), self.fields['languages'].book_value_map.copy())
 
     @read_api
     def update_data_for_find_identical_books(self, book_id, data):
-        author_map, author_book_map, title_map = data
+        author_map, author_book_map, title_map, lang_map = data
         title_map[book_id] = self._field_for('title', book_id)
+        lang_map[book_id] = self._field_for('languages', book_id)
         at = self.fields['authors'].table
         for aid in at.book_col_map.get(book_id, ()):
             author_map[icu_lower(at.id_map[aid])].add(aid)
@@ -1951,6 +1957,7 @@ class Cache(object):
         title (title is fuzzy matched). See also :meth:`data_for_find_identical_books`. '''
         from calibre.db.utils import fuzzy_title
         identical_book_ids = set()
+        langq = tuple(filter(lambda x: x and x != 'und', map(canonicalize_lang, mi.languages or ())))
         if mi.authors:
             try:
                 quathors = mi.authors[:20]  # Too many authors causes parsing of the search expression to fail
@@ -1979,7 +1986,9 @@ class Cache(object):
                 fbook_title = fuzzy_title(fbook_title)
                 mbook_title = fuzzy_title(mi.title)
                 if fbook_title == mbook_title:
-                    identical_book_ids.add(book_id)
+                    bl = self._field_for('languages', book_id)
+                    if not langq or not bl or bl == langq:
+                        identical_book_ids.add(book_id)
         return identical_book_ids
 
     @read_api

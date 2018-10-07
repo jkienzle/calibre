@@ -37,24 +37,40 @@ def debug_print(*args, **k):
 def load_plugin(src):
     src = src.encode('utf-8')
     ns = {}
-    exec src in ns
+    exec(src, ns)
     for x in ns.itervalues():
         if isinstance(x, type) and issubclass(x, Source) and x is not Source:
             return x
+
+
+class PatchedSearchEngines(object):
+
+    def __init__(self, ns):
+        self.__ns = ns
+
+    def __getattr__(self, attr):
+        try:
+            return self.__ns[attr]
+        except KeyError:
+            raise AttributeError('{} not present in search_engines_module'.format(attr))
 
 
 def patch_search_engines(src):
     global current_search_engines
     src = src.encode('utf-8')
     ns = {}
-    exec src in ns
-    mcv = ns.get('minimum_calibre_version')
+    try:
+        exec(src, ns)
+    except Exception:
+        mcv = None
+    else:
+        mcv = ns.get('minimum_calibre_version')
     if mcv is None or mcv > numeric_version:
         return
     cv = ns.get('current_version')
     if cv is None or cv <= builtin_search_engines.current_version:
         return
-    current_search_engines = ns
+    current_search_engines = PatchedSearchEngines(ns)
 
 
 def patch_plugins():

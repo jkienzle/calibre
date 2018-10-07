@@ -20,7 +20,9 @@ from calibre.utils.imghdr import what
 
 
 def sanitize_file_name(x):
-    return re.sub(r'[?&=;#]', '_', ascii_filename(x))
+    ans = re.sub(r'\s+', ' ', re.sub(r'[?&=;#]', '_', ascii_filename(x))).strip().rstrip('.')
+    ans, ext = ans.rpartition('.')[::2]
+    return (ans.strip() + '.' + ext.strip()).rstrip('.')
 
 
 class HTMLInput(InputFormatPlugin):
@@ -28,9 +30,10 @@ class HTMLInput(InputFormatPlugin):
     name        = 'HTML Input'
     author      = 'Kovid Goyal'
     description = 'Convert HTML and OPF files to an OEB'
-    file_types  = set(['opf', 'html', 'htm', 'xhtml', 'xhtm', 'shtm', 'shtml'])
+    file_types  = {'opf', 'html', 'htm', 'xhtml', 'xhtm', 'shtm', 'shtml'}
+    commit_name = 'html_input'
 
-    options = set([
+    options = {
         OptionRecommendation(name='breadth_first',
             recommended_value=False, level=OptionRecommendation.LOW,
             help=_('Traverse links in HTML files breadth first. Normally, '
@@ -56,7 +59,7 @@ class HTMLInput(InputFormatPlugin):
                 )
         ),
 
-    ])
+    }
 
     def convert(self, stream, opts, file_ext, log,
                 accelerators):
@@ -91,8 +94,7 @@ class HTMLInput(InputFormatPlugin):
             return self._is_case_sensitive
         if not path or not os.path.exists(path):
             return islinux or isbsd
-        self._is_case_sensitive = not (os.path.exists(path.lower()) and
-                                       os.path.exists(path.upper()))
+        self._is_case_sensitive = not (os.path.exists(path.lower()) and os.path.exists(path.upper()))
         return self._is_case_sensitive
 
     def create_oebbook(self, htmlpath, basedir, opts, log, mi):

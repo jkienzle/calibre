@@ -8,7 +8,7 @@ __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 
 import time, textwrap, os
 from threading import Thread
-from future_builtins import map
+from polyglot.builtins import map
 from operator import itemgetter
 from functools import partial
 from collections import defaultdict
@@ -33,7 +33,8 @@ from calibre.gui2 import error_dialog, question_dialog, choose_save_file, open_u
 from calibre.gui2.tweak_book import current_container, tprefs, dictionaries
 from calibre.gui2.tweak_book.widgets import Dialog
 from calibre.gui2.progress_indicator import ProgressIndicator
-from calibre.utils.icu import primary_contains, numeric_sort_key, character_name_from_code
+from calibre.utils.icu import primary_contains, numeric_sort_key
+from calibre.utils.unicode_names import character_name_from_code
 from calibre.utils.localization import calibre_langcode_to_name, canonicalize_lang
 
 # Utils {{{
@@ -282,6 +283,7 @@ class FilesWidget(QWidget):
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = FilesModel(self)
         self.files = f = FilesView(m, self)
         self.to_csv = f.to_csv
@@ -471,6 +473,7 @@ class ImagesWidget(QWidget):
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = ImagesModel(self)
         self.files = f = FilesView(m, self)
         self.to_csv = f.to_csv
@@ -591,6 +594,7 @@ class LinksWidget(QWidget):
         self.splitter = s = QSplitter(Qt.Vertical, self)
         l.addWidget(s)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = LinksModel(self)
         self.links = f = FilesView(m, self)
         f.DELETE_POSSIBLE = False
@@ -730,6 +734,7 @@ class WordsWidget(QWidget):
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = WordsModel(self)
         self.words = f = FilesView(m, self)
         self.to_csv = f.to_csv
@@ -818,6 +823,7 @@ class CharsWidget(QWidget):
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = CharsModel(self)
         self.chars = f = FilesView(m, self)
         self.to_csv = f.to_csv
@@ -869,7 +875,7 @@ class CharsWidget(QWidget):
             ed = boss.edit_file_requested(file_name)
             if ed is None:
                 return
-            if ed.editor.find(pat, complete=not from_cursor):
+            if ed.editor.find_text(pat, complete=not from_cursor):
                 boss.show_editor(file_name)
                 return True
         return False
@@ -1023,6 +1029,7 @@ class CSSWidget(QWidget):
         self.filter_edit = e = QLineEdit(self)
         l.addWidget(e)
         e.setPlaceholderText(_('Filter'))
+        e.setClearButtonEnabled(True)
         self.model = m = self.MODEL(self)
         self.proxy = p = self.PROXY(self)
         p.setSourceModel(m)
@@ -1298,11 +1305,11 @@ class ReportsWidget(QWidget):
 
         self.css = c = CSSWidget(self)
         s.addWidget(c)
-        QListWidgetItem(_('Style Rules'), r)
+        QListWidgetItem(_('Style rules'), r)
 
         self.css = c = ClassesWidget(self)
         s.addWidget(c)
-        QListWidgetItem(_('Style Classes'), r)
+        QListWidgetItem(_('Style classes'), r)
 
         self.chars = c = CharsWidget(self)
         s.addWidget(c)

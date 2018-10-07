@@ -2,30 +2,37 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 # License: GPLv3 Copyright: 2010, Kovid Goyal <kovid at kovidgoyal.net>
 
+import errno
+import json
 import os
 import textwrap
 import time
 
-import sip
 from PyQt5.Qt import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFormLayout,
     QFrame, QHBoxLayout, QIcon, QLabel, QLineEdit, QListWidget, QPlainTextEdit,
     QPushButton, QScrollArea, QSize, QSizePolicy, QSpinBox, Qt, QTabWidget, QTimer,
-    QUrl, QVBoxLayout, QWidget, pyqtSignal
+    QToolButton, QUrl, QVBoxLayout, QWidget, pyqtSignal
 )
+try:
+    from PyQt5 import sip
+except ImportError:
+    import sip
 
 from calibre import as_unicode
 from calibre.gui2 import (
-    config, error_dialog, gprefs, info_dialog, open_url, warning_dialog
+    choose_files, choose_save_file, config, error_dialog, gprefs, info_dialog,
+    open_url, warning_dialog
 )
 from calibre.gui2.preferences import AbortCommit, ConfigWidgetBase, test_widget
+from calibre.srv.code import custom_list_template as default_custom_list_template
+from calibre.srv.embedded import custom_list_template
 from calibre.srv.library_broker import load_gui_libraries
 from calibre.srv.opts import change_settings, options, server_config
 from calibre.srv.users import (
     UserManager, create_user_data, validate_password, validate_username
 )
 from calibre.utils.icu import primary_sort_key
-
 
 # Advanced {{{
 
@@ -99,6 +106,7 @@ class Text(QLineEdit):
 
     def __init__(self, name, layout):
         QLineEdit.__init__(self)
+        self.setClearButtonEnabled(True)
         opt = options[name]
         self.textChanged.connect(self.changed_signal.emit)
         init_opt(self, opt, layout)
@@ -108,6 +116,40 @@ class Text(QLineEdit):
 
     def set(self, val):
         self.setText(type(u'')(val or ''))
+
+
+class Path(QWidget):
+
+    changed_signal = pyqtSignal()
+
+    def __init__(self, name, layout):
+        QWidget.__init__(self)
+        self.dname = name
+        opt = options[name]
+        self.l = l = QHBoxLayout(self)
+        l.setContentsMargins(0, 0, 0, 0)
+        self.text = t = QLineEdit(self)
+        t.setClearButtonEnabled(True)
+        t.textChanged.connect(self.changed_signal.emit)
+        l.addWidget(t)
+
+        self.b = b = QToolButton(self)
+        l.addWidget(b)
+        b.setIcon(QIcon(I('document_open.png')))
+        b.setToolTip(_("Browse for the file"))
+        b.clicked.connect(self.choose)
+        init_opt(self, opt, layout)
+
+    def get(self):
+        return self.text.text().strip() or None
+
+    def set(self, val):
+        self.text.setText(type(u'')(val or ''))
+
+    def choose(self):
+        ans = choose_files(self, 'choose_path_srv_opts_' + self.dname, _('Choose a file'), select_only_single_file=True)
+        if ans:
+            self.set(ans[0])
 
 
 class Choices(QComboBox):
@@ -142,6 +184,7 @@ class AdvancedTab(QWidget):
         self.l = l = QFormLayout(self)
         l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
         self.widgets = []
+        self.widget_map = {}
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         for name in sorted(options, key=lambda n: options[n].shortdoc.lower()):
             if name in ('auth', 'port', 'allow_socket_preallocation', 'userdb'):
@@ -157,9 +200,12 @@ class AdvancedTab(QWidget):
                 w = Float
             else:
                 w = Text
+                if name in ('ssl_certfile', 'ssl_keyfile'):
+                    w = Path
             w = w(name, l)
             setattr(self, 'opt_' + name, w)
             self.widgets.append(w)
+            self.widget_map[name] = w
 
     def genesis(self):
         opts = server_config()
@@ -171,10 +217,16 @@ class AdvancedTab(QWidget):
         for w in self.widgets:
             w.set(w.default_val)
 
+    def get(self, name):
+        return self.widget_map[name].get()
+
     @property
     def settings(self):
         return {w.name: w.get() for w in self.widgets}
 
+    @property
+    def has_ssl(self):
+        return bool(self.get('ssl_certfile')) and bool(self.get('ssl_keyfile'))
 
 # }}}
 
@@ -236,7 +288,19 @@ class MainTab(QWidget):  # {{{
             if name == 'show_logs':
                 h.addStretch(10)
             h.addWidget(b)
+        self.ip_info = QLabel(self)
+        self.update_ip_info()
+        from calibre.gui2.ui import get_gui
+        get_gui().iactions['Connect Share'].share_conn_menu.server_state_changed_signal.connect(self.update_ip_info)
+        l.addSpacing(10)
+        l.addWidget(self.ip_info)
         l.addStretch(10)
+
+    def update_ip_info(self):
+        from calibre.gui2.ui import get_gui
+        t = get_gui().iactions['Connect Share'].share_conn_menu.ip_text
+        t = t.strip().strip('[]')
+        self.ip_info.setText(_('Content server listening at: %s') % t)
 
     def genesis(self):
         opts = server_config()
@@ -248,7 +312,7 @@ class MainTab(QWidget):  # {{{
 
     def change_auth_desc(self):
         self.auth_desc.setText(
-            _('Remember to create some user accounts in the "Users" tab')
+            _('Remember to create some user accounts in the "User accounts" tab')
             if self.opt_auth.isChecked() else _(
                 'Requiring a username/password prevents unauthorized people from'
                 ' accessing your calibre library. It is also needed for some features'
@@ -269,6 +333,8 @@ class MainTab(QWidget):  # {{{
         from calibre.gui2.ui import get_gui
         gui = get_gui()
         is_running = gui.content_server is not None and gui.content_server.is_running
+        self.ip_info.setVisible(is_running)
+        self.update_ip_info()
         self.start_server_button.setEnabled(not is_running)
         self.stop_server_button.setEnabled(is_running)
         self.test_server_button.setEnabled(is_running)
@@ -613,7 +679,7 @@ class User(QWidget):
             b = _('Change the blocked libraries')
         else:
             m = _('{} is currently allowed access to all libraries')
-            b = _('Restrict the &libraries {} can access'.format(self.username))
+            b = _('Restrict the &libraries {} can access').format(self.username)
         self.restrict_button.setText(b),
         self.access_label.setText(m.format(username))
 
@@ -729,6 +795,133 @@ class Users(QWidget):
 # }}}
 
 
+class CustomList(QWidget):  # {{{
+
+    changed_signal = pyqtSignal()
+
+    def __init__(self, parent):
+        QWidget.__init__(self, parent)
+        self.default_template = default_custom_list_template()
+        self.l = l = QFormLayout(self)
+        l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
+        self.la = la = QLabel('<p>' + _(
+            'Here you can create a template to control what data is shown when'
+            ' using the <i>Custom list</i> mode for the book list'))
+        la.setWordWrap(True)
+        l.addRow(la)
+        self.thumbnail = t = QCheckBox(_('Show a cover &thumbnail'))
+        self.thumbnail_height = th = QSpinBox(self)
+        th.setSuffix(' px'), th.setRange(60, 600)
+        self.entry_height = eh = QLineEdit(self)
+        l.addRow(t), l.addRow(_('Thumbnail &height:'), th)
+        l.addRow(_('Entry &height:'), eh)
+        t.stateChanged.connect(self.changed_signal)
+        th.valueChanged.connect(self.changed_signal)
+        eh.textChanged.connect(self.changed_signal)
+        eh.setToolTip(textwrap.fill(_(
+            'The height for each entry. The special value "auto" causes a height to be calculated'
+            ' based on the number of lines in the template. Otherwise, use a CSS length, such as'
+            ' 100px or 15ex')))
+        t.stateChanged.connect(self.thumbnail_state_changed)
+        th.setVisible(False)
+
+        self.comments_fields = cf = QLineEdit(self)
+        l.addRow(_('&Long text fields:'), cf)
+        cf.setToolTip(textwrap.fill(_(
+            'A comma separated list of fields that will be added at the bottom of every entry.'
+            ' These fields are interpreted as containing HTML, not plain text.')))
+        cf.textChanged.connect(self.changed_signal)
+
+        self.la1 = la = QLabel('<p>' + _(
+            'The template below will be interpreted as HTML and all {{fields}} will be replaced'
+            ' by the actual metadata, if available. You can use {0} as a separator'
+            ' to split a line into multiple columns.').format('|||'))
+        la.setWordWrap(True)
+        l.addRow(la)
+        self.template = t = QPlainTextEdit(self)
+        l.addRow(t)
+        t.textChanged.connect(self.changed_signal)
+        self.imex = bb = QDialogButtonBox(self)
+        b = bb.addButton(_('&Import template'), bb.ActionRole)
+        b.clicked.connect(self.import_template)
+        b = bb.addButton(_('E&xport template'), bb.ActionRole)
+        b.clicked.connect(self.export_template)
+        l.addRow(bb)
+
+    def import_template(self):
+        paths = choose_files(self, 'custom-list-template', _('Choose template file'),
+            filters=[(_('Template files'), ['json'])], all_files=False, select_only_single_file=True)
+        if paths:
+            with lopen(paths[0], 'rb') as f:
+                raw = f.read()
+            self.current_template = self.deserialize(raw)
+
+    def export_template(self):
+        path = choose_save_file(
+            self, 'custom-list-template', _('Choose template file'),
+            filters=[(_('Template files'), ['json'])], initial_filename='custom-list-template.json')
+        if path:
+            raw = self.serialize(self.current_template)
+            with lopen(path, 'wb') as f:
+                f.write(raw)
+
+    def thumbnail_state_changed(self):
+        is_enabled = bool(self.thumbnail.isChecked())
+        for w, x in [(self.thumbnail_height, True), (self.entry_height, False)]:
+            w.setVisible(is_enabled is x)
+            self.layout().labelForField(w).setVisible(is_enabled is x)
+
+    def genesis(self):
+        self.current_template = custom_list_template() or self.default_template
+
+    @property
+    def current_template(self):
+        return {
+            'thumbnail': self.thumbnail.isChecked(),
+            'thumbnail_height': self.thumbnail_height.value(),
+            'height': self.entry_height.text().strip() or 'auto',
+            'comments_fields': [x.strip() for x in self.comments_fields.text().split(',') if x.strip()],
+            'lines': [x.strip() for x in self.template.toPlainText().splitlines()]
+        }
+
+    @current_template.setter
+    def current_template(self, template):
+        self.thumbnail.setChecked(bool(template.get('thumbnail')))
+        try:
+            th = int(template['thumbnail_height'])
+        except Exception:
+            th = self.default_template['thumbnail_height']
+        self.thumbnail_height.setValue(th)
+        self.entry_height.setText(template.get('height') or 'auto')
+        self.comments_fields.setText(', '.join(template.get('comments_fields') or ()))
+        self.template.setPlainText('\n'.join(template.get('lines') or ()))
+
+    def serialize(self, template):
+        return json.dumps(template, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii=True)
+
+    def deserialize(self, raw):
+        return json.loads(raw)
+
+    def restore_defaults(self):
+        self.current_template = self.default_template
+
+    def commit(self):
+        template = self.current_template
+        if template == self.default_template:
+            try:
+                os.remove(custom_list_template.path)
+            except EnvironmentError as err:
+                if err.errno != errno.ENOENT:
+                    raise
+        else:
+            raw = self.serialize(template)
+            with lopen(custom_list_template.path, 'wb') as f:
+                f.write(raw)
+        return True
+
+# }}}
+
+
 class ConfigWidget(ConfigWidgetBase):
 
     def __init__(self, *args, **kw):
@@ -750,6 +943,10 @@ class ConfigWidget(ConfigWidgetBase):
         sa = QScrollArea(self)
         sa.setWidget(a), sa.setWidgetResizable(True)
         t.addTab(sa, _('&Advanced'))
+        self.custom_list_tab = clt = CustomList(self)
+        sa = QScrollArea(self)
+        sa.setWidget(clt), sa.setWidgetResizable(True)
+        t.addTab(sa, _('Book &list template'))
         for tab in self.tabs:
             if hasattr(tab, 'changed_signal'):
                 tab.changed_signal.connect(self.changed_signal.emit)
@@ -825,10 +1022,14 @@ class ConfigWidget(ConfigWidgetBase):
         self.stopping_msg.accept()
 
     def test_server(self):
-        prefix = self.advanced_tab.opt_url_prefix.text().strip()
-        open_url(
-            QUrl('http://127.0.0.1:' + str(self.main_tab.opt_port.value()) + prefix)
-        )
+        prefix = self.advanced_tab.get('url_prefix') or ''
+        protocol = 'https' if self.advanced_tab.has_ssl else 'http'
+        lo = self.advanced_tab.get('listen_on') or '0.0.0.0'
+        lo = {'0.0.0.0': '127.0.0.1', '::':'::1'}.get(lo)
+        url = '{protocol}://{interface}:{port}{prefix}'.format(
+            protocol=protocol, interface=lo,
+            port=self.main_tab.opt_port.value(), prefix=prefix)
+        open_url(QUrl(url))
 
     def view_server_logs(self):
         from calibre.srv.embedded import log_paths
@@ -861,6 +1062,25 @@ class ConfigWidget(ConfigWidgetBase):
         bx = QDialogButtonBox(QDialogButtonBox.Ok)
         layout.addWidget(bx)
         bx.accepted.connect(d.accept)
+        b = bx.addButton(_('&Clear logs'), bx.ActionRole)
+
+        def clear_logs():
+            if getattr(self.server, 'is_running', False):
+                return error_dialog(d, _('Server running'), _(
+                    'Cannot clear logs while the server is running. First stop the server.'), show=True)
+            if self.server:
+                self.server.access_log.clear()
+                self.server.log.clear()
+            else:
+                for x in (log_error_file, log_access_file):
+                    try:
+                        os.remove(x)
+                    except EnvironmentError as err:
+                        if err.errno != errno.ENOENT:
+                            raise
+            el.setPlainText(''), al.setPlainText('')
+
+        b.clicked.connect(clear_logs)
         d.show()
 
     def save_changes(self):
@@ -882,6 +1102,8 @@ class ConfigWidget(ConfigWidgetBase):
                 )
                 self.tabs_widget.setCurrentWidget(self.users_tab)
                 return False
+        if not self.custom_list_tab.commit():
+            return False
         ConfigWidgetBase.commit(self)
         change_settings(**settings)
         UserManager().user_data = users
@@ -902,6 +1124,7 @@ class ConfigWidget(ConfigWidgetBase):
     def refresh_gui(self, gui):
         if self.server:
             self.server.user_manager.refresh()
+            self.server.ctx.custom_list_template = custom_list_template()
 
 
 if __name__ == '__main__':

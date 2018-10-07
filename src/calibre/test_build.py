@@ -2,7 +2,7 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from future_builtins import map
+from polyglot.builtins import map
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -12,7 +12,7 @@ __docformat__ = 'restructuredtext en'
 Test a binary calibre build to ensure that all needed binary images/libraries have loaded.
 '''
 
-import os, ctypes, sys, unittest
+import os, ctypes, sys, unittest, time
 from calibre.constants import plugins, iswindows, islinux, isosx
 is_ci = os.environ.get('CI', '').lower() == 'true'
 
@@ -111,6 +111,8 @@ class BuildTest(unittest.TestCase):
         for obj in ({1:1}, utcnow()):
             s = msgpack_dumps(obj)
             self.assertEqual(obj, msgpack_loads(s))
+        self.assertEqual(type(msgpack_loads(msgpack_dumps(b'b'))), bytes)
+        self.assertEqual(type(msgpack_loads(msgpack_dumps(u'b'))), type(u''))
 
     @unittest.skipUnless(isosx, 'FSEvents only present on OS X')
     def test_fsevents(self):
@@ -120,9 +122,32 @@ class BuildTest(unittest.TestCase):
     @unittest.skipUnless(iswindows, 'winutil is windows only')
     def test_winutil(self):
         from calibre.constants import plugins
+        from calibre import strftime
         winutil = plugins['winutil'][0]
+
+        def au(x, name):
+            self.assertTrue(isinstance(x, unicode), name + '() did not return a unicode string')
         for x in winutil.argv():
-            self.assertTrue(isinstance(x, unicode), 'argv() not returning unicode string')
+            au(x, 'argv')
+        for x in 'username temp_path locale_name'.split():
+            au(getattr(winutil, x)(), x)
+        d = winutil.localeconv()
+        au(d['thousands_sep'], 'localeconv')
+        au(d['decimal_point'], 'localeconv')
+        for k, v in d.iteritems():
+            au(v, k)
+        for k in os.environ.keys():
+            au(winutil.getenv(unicode(k)), 'getenv-' + k)
+        os.environ['XXXTEST'] = 'YYY'
+        self.assertEqual(winutil.getenv(u'XXXTEST'), u'YYY')
+        del os.environ['XXXTEST']
+        self.assertIsNone(winutil.getenv(u'XXXTEST'))
+        t = time.localtime()
+        fmt = u'%Y%a%b%e%H%M'
+        for fmt in (fmt, fmt.encode('ascii')):
+            x = strftime(fmt, t)
+            au(x, 'strftime')
+            self.assertEqual(unicode(time.strftime(fmt.replace('%e', '%#d'), t)), x)
 
     def test_sqlite(self):
         import sqlite3

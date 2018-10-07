@@ -190,18 +190,15 @@ class ProgressBar:
             self.cleared = 0
         n = int((self.width-10)*percent)
         msg = message.center(self.width)
-        msg = (self.term.BOL + self.term.UP + self.term.CLEAR_EOL +
-            (self.bar % (100*percent, '='*n, '-'*(self.width-10-n))) +
-            self.term.CLEAR_EOL + msg).encode(enc)
+        msg = (self.term.BOL + self.term.UP + self.term.CLEAR_EOL + (
+            self.bar % (100*percent, '='*n, '-'*(self.width-10-n))) + self.term.CLEAR_EOL + msg).encode(enc)
         out.write(msg)
         out.flush()
 
     def clear(self):
         out = (sys.stdout.buffer if py3 else sys.stdout)
         if not self.cleared:
-            out.write((self.term.BOL + self.term.CLEAR_EOL +
-            self.term.UP + self.term.CLEAR_EOL +
-            self.term.UP + self.term.CLEAR_EOL).encode(enc))
+            out.write((self.term.BOL + self.term.CLEAR_EOL + self.term.UP + self.term.CLEAR_EOL + self.term.UP + self.term.CLEAR_EOL).encode(enc))
             self.cleared = 1
             out.flush()
 # }}}
@@ -322,7 +319,7 @@ def download_tarball():
     dest = os.path.join(cache, fname)
     raw = check_signature(dest, signature)
     if raw is not None:
-        print ('Using previously downloaded', fname)
+        print('Using previously downloaded', fname)
         return raw
     cached_sigf = dest +'.signature'
     cached_sig = None
@@ -637,8 +634,8 @@ def extract_tarball(raw, destdir):
 def get_tarball_info():
     global signature, calibre_version
     print ('Downloading tarball signature securely...')
-    raw = get_https_resource_securely('https://code.calibre-ebook.com/tarball-info/' +
-                                      ('x86_64' if is64bit else 'i686'))
+    raw = get_https_resource_securely(
+            'https://code.calibre-ebook.com/tarball-info/' + ('x86_64' if is64bit else 'i686'))
     signature, calibre_version = raw.rpartition(b'@')[::2]
     if not signature or not calibre_version:
         raise ValueError('Failed to get install file signature, invalid signature returned')
@@ -674,7 +671,7 @@ def run_installer(install_dir, isolated, bin_dir, share_dir):
         if not os.path.isdir(destdir):
             prints(destdir, 'exists and is not a directory. Choose a location like /opt or /usr/local')
             return 1
-    print ('Installing to', destdir)
+    print('Installing to', destdir)
 
     download_and_extract(destdir)
 
@@ -697,21 +694,25 @@ def check_umask():
     mask = os.umask(18)  # 18 = 022
     os.umask(mask)
     forbid_user_read = mask & stat.S_IRUSR
+    forbid_user_exec = mask & stat.S_IXUSR
     forbid_group_read = mask & stat.S_IRGRP
+    forbid_group_exec = mask & stat.S_IXGRP
     forbid_other_read = mask & stat.S_IROTH
-    if forbid_user_read or forbid_group_read or forbid_other_read:
+    forbid_other_exec = mask & stat.S_IXOTH
+    if forbid_user_read or forbid_user_exec or forbid_group_read or forbid_group_exec or forbid_other_read or forbid_other_exec:
         prints(
             'WARNING: Your current umask disallows reading of files by some users,'
             ' this can cause system breakage when running the installer because'
             ' of bugs in common system utilities.'
         )
+        sys.stdin = open('/dev/tty')  # stdin is a pipe from wget
         while True:
             q = raw_input('Should the installer (f)ix the umask, (i)gnore it or (a)bort [f/i/a Default is abort]: ') or 'a'
             if q in 'f i a'.split():
                 break
             prints('Response', q, 'not understood')
         if q == 'f':
-            mask = mask & ~stat.S_IRUSR & ~stat.S_IRGRP & ~stat.S_IROTH
+            mask = mask & ~stat.S_IRUSR & ~stat.S_IXUSR & ~stat.S_IRGRP & ~stat.S_IXGRP & ~stat.S_IROTH & ~stat.S_IXOTH
             os.umask(mask)
             prints('umask changed to: {:03o}'.format(mask))
         elif q == 'i':
@@ -723,6 +724,12 @@ def check_umask():
 def main(install_dir=None, isolated=False, bin_dir=None, share_dir=None, ignore_umask=False):
     if not ignore_umask and not isolated:
         check_umask()
+    machine = os.uname()[4]
+    if machine and machine.lower().startswith('arm'):
+        raise SystemExit(
+            'You are running on an ARM system. The calibre binaries are only'
+            ' available for x86 systems. You will have to compile from'
+            ' source.')
     run_installer(install_dir, isolated, bin_dir, share_dir)
 
 
@@ -732,5 +739,44 @@ try:
 except NameError:
     from_file = False
 
+
+def update_intaller_wrapper():
+    # To run: python3 -c "import runpy; runpy.run_path('setup/linux-installer.py', run_name='update_wrapper')"
+    src = open(__file__, 'rb').read().decode('utf-8')
+    wrapper = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'linux-installer.sh')
+    with open(wrapper, 'r+b') as f:
+        raw = f.read().decode('utf-8')
+        nraw = re.sub(r'^# HEREDOC_START.+^# HEREDOC_END', lambda m: '# HEREDOC_START\n{}\n# HEREDOC_END'.format(src), raw, flags=re.MULTILINE | re.DOTALL)
+        if 'update_intaller_wrapper()' not in nraw:
+            raise SystemExit('regex substitute of HEREDOC failed')
+        f.seek(0), f.truncate()
+        f.write(nraw.encode('utf-8'))
+
+
+def script_launch():
+    def path(x):
+        return os.path.expanduser(x)
+
+    def to_bool(x):
+        return x.lower() in ('y', 'yes', '1', 'true')
+
+    type_map = {x: path for x in 'install_dir isolated bin_dir share_dir ignore_umask'.split()}
+    type_map['isolated'] = type_map['ignore_umask'] = to_bool
+    kwargs = {}
+
+    for arg in sys.argv[1:]:
+        if arg:
+            m = re.match('([a-z_]+)=(.+)', arg)
+            if m is None:
+                raise SystemExit('Unrecognized command line argument: ' + arg)
+            k = m.group(1)
+            if k not in type_map:
+                raise SystemExit('Unrecognized command line argument: ' + arg)
+            kwargs[k] = type_map[k](m.group(2))
+    main(**kwargs)
+
+
 if __name__ == '__main__' and from_file:
     main()
+elif __name__ == 'update_wrapper':
+    update_intaller_wrapper()

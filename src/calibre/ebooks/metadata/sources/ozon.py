@@ -23,7 +23,7 @@ from calibre.ebooks.metadata.book.base import Metadata
 class Ozon(Source):
     name = 'OZON.ru'
     minimum_calibre_version = (2, 80, 0)
-    version = (1, 0, 0)
+    version = (1, 1, 0)
     description = _('Downloads metadata and covers from OZON.ru (updated)')
 
     capabilities = frozenset(['identify', 'cover'])
@@ -81,7 +81,7 @@ class Ozon(Source):
 
         ozonid = identifiers.get('ozon', None)
 
-        qItems = set([ozonid, isbn])
+        qItems = {ozonid, isbn}
 
         # Added Russian variant of 'Unknown'
         unk = [_('Unknown').upper(), 'Неизв.'.upper(), icu_upper('Неизв.')]
@@ -149,9 +149,13 @@ class Ozon(Source):
                 # Redirect page: trying to extract ozon_id from javascript data
                 h = HTMLParser()
                 entry_string = (h.unescape(etree.tostring(doc, pretty_print=True, encoding=unicode)))
-                json_pat = re.compile(u'dataLayer\s*=\s*(.+)?;')
+                json_pat = re.compile(r'dataLayer\s*=\s*(.+)?;')
                 json_info = re.search(json_pat, entry_string)
                 jsondata = json_info.group(1) if json_info else None
+                if jsondata:
+                    idx = jsondata.rfind('}]')
+                    if idx > 0:
+                        jsondata = jsondata[:idx + 2]
 
                 # log.debug(u'jsondata: %s' % jsondata)
                 dataLayer = json.loads(jsondata) if jsondata else None
@@ -340,7 +344,7 @@ class Ozon(Source):
 
         pub_year = None
         pub_year_block = entry.xpath(u'.//div[@class="bOneTileProperty"]/text()')
-        year_pattern = re.compile('\d{4}')
+        year_pattern = re.compile(r'\d{4}')
         if pub_year_block:
             pub_year = re.search(year_pattern, pub_year_block[0])
             if pub_year:
@@ -621,8 +625,8 @@ def _translageLanguageToCode(displayLang):  # {{{
 def _normalizeAuthorNameWithInitials(name):  # {{{
     res = name
     if name:
-        re1 = u'^(?P<lname>\S+)\s+(?P<fname>[^\d\W]\.)(?:\s*(?P<mname>[^\d\W]\.))?$'
-        re2 = u'^(?P<fname>[^\d\W]\.)(?:\s*(?P<mname>[^\d\W]\.))?\s+(?P<lname>\S+)$'
+        re1 = r'^(?P<lname>\S+)\s+(?P<fname>[^\d\W]\.)(?:\s*(?P<mname>[^\d\W]\.))?$'
+        re2 = r'^(?P<fname>[^\d\W]\.)(?:\s*(?P<mname>[^\d\W]\.))?\s+(?P<lname>\S+)$'
         matcher = re.match(re1, unicode(name), re.UNICODE)
         if not matcher:
             matcher = re.match(re2, unicode(name), re.UNICODE)

@@ -82,4 +82,9 @@ class TelegraphUK(BasicNewsRecipe):
                 if int(item.get('width', 0)) > 700:
                     img['src'] = absolutize(item['src'])
                     break
+        for img in soup.findAll('div', attrs={'data-js': 'LazyImage'}):
+            img['style'] = ''
+            img.name = 'img'
+            srcs = [x.split(' ')[0].strip() for x in img['data-srcset'].split(',')]
+            img['src'] = srcs[1 if len(srcs) > 0 else 0]
         return soup

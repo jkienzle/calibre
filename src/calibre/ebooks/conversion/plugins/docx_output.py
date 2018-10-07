@@ -17,6 +17,8 @@ class DOCXOutput(OutputFormatPlugin):
     name = 'DOCX Output'
     author = 'Kovid Goyal'
     file_type = 'docx'
+    commit_name = 'docx_output'
+    ui_data = {'page_sizes': PAGE_SIZES}
 
     options = {
         OptionRecommendation(name='docx_page_size', recommended_value='letter',
@@ -32,6 +34,10 @@ class DOCXOutput(OutputFormatPlugin):
         OptionRecommendation(name='docx_no_cover', recommended_value=False,
             help=_('Do not insert the book cover as an image at the start of the document.'
                    ' If you use this option, the book cover will be discarded.')),
+
+        OptionRecommendation(name='preserve_cover_aspect_ratio', recommended_value=False,
+            help=_('Preserve the aspect ratio of the cover image instead of stretching'
+                   ' it out to cover the entire page.')),
 
         OptionRecommendation(name='docx_no_toc', recommended_value=False,
             help=_('Do not insert the table of contents as a page at the start of the document.')),

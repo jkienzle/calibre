@@ -8,9 +8,8 @@ __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
 
 from operator import attrgetter, methodcaller
 from collections import namedtuple
-from future_builtins import map
+from polyglot.builtins import map
 from itertools import product
-from functools import partial
 from copy import copy, deepcopy
 
 from PyQt5.Qt import (
@@ -185,7 +184,7 @@ class EditorSettings(BasicSettings):
 
         self.tb = b = QPushButton(_('Change &templates'))
         l.addRow(_('Templates for new files:'), b)
-        b.clicked.connect(lambda : TemplatesDialog(self).exec_())
+        connect_lambda(b.clicked, self, lambda self: TemplatesDialog(self).exec_())
 
         lw = self('editor_line_wrap')
         lw.setText(_('&Wrap long lines in the editor'))
@@ -415,10 +414,10 @@ class ToolbarSettings(QWidget):
         l.addWidget(gb1, 0, 0, -1, 1), l.addWidget(gb2, 0, 2, -1, 1)
         self.available, self.current = ToolbarList(self), ToolbarList(self)
         self.ub = b = QToolButton(self)
-        b.clicked.connect(partial(self.move, up=True))
+        connect_lambda(b.clicked, self, lambda self: self.move(up=True))
         b.setToolTip(_('Move selected action up')), b.setIcon(QIcon(I('arrow-up.png')))
         self.db = b = QToolButton(self)
-        b.clicked.connect(partial(self.move, up=False))
+        connect_lambda(b.clicked, self, lambda self: self.move(up=False))
         b.setToolTip(_('Move selected action down')), b.setIcon(QIcon(I('arrow-down.png')))
         self.gl1 = gl1 = QVBoxLayout()
         gl1.addWidget(self.available), gb1.setLayout(gl1)
@@ -427,10 +426,10 @@ class ToolbarSettings(QWidget):
         gl2.addWidget(self.ub, 0, 1), gl2.addWidget(self.db, 2, 1)
         gb2.setLayout(gl2)
         self.lb = b = QToolButton(self)
-        b.setToolTip(_('Add selected actions to toolbar')), b.setIcon(QIcon(I('forward.png')))
+        b.setToolTip(_('Add selected actions to the toolbar')), b.setIcon(QIcon(I('forward.png')))
         l.addWidget(b, 1, 1), b.clicked.connect(self.add_action)
         self.rb = b = QToolButton(self)
-        b.setToolTip(_('Remove selected actions from toolbar')), b.setIcon(QIcon(I('back.png')))
+        b.setToolTip(_('Remove selected actions from the toolbar')), b.setIcon(QIcon(I('back.png')))
         l.addWidget(b, 3, 1), b.clicked.connect(self.remove_action)
         self.si = QSpacerItem(20, 10, hPolicy=QSizePolicy.Preferred, vPolicy=QSizePolicy.Expanding)
         l.setRowStretch(0, 10), l.setRowStretch(2, 10), l.setRowStretch(4, 10)
@@ -755,6 +754,9 @@ class Preferences(QDialog):
         changed = 0
         for key in tuple(tprefs):
             if key.endswith('_again') and tprefs.get(key) is False:
+                del tprefs[key]
+                changed += 1
+            elif key.startswith('skip_ask_to_show_current_diff_for_'):
                 del tprefs[key]
                 changed += 1
         msg = _('There are no disabled confirmation prompts')

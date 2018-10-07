@@ -20,7 +20,7 @@ from calibre import as_unicode
 NAMESPACES = {
               'openSearch':'http://a9.com/-/spec/opensearchrss/1.0/',
               'atom' : 'http://www.w3.org/2005/Atom',
-              'db': 'http://www.douban.com/xmlns/',
+              'db': 'https://www.douban.com/xmlns/',
               'gd': 'http://schemas.google.com/g/2005'
             }
 
@@ -72,7 +72,7 @@ def to_metadata(browser, log, entry_, timeout):  # {{{
             log.exception('Programming error:')
         return None
 
-    id_url = entry_id(entry_)[0].text
+    id_url = entry_id(entry_)[0].text.replace('http://', 'https://')
     douban_id = id_url.split('/')[-1]
     title_ = ': '.join([x.text for x in title(entry_)]).strip()
     authors = [x.text.strip() for x in creator(entry_) if x.text]
@@ -152,11 +152,11 @@ class Douban(Source):
 
     name = 'Douban Books'
     author = 'Li Fanxi'
-    version = (2, 0, 0)
+    version = (2, 1, 0)
     minimum_calibre_version = (2, 80, 0)
 
     description = _('Downloads metadata and covers from Douban.com. '
-            'Useful only for chinese language books.')
+            'Useful only for Chinese language books.')
 
     capabilities = frozenset(['identify', 'cover'])
     touched_fields = frozenset(['title', 'authors', 'tags',

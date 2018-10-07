@@ -22,7 +22,10 @@ class TheWashingtonPost(BasicNewsRecipe):
     language = 'en'
     remove_empty_feeds = True
     publication_type = 'newspaper'
-    auto_cleanup = True
+
+    keep_only_tags = [
+            dict(itemprop=['headline', 'articleBody']),
+    ]
 
     feeds = [
         (u'World', u'http://feeds.washingtonpost.com/rss/world'),

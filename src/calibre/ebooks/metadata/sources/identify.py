@@ -17,7 +17,7 @@ from urlparse import urlparse
 from urllib import quote
 
 from calibre.customize.ui import metadata_plugins, all_metadata_plugins
-from calibre.ebooks.metadata import check_issn
+from calibre.ebooks.metadata import check_issn, authors_to_sort_string
 from calibre.ebooks.metadata.sources.base import create_log
 from calibre.ebooks.metadata.sources.prefs import msprefs
 from calibre.ebooks.metadata.xisbn import xisbn
@@ -92,7 +92,9 @@ class ISBNMerge(object):
         self.isbnless_results = []
         self.results = []
         self.log = log
-        self.use_xisbn = True
+        # The xISBN service has been de-commissioned
+        # https://www.oclc.org/developer/news/2018/xid-decommission.en.html
+        self.use_xisbn = False
 
     def isbn_in_pool(self, isbn):
         if isbn:
@@ -423,8 +425,7 @@ def identify(log, abort,  # {{{
         if not is_worker_alive(workers):
             break
 
-        if (first_result_at is not None and time.time() - first_result_at >
-                wait_time):
+        if (first_result_at is not None and time.time() - first_result_at > wait_time):
             log.warn('Not waiting any longer for more results. Still running'
                     ' sources:')
             for worker in workers:
@@ -486,8 +487,7 @@ def identify(log, abort,  # {{{
                     result.series_index = dummy.series_index
             result.relevance_in_source = i
             result.has_cached_cover_url = (
-                plugin.cached_cover_url_is_reliable and
-                plugin.get_cached_cover_url(result.identifiers) is not None)
+                plugin.cached_cover_url_is_reliable and plugin.get_cached_cover_url(result.identifiers) is not None)
             result.identify_plugin = plugin
             if msprefs['txt_comments']:
                 if plugin.has_html_comments and result.comments:
@@ -495,8 +495,7 @@ def identify(log, abort,  # {{{
 
     log('The identify phase took %.2f seconds'%(time.time() - start_time))
     log('The longest time (%f) was taken by:'%longest, lp)
-    log('Merging results from different sources and finding earliest ',
-            'publication dates from the worldcat.org service')
+    log('Merging results from different sources')
     start_time = time.time()
     results = merge_identify_results(results, log)
 
@@ -505,6 +504,10 @@ def identify(log, abort,  # {{{
     tm_rules = msprefs['tag_map_rules']
     if tm_rules:
         from calibre.ebooks.metadata.tag_mapper import map_tags
+    am_rules = msprefs['author_map_rules']
+    if am_rules:
+        from calibre.ebooks.metadata.author_mapper import map_authors, compile_rules
+        am_rules = compile_rules(am_rules)
 
     max_tags = msprefs['max_tags']
     for r in results:
@@ -526,6 +529,13 @@ def identify(log, abort,  # {{{
                 return '%s, %s' % (surname, ' '.join(parts[:-1]))
             r.authors = [swap_to_ln_fn(a) for a in r.authors]
 
+    if am_rules:
+        for r in results:
+            new_authors = map_authors(r.authors, am_rules)
+            if new_authors != r.authors:
+                r.authors = new_authors
+                r.author_sort = authors_to_sort_string(r.authors)
+
     return results
 # }}}
 
@@ -543,6 +553,7 @@ def urls_from_identifiers(identifiers):  # {{{
     if rules:
         formatter = EvalFormatter()
         for k, val in identifiers.iteritems():
+            val = val.replace('|', ',')
             vals = {'id':quote(val if isinstance(val, bytes) else val.encode('utf-8')).decode('ascii')}
             items = rules.get(k) or ()
             for name, template in items:

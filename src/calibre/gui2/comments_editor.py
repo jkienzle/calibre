@@ -8,18 +8,22 @@ __docformat__ = 'restructuredtext en'
 import re, os, json, weakref
 
 from lxml import html
-import sip
 
 from PyQt5.Qt import (QApplication, QFontInfo, QSize, QWidget, QPlainTextEdit,
     QToolBar, QVBoxLayout, QAction, QIcon, Qt, QTabWidget, QUrl, QFormLayout,
     QSyntaxHighlighter, QColor, QColorDialog, QMenu, QDialog, QLabel,
     QHBoxLayout, QKeySequence, QLineEdit, QDialogButtonBox, QPushButton,
-    QCheckBox)
+    pyqtSignal, QCheckBox)
 from PyQt5.QtWebKitWidgets import QWebView, QWebPage
+try:
+    from PyQt5 import sip
+except ImportError:
+    import sip
 
 from calibre.ebooks.chardet import xml_to_unicode
 from calibre import xml_replace_entities, prepare_string_for_xml
 from calibre.gui2 import open_url, error_dialog, choose_files, gprefs, NO_URL_FORMATTING, secure_web_page
+from calibre.gui2.widgets import LineEditECM
 from calibre.utils.soupparser import fromstring
 from calibre.utils.config import tweaks
 from calibre.utils.imghdr import what
@@ -68,10 +72,13 @@ class BlockStyleAction(QAction):  # {{{
 # }}}
 
 
-class EditorWidget(QWebView):  # {{{
+class EditorWidget(QWebView, LineEditECM):  # {{{
+
+    data_changed = pyqtSignal()
 
     def __init__(self, parent=None):
         QWebView.__init__(self, parent)
+        self.base_url = None
         self._parent = weakref.ref(parent)
         self.readonly = False
 
@@ -179,6 +186,7 @@ class EditorWidget(QWebView):  # {{{
 
         self.setHtml('')
         self.set_readonly(False)
+        self.page().contentsChanged.connect(self.data_changed)
 
     def update_link_action(self):
         wac = self.pageAction(QWebPage.ToggleBold).isEnabled()
@@ -370,9 +378,16 @@ class EditorWidget(QWebView):  # {{{
             return ans
 
         def fset(self, val):
-            self.setHtml(val)
+            if self.base_url is None:
+                self.setHtml(val)
+            else:
+                self.setHtml(val, self.base_url)
             self.set_font_style()
         return property(fget=fget, fset=fset)
+
+    def set_base_url(self, qurl):
+        self.base_url = qurl
+        self.setHtml('', self.base_url)
 
     def set_html(self, val, allow_undo=True):
         if not allow_undo or self.readonly:
@@ -397,7 +412,7 @@ class EditorWidget(QWebView):  # {{{
         self.page().setContentEditable(not self.readonly)
 
     def event(self, ev):
-        if ev.type() in (ev.KeyPress, ev.KeyRelease, ev.ShortcutOverride) and ev.key() in (
+        if ev.type() in (ev.KeyPress, ev.KeyRelease, ev.ShortcutOverride) and hasattr(ev, 'key') and ev.key() in (
                 Qt.Key_Tab, Qt.Key_Escape, Qt.Key_Backtab):
             if (ev.key() == Qt.Key_Tab and ev.modifiers() & Qt.ControlModifier and ev.type() == ev.KeyPress):
                 self.exec_command('insertHTML', '<span style="white-space:pre">\t</span>')
@@ -407,12 +422,21 @@ class EditorWidget(QWebView):  # {{{
             return False
         return QWebView.event(self, ev)
 
+    def text(self):
+        return self.page().selectedText()
+
+    def setText(self, text):
+        self.exec_command('insertText', text)
+
     def contextMenuEvent(self, ev):
         menu = self.page().createStandardContextMenu()
         paste = self.pageAction(QWebPage.Paste)
         for action in menu.actions():
             if action == paste:
                 menu.insertAction(action, self.pageAction(QWebPage.PasteAndMatchStyle))
+        st = self.text()
+        if st and st.strip():
+            self.create_change_case_menu(menu)
         parent = self._parent()
         if hasattr(parent, 'toolbars_visible'):
             vis = parent.toolbars_visible
@@ -639,6 +663,7 @@ class Highlighter(QSyntaxHighlighter):
 class Editor(QWidget):  # {{{
 
     toolbar_prefs_name = None
+    data_changed = pyqtSignal()
 
     def __init__(self, parent=None, one_line_toolbar=False, toolbar_prefs_name=None):
         QWidget.__init__(self, parent)
@@ -650,6 +675,8 @@ class Editor(QWidget):  # {{{
             t = getattr(self, 'toolbar%d'%i)
             t.setIconSize(QSize(18, 18))
         self.editor = EditorWidget(self)
+        self.editor.data_changed.connect(self.data_changed)
+        self.set_base_url = self.editor.set_base_url
         self.set_html = self.editor.set_html
         self.tabs = QTabWidget(self)
         self.tabs.setTabPosition(self.tabs.South)

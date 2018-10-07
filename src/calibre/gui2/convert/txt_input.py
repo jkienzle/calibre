@@ -9,6 +9,7 @@ from PyQt5.Qt import QListWidgetItem, Qt
 from calibre.gui2.convert.txt_input_ui import Ui_Form
 from calibre.gui2.convert import Widget
 from calibre.ebooks.conversion.plugins.txt_input import MD_EXTENSIONS
+from calibre.ebooks.conversion.config import OPTIONS
 
 
 class PluginWidget(Widget, Ui_Form):
@@ -19,9 +20,7 @@ class PluginWidget(Widget, Ui_Form):
     ICON = I('mimetypes/txt.png')
 
     def __init__(self, parent, get_option, get_help, db=None, book_id=None):
-        Widget.__init__(self, parent,
-            ['paragraph_type', 'formatting_type', 'markdown_extensions',
-             'preserve_spaces', 'txt_in_remove_indents'])
+        Widget.__init__(self, parent, OPTIONS['input']['txt'])
         self.db, self.book_id = db, book_id
         for x in get_option('paragraph_type').option.choices:
             self.opt_paragraph_type.addItem(x)
@@ -54,4 +53,4 @@ class PluginWidget(Widget, Ui_Form):
     def connect_gui_obj_handler(self, g, f):
         if g is not self.opt_markdown_extensions:
             raise NotImplementedError()
-        g.itemChanged.connect(lambda item: f())
+        g.itemChanged.connect(self.changed_signal)

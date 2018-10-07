@@ -2,6 +2,7 @@
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2015, Kovid Goyal <kovid at kovidgoyal.net>
 
+from __future__ import print_function
 import functools
 import os
 import sys
@@ -10,8 +11,8 @@ from functools import partial
 from threading import Thread
 
 from PyQt5.Qt import (
-    QAction, QApplication, QByteArray, QIcon, QInputDialog, QModelIndex, QObject,
-    QPropertyAnimation, QSize, Qt, QTime, QTimer, pyqtSignal
+    QAction, QApplication, QByteArray, QIcon, QInputDialog, QMimeData, QModelIndex,
+    QObject, QPropertyAnimation, QSize, Qt, QTime, QTimer, pyqtSignal
 )
 
 from calibre import as_unicode, force_unicode, isbytestring, prints
@@ -21,8 +22,8 @@ from calibre.constants import (
 from calibre.customize.ui import available_input_formats
 from calibre.ebooks.oeb.iterator.book import EbookIterator
 from calibre.gui2 import (
-    Application, choose_files, error_dialog, info_dialog, open_url,
-    setup_gui_option_parser
+    Application, add_to_recent_docs, choose_files, error_dialog, info_dialog,
+    open_url, set_app_uid, setup_gui_option_parser
 )
 from calibre.gui2.viewer.toc import TOC
 from calibre.gui2.viewer.ui import Main as MainWindow
@@ -174,7 +175,7 @@ class EbookViewer(MainWindow):
         self.pending_toc_click = None
         self.cursor_hidden     = False
         self.existing_bookmarks= []
-        self.selected_text     = None
+        self.selected_text     = self.selected_html = None
         self.was_maximized     = False
         self.read_settings()
         self.autosave_timer = t = QTimer(self)
@@ -182,6 +183,7 @@ class EbookViewer(MainWindow):
         t.timeout.connect(self.autosave)
         self.pos.value_changed.connect(self.update_pos_label)
         self.pos.value_changed.connect(self.autosave_timer.start)
+        self.pos.value_changed.connect(self.update_window_title)
         self.pos.setMinimumWidth(150)
         self.setFocusPolicy(Qt.StrongFocus)
         self.view.set_manager(self)
@@ -253,7 +255,6 @@ class EbookViewer(MainWindow):
             self.toggle_toolbar_action.setText(self.toggle_toolbar_action.text() + '\t' + tts[0])
         self.toggle_toolbar_action.setCheckable(True)
         self.toggle_toolbar_action.triggered.connect(self.toggle_toolbars)
-        self.toolbar_hidden = None
         self.addAction(self.toggle_toolbar_action)
         self.full_screen_label_anim = QPropertyAnimation(
                 self.full_screen_label, b'size')
@@ -354,6 +355,7 @@ class EbookViewer(MainWindow):
             for path in recent:
                 if os.path.exists(path):
                     self.load_ebook(path)
+                    break
 
     def shutdown(self):
         if self.isFullScreen() and not self.view.document.start_in_fullscreen:
@@ -417,6 +419,7 @@ class EbookViewer(MainWindow):
 
     def lookup(self, word):
         from urllib import quote
+        word = word.replace(u'\u00ad', '')
         word = quote(word.encode('utf-8'))
         lang = canonicalize_lang(self.view.current_language) or get_lang() or 'en'
         try:
@@ -442,6 +445,7 @@ class EbookViewer(MainWindow):
             self.showNormal()
         else:
             self.showFullScreen()
+        self.update_window_title()
 
     def showFullScreen(self):
         self.view.document.page_position.save()
@@ -512,6 +516,34 @@ class EbookViewer(MainWindow):
             self.pos_label.setText(text)
             self.pos_label.resize(self.pos_label.sizeHint())
 
+    def update_window_title(self):
+        try:
+            fmt = self.iterator.book_format
+        except Exception:
+            fmt = None
+        current_title = getattr(self, 'current_title', None)
+        try:
+            if current_title:
+                if not self.tool_bar2.isVisible():
+                    value, maximum = self.pos.value(), self.pos.maximum()
+                    text = '%g/%g'%(value, maximum)
+                    if fmt:
+                        title = '({}) {} [{}] - {}'.format(text, self.current_title, fmt, self.base_window_title)
+                    else:
+                        title = '({}) {} - {}'.format(text, self.current_title, self.base_window_title)
+                else:
+                    if fmt:
+                        title = '{} [{}] - {}'.format(self.current_title, fmt, self.base_window_title)
+                    else:
+                        title = '{} - {}'.format(self.current_title, self.base_window_title)
+            else:
+                title = self.base_window_title
+        except Exception:
+            title = self.base_window_title
+            if current_title:
+                title = current_title + ' - ' + title
+        self.setWindowTitle(title)
+
     def showNormal(self):
         self.view.document.page_position.save()
         self.clock_label.setVisible(False)
@@ -569,13 +601,19 @@ class EbookViewer(MainWindow):
                 self.link_clicked(url)
         self.view.setFocus(Qt.OtherFocusReason)
 
-    def selection_changed(self, selected_text):
-        self.selected_text = selected_text.strip()
-        self.action_copy.setEnabled(bool(self.selected_text))
+    def selection_changed(self, selected_text, selected_html):
+        self.selected_text = selected_text
+        self.selected_html = selected_html
+        self.action_copy.setEnabled(bool(self.selected_text) or bool(self.selected_html))
 
-    def copy(self, x):
-        if self.selected_text:
-            QApplication.clipboard().setText(self.selected_text)
+    def copy(self, x=False):
+        if self.selected_text or self.selected_html:
+            md = QMimeData()
+            if self.selected_text:
+                md.setText(self.selected_text)
+            if self.selected_html:
+                md.setHtml(self.selected_html)
+            QApplication.clipboard().setMimeData(md)
 
     def back(self, x):
         pos = self.history.back(self.pos.value())
@@ -912,8 +950,9 @@ class EbookViewer(MainWindow):
     def build_bookmarks_menu(self, bookmarks):
         self.bookmarks_menu.clear()
         sc = _(' or ').join(self.view.shortcuts.get_shortcuts('Bookmark'))
-        self.bookmarks_menu.addAction(_("Bookmark this location [%s]") % sc, self.bookmark)
-        self.bookmarks_menu.addAction(_("Show/hide bookmarks"), self.bookmarks_dock.toggleViewAction().trigger)
+        tc = _(' or ').join(self.view.shortcuts.get_shortcuts('Toggle bookmarks'))
+        self.bookmarks_menu.addAction(_("Bookmark this location") + '\t' + sc, self.bookmark)
+        self.bookmarks_menu.addAction(_("Show/hide bookmarks") + '\t' + tc, self.bookmarks_dock.toggleViewAction().trigger)
         self.bookmarks_menu.addSeparator()
         current_page = None
         self.existing_bookmarks = []
@@ -959,7 +998,7 @@ class EbookViewer(MainWindow):
         if self.iterator is not None:
             self.save_current_position()
             self.iterator.__exit__()
-        self.iterator = EbookIterator(pathtoebook, copy_bookmarks_to_file=self.view.document.copy_bookmarks_to_file)
+        self.iterator = EbookIterator(pathtoebook, copy_bookmarks_to_file=self.view.document.copy_bookmarks_to_file, use_tdir_in_cache=True)
         self.history.clear()
         self.open_progress_indicator(_('Loading e-book...'))
         worker = Worker(target=partial(self.iterator.__enter__, view_kepub=True))
@@ -1007,8 +1046,7 @@ class EbookViewer(MainWindow):
             vprefs.set('viewer_open_history', vh[:50])
             if iswindows:
                 try:
-                    from win32com.shell import shell, shellcon
-                    shell.SHAddToRecentDocs(shellcon.SHARD_PATHW, pathtoebook)
+                    add_to_recent_docs(pathtoebook)
                 except Exception:
                     import traceback
                     traceback.print_exc()
@@ -1018,7 +1056,7 @@ class EbookViewer(MainWindow):
             self.action_table_of_contents.setDisabled(not self.iterator.toc)
             self.current_book_has_toc = bool(self.iterator.toc)
             self.current_title = title
-            self.setWindowTitle(title + ' [%s]'%self.iterator.book_format + ' - ' + self.base_window_title)
+            self.update_window_title()
             self.pos.setMaximum(sum(self.iterator.pages))
             self.pos.setSuffix(' / %d'%sum(self.iterator.pages))
             self.vertical_scrollbar.setMinimum(100)
@@ -1069,8 +1107,7 @@ class EbookViewer(MainWindow):
             self.update_indexing_state(ap)
 
     def next_document(self):
-        if (hasattr(self, 'current_index') and self.current_index <
-                len(self.iterator.spine) - 1):
+        if (hasattr(self, 'current_index') and self.current_index < len(self.iterator.spine) - 1):
             self.load_path(self.iterator.spine[self.current_index+1])
 
     def previous_document(self):
@@ -1098,7 +1135,7 @@ class EbookViewer(MainWindow):
         action = {
             'Quit':self.action_quit,
             'Show metadata':self.action_metadata,
-            'Copy':self.view.copy_action,
+            'Copy':self.action_copy,
             'Font larger': self.action_font_size_larger,
             'Font smaller': self.action_font_size_smaller,
             'Fullscreen': self.action_full_screen,
@@ -1108,6 +1145,7 @@ class EbookViewer(MainWindow):
             'Lookup word': self.view.dictionary_action,
             'Next occurrence': self.view.search_action,
             'Bookmark': bac,
+            'Toggle bookmarks': self.bookmarks_dock.toggleViewAction(),
             'Reload': self.action_reload,
             'Table of Contents': self.action_table_of_contents,
             'Print': self.action_print,
@@ -1121,6 +1159,7 @@ class EbookViewer(MainWindow):
             if not self.tool_bar.isVisible():
                 self.toggle_toolbars()
             self.search.setFocus(Qt.OtherFocusReason)
+            self.search.lineEdit().selectAll()
             return
         if not self.view.handle_key_press(event):
             event.ignore()
@@ -1261,11 +1300,7 @@ def main(args=sys.argv):
         # Ensure that all ebook editor instances are grouped together in the task
         # bar. This prevents them from being grouped with viewer process when
         # launched from within calibre, as both use calibre-parallel.exe
-        import ctypes
-        try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(VIEWER_APP_UID)
-        except Exception:
-            pass  # Only available on windows 7 and newer
+        set_app_uid(VIEWER_APP_UID)
 
     parser = option_parser()
     opts, args = parser.parse_args(args)

@@ -24,6 +24,7 @@ from calibre.gui2.book_details import BookDetails
 from calibre.gui2.notify import get_notifier
 from calibre.gui2.layout_menu import LayoutMenu
 from calibre.customize.ui import find_plugin
+from calibre.utils.localization import localize_website_link
 
 _keep_refs = []
 
@@ -41,6 +42,7 @@ class LibraryViewMixin(object):  # {{{
 
     def init_library_view_mixin(self, db):
         self.library_view.files_dropped.connect(self.iactions['Add Books'].files_dropped, type=Qt.QueuedConnection)
+        self.library_view.books_dropped.connect(self.iactions['Edit Metadata'].books_dropped, type=Qt.QueuedConnection)
         self.library_view.add_column_signal.connect(partial(self.iactions['Preferences'].do_config,
             initial_plugin=('Interface', 'Custom Columns')),
                 type=Qt.QueuedConnection)
@@ -82,6 +84,9 @@ class LibraryViewMixin(object):  # {{{
         populate_menu(dm, gprefs['action-layout-context-menu-device'], self.iactions)
         ec = self.iactions['Edit Collections'].qaction
         self.library_view.set_context_menu(lm, ec)
+        sm = QMenu(self)
+        populate_menu(sm, gprefs['action-layout-context-menu-split'], self.iactions)
+        self.library_view.pin_view.set_context_menu(sm)
         for v in (self.memory_view, self.card_a_view, self.card_b_view):
             v.set_context_menu(dm, ec)
 
@@ -159,7 +164,7 @@ class LibraryWidget(Splitter):  # {{{
         parent.library_view.setObjectName('library_view')
         stack = QStackedWidget(self)
         av = parent.library_view.alternate_views
-        av.set_stack(stack)
+        parent.pin_container = av.set_stack(stack)
         parent.grid_view = GridView(parent)
         parent.grid_view.setObjectName('grid_view')
         av.add_view('grid', parent.grid_view)
@@ -223,7 +228,7 @@ class VersionLabel(QLabel):  # {{{
         self.setToolTip(_('See what\'s new in this calibre release'))
 
     def mouseReleaseEvent(self, ev):
-        open_url('https://calibre-ebook.com/whats-new')
+        open_url(localize_website_link('https://calibre-ebook.com/whats-new'))
         ev.accept()
         return QLabel.mouseReleaseEvent(self, ev)
 
@@ -365,7 +370,7 @@ class SearchBarButton(LayoutButton):  # {{{
     def __init__(self, gui):
         sc = 'Alt+Shift+F'
         LayoutButton.__init__(self, I('search.png'), _('Search bar'), parent=gui, shortcut=sc)
-        self.set_state_to_show()
+        self.set_state_to_hide()
         self.action_toggle = QAction(self.icon(), _('Toggle') + ' ' + self.label, self)
         gui.addAction(self.action_toggle)
         gui.keyboard.register_shortcut('search bar toggle' + self.label, unicode(self.action_toggle.text()),
@@ -396,7 +401,7 @@ class VLTabs(QTabBar):  # {{{
         self.setDocumentMode(True)
         self.setDrawBase(False)
         self.setMovable(True)
-        self.setTabsClosable(True)
+        self.setTabsClosable(gprefs['vl_tabs_closable'])
         self.gui = parent
         self.ignore_tab_changed = False
         self.currentChanged.connect(self.tab_changed)
@@ -431,6 +436,23 @@ class VLTabs(QTabBar):  # {{{
     def disable_bar(self):
         gprefs['show_vl_tabs'] = False
         self.setVisible(False)
+
+    def lock_tab(self):
+        gprefs['vl_tabs_closable'] = False
+        self.setTabsClosable(False)
+
+    def unlock_tab(self):
+        gprefs['vl_tabs_closable'] = True
+        self.setTabsClosable(True)
+        try:
+            self.tabButton(0, self.RightSide).setVisible(False)
+        except AttributeError:
+            try:
+                self.tabButton(0, self.LeftSide).setVisible(False)
+            except AttributeError:
+                # On some OS X machines (using native style) the tab button is
+                # on the left
+                pass
 
     def tab_changed(self, idx):
         if self.ignore_tab_changed:
@@ -505,13 +527,17 @@ class VLTabs(QTabBar):  # {{{
 
     def contextMenuEvent(self, ev):
         m = QMenu(self)
-        m.addAction(_('Sort alphabetically'), self.sort_alphabetically)
+        m.addAction(_('Sort tabs alphabetically'), self.sort_alphabetically)
         hidden = self.current_db.prefs['virt_libs_hidden']
         if hidden:
             s = m._s = m.addMenu(_('Restore hidden tabs'))
             for x in hidden:
                 s.addAction(x, partial(self.restore, x))
         m.addAction(_('Hide virtual library tabs'), self.disable_bar)
+        if gprefs['vl_tabs_closable']:
+            m.addAction(_('Lock virtual library tabs'), self.lock_tab)
+        else:
+            m.addAction(_('Unlock virtual library tabs'), self.unlock_tab)
         i = self.tabAt(ev.pos())
         if i > -1:
             vl = unicode(self.tabData(i) or '')
@@ -633,6 +659,8 @@ class LayoutMixin(object):  # {{{
                 type=Qt.QueuedConnection)
         self.book_details.open_fmt_with.connect(self.bd_open_fmt_with,
                 type=Qt.QueuedConnection)
+        self.book_details.edit_book.connect(self.bd_edit_book,
+                type=Qt.QueuedConnection)
         self.book_details.cover_removed.connect(self.bd_cover_removed,
                 type=Qt.QueuedConnection)
         self.book_details.remote_file_dropped.connect(
@@ -655,7 +683,7 @@ class LayoutMixin(object):  # {{{
                 type=Qt.QueuedConnection)
         self.book_details.view_device_book.connect(
                 self.iactions['View'].view_device_book)
-        self.book_details.manage_author.connect(lambda author:self.do_author_sort_edit(self, author, select_sort=False, select_link=False))
+        self.book_details.manage_category.connect(self.manage_category_triggerred)
         self.book_details.compare_specific_format.connect(self.compare_format)
 
         m = self.library_view.model()
@@ -664,6 +692,13 @@ class LayoutMixin(object):  # {{{
             m.current_changed(self.library_view.currentIndex(),
                     self.library_view.currentIndex())
         self.library_view.setFocus(Qt.OtherFocusReason)
+
+    def manage_category_triggerred(self, field, value):
+        if field and value:
+            if field == 'authors':
+                self.do_author_sort_edit(self, value, select_sort=False, select_link=False)
+            elif field:
+                self.do_tags_list_edit(value, field)
 
     def toggle_grid_view(self, show):
         self.library_view.alternate_views.show_view('grid' if show else None)
@@ -696,6 +731,11 @@ class LayoutMixin(object):  # {{{
                 'The book {0} does not have the {1} format').format(
                     self.current_db.new_api.field_for('title', book_id, default_value=_('Unknown')),
                     fmt), show=True)
+
+    def bd_edit_book(self, book_id, fmt):
+        from calibre.gui2.device import BusyCursor
+        with BusyCursor():
+            self.iactions['Tweak ePub'].ebook_edit_format(book_id, fmt)
 
     def open_with_action_triggerred(self, fmt, entry, *args):
         book_id = self.library_view.current_book

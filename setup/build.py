@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import with_statement
+from __future__ import print_function
 
 __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -9,7 +10,7 @@ __docformat__ = 'restructuredtext en'
 import textwrap, os, shlex, subprocess, glob, shutil, re, sys, json
 from collections import namedtuple
 
-from setup import Command, islinux, isbsd, isosx, ishaiku, SRC, iswindows, __version__
+from setup import Command, islinux, isbsd, isfreebsd, isosx, ishaiku, SRC, iswindows, __version__
 isunix = islinux or isosx or isbsd or ishaiku
 
 py_lib = os.path.join(sys.prefix, 'libs', 'python%d%d.lib' % sys.version_info[:2])
@@ -26,6 +27,7 @@ class Extension(object):
         self.name = d['name'] = name
         self.sources = d['sources'] = absolutize(sources)
         self.needs_cxx = d['needs_cxx'] = bool([1 for x in self.sources if os.path.splitext(x)[1] in ('.cpp', '.c++', '.cxx')])
+        self.needs_py2 = d['needs_py2'] = kwargs.get('needs_py2', False)
         self.headers = d['headers'] = absolutize(kwargs.get('headers', []))
         self.sip_files = d['sip_files'] = absolutize(kwargs.get('sip_files', []))
         self.inc_dirs = d['inc_dirs'] = absolutize(kwargs.get('inc_dirs', []))
@@ -37,10 +39,16 @@ class Extension(object):
         if iswindows:
             self.cflags.append('/DCALIBRE_MODINIT_FUNC=PyMODINIT_FUNC')
         else:
-            if self.needs_cxx:
-                self.cflags.append('-DCALIBRE_MODINIT_FUNC=extern "C" __attribute__ ((visibility ("default"))) void')
-            else:
-                self.cflags.append('-DCALIBRE_MODINIT_FUNC=__attribute__ ((visibility ("default"))) void')
+            return_type = 'PyObject*' if sys.version_info >= (3,) else 'void'
+            extern_decl = 'extern "C"' if self.needs_cxx else ''
+
+            self.cflags.append(
+                '-DCALIBRE_MODINIT_FUNC='
+                '{} __attribute__ ((visibility ("default"))) {}'.format(extern_decl, return_type))
+
+            if not self.needs_cxx and kwargs.get('needs_c99'):
+                self.cflags.insert(0, '-std=c99')
+
         self.ldflags = d['ldflags'] = kwargs.get('ldflags', [])
         self.optional = d['options'] = kwargs.get('optional', False)
         of = kwargs.get('optimize_level', None)
@@ -70,7 +78,7 @@ def expand_file_list(items, is_paths=True):
     for item in items:
         if item.startswith('!'):
             item = lazy_load(item)
-            if isinstance(item, basestring):
+            if hasattr(item, 'rjust'):
                 item = [item]
             ans.extend(expand_file_list(item, is_paths=is_paths))
         else:
@@ -87,9 +95,9 @@ def expand_file_list(items, is_paths=True):
 def is_ext_allowed(ext):
     only = ext.get('only', '')
     if only:
-        only = only.split()
-        q = 'windows' if iswindows else 'osx' if isosx else 'bsd' if isbsd else 'haiku' if ishaiku else 'linux'
-        return q in only
+        only = set(only.split())
+        q = set(filter(lambda x: globals()["is" + x], ["bsd", "freebsd", "haiku", "linux", "osx", "windows"]))
+        return len(q.intersection(only)) > 0
     return True
 
 
@@ -107,6 +115,8 @@ def parse_extension(ext):
             ans = ext.pop('osx_' + k, ans)
         elif isbsd:
             ans = ext.pop('bsd_' + k, ans)
+        elif isfreebsd:
+            ans = ext.pop('freebsd_' + k, ans)
         elif ishaiku:
             ans = ext.pop('haiku_' + k, ans)
         else:
@@ -157,20 +167,21 @@ def init_env():
     if islinux:
         cflags.append('-pthread')
         ldflags.append('-shared')
-        cflags.append('-I'+sysconfig.get_python_inc())
-        ldflags.append('-lpython'+sysconfig.get_python_version())
 
     if isbsd:
         cflags.append('-pthread')
         ldflags.append('-shared')
-        cflags.append('-I'+sysconfig.get_python_inc())
-        ldflags.append('-lpython'+sysconfig.get_python_version())
 
     if ishaiku:
         cflags.append('-lpthread')
         ldflags.append('-shared')
+
+    if islinux or isbsd or ishaiku:
         cflags.append('-I'+sysconfig.get_python_inc())
-        ldflags.append('-lpython'+sysconfig.get_python_version())
+        # getattr(..., 'abiflags') is for PY2 compat, since PY2 has no abiflags
+        # member
+        ldflags.append('-lpython{}{}'.format(
+            sysconfig.get_config_var('VERSION'), getattr(sys, 'abiflags', '')))
 
     if isosx:
         cflags.append('-D_OSX')
@@ -229,8 +240,7 @@ class Build(Command):
     def add_options(self, parser):
         choices = [e['name'] for e in read_extensions() if is_ext_allowed(e)]+['all', 'headless']
         parser.add_option('-1', '--only', choices=choices, default='all',
-                help=('Build only the named extension. Available: '+
-                    ', '.join(choices)+'. Default:%default'))
+                help=('Build only the named extension. Available: '+ ', '.join(choices)+'. Default:%default'))
         parser.add_option('--no-compile', default=False, action='store_true',
                 help='Skip compiling all C/C++ extensions.')
         parser.add_option('--build-dir', default=None,
@@ -252,6 +262,8 @@ class Build(Command):
                 os.makedirs(x)
         for ext in extensions:
             if opts.only != 'all' and opts.only != ext.name:
+                continue
+            if ext.needs_py2 and sys.version_info >= (3,):
                 continue
             if ext.error:
                 if ext.optional:
@@ -340,7 +352,7 @@ class Build(Command):
             subprocess.check_call(*args, **kwargs)
         except:
             cmdline = ' '.join(['"%s"' % (arg) if ' ' in arg else arg for arg in args[0]])
-            print "Error while executing: %s\n" % (cmdline)
+            print("Error while executing: %s\n" % (cmdline))
             raise
 
     def build_headless(self):
@@ -424,15 +436,14 @@ class Build(Command):
         sipf = sip_files[0]
         sbf = self.j(src_dir, self.b(sipf)+'.sbf')
         if self.newer(sbf, [sipf]+ext.headers):
-            cmd = [pyqt['sip_bin'], '-w', '-c', src_dir, '-b', sbf, '-I'+
-                    pyqt['pyqt_sip_dir']] + shlex.split(pyqt['sip_flags']) + [sipf]
+            cmd = [pyqt['sip_bin'], '-w', '-c', src_dir, '-b', sbf, '-I' + pyqt['pyqt_sip_dir']] + shlex.split(pyqt['sip_flags']) + [sipf]
             self.info(' '.join(cmd))
             self.check_call(cmd)
             self.info('')
         raw = open(sbf, 'rb').read().decode('utf-8')
 
         def read(x):
-            ans = re.search('^%s\s*=\s*(.+)$' % x, raw, flags=re.M).group(1).strip()
+            ans = re.search(r'^%s\s*=\s*(.+)$' % x, raw, flags=re.M).group(1).strip()
             if x != 'target':
                 ans = ans.split()
             return ans

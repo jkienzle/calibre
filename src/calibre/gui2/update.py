@@ -2,7 +2,7 @@ __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 
 import re, binascii, cPickle, ssl, json
-from future_builtins import map
+from polyglot.builtins import map
 from threading import Thread, Event
 
 from PyQt5.Qt import (QObject, pyqtSignal, Qt, QUrl, QDialog, QGridLayout,
@@ -12,6 +12,7 @@ from calibre.constants import (__appname__, __version__, iswindows, isosx,
         isportable, is64bit, numeric_version)
 from calibre import prints, as_unicode
 from calibre.utils.config import prefs
+from calibre.utils.localization import localize_website_link
 from calibre.utils.https import get_https_resource_securely
 from calibre.gui2 import config, dynamic, open_url
 from calibre.gui2.dialogs.plugin_updater import get_plugin_updates_available
@@ -26,7 +27,7 @@ def get_download_url():
             else 'osx' if isosx else 'linux')
     if which == 'windows' and is64bit:
         which += '64'
-    return 'https://calibre-ebook.com/download_' + which
+    return localize_website_link('https://calibre-ebook.com/download_' + which)
 
 
 def get_newest_version():
@@ -55,7 +56,7 @@ def get_newest_version():
     except UnicodeDecodeError:
         version = u''
     ans = NO_CALIBRE_UPDATE
-    m = re.match(ur'(\d+)\.(\d+).(\d+)$', version)
+    m = re.match(unicode(r'(\d+)\.(\d+).(\d+)$'), version)
     if m is not None:
         ans = tuple(map(int, (m.group(1), m.group(2), m.group(3))))
     return ans
@@ -100,6 +101,12 @@ class CheckForUpdates(Thread):
         self.shutdown_event.set()
 
 
+def version_key(calibre_version):
+    if calibre_version.count('.') > 1:
+        calibre_version = calibre_version.rpartition('.')[0]
+    return 'update to version %s' % calibre_version
+
+
 class UpdateNotification(QDialog):
 
     def __init__(self, calibre_version, plugin_updates, parent=None):
@@ -114,11 +121,11 @@ class UpdateNotification(QDialog):
         ver = calibre_version
         if ver.endswith('.0'):
             ver = ver[:-2]
-        self.label = QLabel(('<p>'+
-            _('New version <b>%(ver)s</b> of %(app)s is available for download. '
-            'See the <a href="https://calibre-ebook.com/whats-new'
-            '">new features</a>.'))%dict(
-                app=__appname__, ver=ver))
+        self.label = QLabel(('<p>'+ _(
+            'New version <b>{ver}</b> of {app} is available for download. '
+            'See the <a href="{url}">new features</a>.').format(
+                url=localize_website_link('https://calibre-ebook.com/whats-new'),
+                app=__appname__, ver=ver)))
         self.label.setOpenExternalLinks(True)
         self.label.setWordWrap(True)
         self.setWindowTitle(_('Update available!'))
@@ -142,7 +149,7 @@ class UpdateNotification(QDialog):
         self.l.addWidget(self.bb, 2, 0, 1, -1)
         self.bb.accepted.connect(self.accept)
         self.bb.rejected.connect(self.reject)
-        dynamic.set('update to version %s'%calibre_version, False)
+        dynamic.set(version_key(calibre_version), False)
 
     def get_plugins(self):
         from calibre.gui2.dialogs.plugin_updater import (PluginUpdaterDialog,
@@ -150,6 +157,12 @@ class UpdateNotification(QDialog):
         d = PluginUpdaterDialog(self.parent(),
                 initial_filter=FILTER_UPDATE_AVAILABLE)
         d.exec_()
+        if d.do_restart:
+            QDialog.accept(self)
+            from calibre.gui2.ui import get_gui
+            gui = get_gui()
+            if gui is not None:
+                gui.quit(restart=True)
 
     def show_future(self, *args):
         config.set('new_version_notification', bool(self.cb.isChecked()))
@@ -195,14 +208,13 @@ class UpdateMixin(object):
                     u'<a href="update:%s">%s%s</a></span>') % (
                         _('Update found'), version_url, calibre_version, plt)
         else:
-            msg = (u'<a href="update:%s">%d %s</a>')%(version_url, number_of_plugin_updates,
-                    _('updated plugins'))
+            plt = ngettext('updated plugin', 'updated plugins', number_of_plugin_updates)
+            msg = (u'<a href="update:%s">%d %s</a>')%(version_url, number_of_plugin_updates, plt)
         self.status_bar.update_label.setText(msg)
         self.status_bar.update_label.setVisible(True)
 
         if has_calibre_update:
-            if (force or (config.get('new_version_notification') and
-                    dynamic.get('update to version %s'%calibre_version, True))):
+            if (force or (config.get('new_version_notification') and dynamic.get(version_key(calibre_version), True))):
                 if not no_show_popup:
                     self._update_notification__ = UpdateNotification(calibre_version,
                             number_of_plugin_updates, parent=self)

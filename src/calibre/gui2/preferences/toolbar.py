@@ -5,8 +5,6 @@ __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-from functools import partial
-
 from PyQt5.Qt import QAbstractListModel, Qt, QIcon, \
         QItemSelectionModel
 
@@ -241,6 +239,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             ('menubar-device', _('The menubar when a device is connected')),
             ('context-menu', _('The context menu for the books in the '
                 'calibre library')),
+            ('context-menu-split', _('The context menu for the split book list')),
             ('context-menu-device', _('The context menu for the books on '
                 'the device')),
             ('context-menu-cover-browser', _('The context menu for the Cover '
@@ -262,8 +261,8 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
 
         self.add_action_button.clicked.connect(self.add_action)
         self.remove_action_button.clicked.connect(self.remove_action)
-        self.action_up_button.clicked.connect(partial(self.move, -1))
-        self.action_down_button.clicked.connect(partial(self.move, 1))
+        connect_lambda(self.action_up_button.clicked, self, lambda self: self.move(-1))
+        connect_lambda(self.action_down_button.clicked, self, lambda self: self.move(1))
         self.all_actions.setMouseTracking(True)
         self.current_actions.setMouseTracking(True)
         self.all_actions.entered.connect(self.all_entered)
@@ -293,7 +292,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         names = self.all_actions.model().names(x)
         if names:
             not_added = self.current_actions.model().add(names)
-            ns = set([y.name for y in not_added])
+            ns = {y.name for y in not_added}
             added = set(names) - ns
             self.all_actions.model().remove(x, added)
             if not_added:
@@ -312,7 +311,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         names = self.current_actions.model().names(x)
         if names:
             not_removed = self.current_actions.model().remove(x)
-            ns = set([y.name for y in not_removed])
+            ns = {y.name for y in not_removed}
             removed = set(names) - ns
             self.all_actions.model().add(removed)
             if not_removed:

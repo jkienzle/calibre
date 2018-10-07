@@ -9,14 +9,14 @@ from base64 import standard_b64encode, standard_b64decode
 from collections import defaultdict, OrderedDict
 from itertools import count
 from functools import partial
-from future_builtins import map
+from polyglot.builtins import map
 from urlparse import urlparse
 from urllib import quote
 
 from cssutils import replaceUrls
 from cssutils.css import CSSRule
 
-from calibre import prepare_string_for_xml
+from calibre import prepare_string_for_xml, force_unicode
 from calibre.ebooks import parse_css_length
 from calibre.ebooks.oeb.base import (
     OEB_DOCS, OEB_STYLES, rewrite_links, XPath, urlunquote, XLINK, XHTML_NS, OPF, XHTML, EPUB_NS)
@@ -176,11 +176,13 @@ class Container(ContainerBase):
         log = log or default_log
         book_fmt, opfpath, input_fmt = extract_book(path_to_ebook, tdir, log=log)
         ContainerBase.__init__(self, tdir, opfpath, log)
+        # We do not add zero byte sized files as the IndexedDB API in the
+        # browser has no good way to distinguish between zero byte files and
+        # load failures.
         excluded_names = {
             name for name, mt in self.mime_map.iteritems() if
             name == self.opf_name or mt == guess_type('a.ncx') or name.startswith('META-INF/') or
-            name == 'mimetype'
-        }
+            name == 'mimetype' or not self.has_name_and_is_not_empty(name)}
         raster_cover_name, titlepage_name = self.create_cover_page(input_fmt.lower())
         toc = get_toc(self).to_dict(count())
         spine = [name for name, is_linear in self.spine_names]
@@ -201,6 +203,7 @@ class Container(ContainerBase):
             'spine_length': 0,
             'toc_anchor_map': toc_anchor_map(toc),
             'landmarks': landmarks,
+            'link_to_map': {},
         }
         # Mark the spine as dirty since we have to ensure it is normalized
         for name in data['spine']:
@@ -318,13 +321,17 @@ class Container(ContainerBase):
             url, frag = purl.path, purl.fragment
             name = self.href_to_name(url, base)
             if name:
-                if self.has_name(name):
+                if self.has_name_and_is_not_empty(name):
                     frag = urlunquote(frag)
                     url = resource_template.format(encode_url(name, frag))
                 else:
-                    url = 'missing:' + quote(name)
+                    if isinstance(name, unicode):
+                        name = name.encode('utf-8')
+                    url = 'missing:' + force_unicode(quote(name), 'utf-8')
                 changed.add(base)
             return url
+
+        ltm = self.book_render_data['link_to_map']
 
         for name, mt in self.mime_map.iteritems():
             mt = mt.lower()
@@ -348,7 +355,9 @@ class Container(ContainerBase):
                     if href.startswith(link_uid):
                         a.set('href', 'javascript:void(0)')
                         parts = decode_url(href.split('|')[1])
-                        a.set('data-' + link_uid, json.dumps({'name':parts[0], 'frag':parts[1]}, ensure_ascii=False))
+                        lname, lfrag = parts[0], parts[1]
+                        ltm.setdefault(lname, {}).setdefault(lfrag or '', set()).add(name)
+                        a.set('data-' + link_uid, json.dumps({'name':lname, 'frag':lfrag}, ensure_ascii=False))
                     else:
                         a.set('target', '_blank')
                         a.set('rel', 'noopener noreferrer')
@@ -359,6 +368,10 @@ class Container(ContainerBase):
                 xlink = XLINK('href')
                 for elem in xlink_xpath(self.parsed(name)):
                     elem.set(xlink, link_replacer(name, elem.get(xlink)))
+
+        for name, amap in ltm.iteritems():
+            for k, v in tuple(amap.iteritems()):
+                amap[k] = tuple(v)  # needed for JSON serialization
 
         tuple(map(self.dirty, changed))
 
@@ -380,7 +393,7 @@ boolean_attributes = frozenset('allowfullscreen,async,autofocus,autoplay,checked
 
 EPUB_TYPE_MAP = {k:'doc-' + k for k in (
     'abstract acknowledgements afterword appendix biblioentry bibliography biblioref chapter colophon conclusion cover credit'
-    ' credits dedication epigraph epilogue errata footnote footnotes forward glossary glossref index introduction noteref notice'
+    ' credits dedication epigraph epilogue errata footnote footnotes forward glossary glossref index introduction link noteref notice'
     ' pagebreak pagelist part preface prologue pullquote qna locator subtitle title toc').split(' ')}
 for k in 'figure term definition directory list list-item table row cell'.split(' '):
     EPUB_TYPE_MAP[k] = k

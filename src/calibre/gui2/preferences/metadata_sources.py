@@ -233,10 +233,10 @@ class FieldsModel(QAbstractListModel):  # {{{
         return ret
 
     def commit(self):
-        ignored_fields = set([x for x in msprefs['ignore_fields'] if x not in
-            self.overrides])
-        changed = set([k for k, v in self.overrides.iteritems() if v ==
-            Qt.Unchecked])
+        ignored_fields = {x for x in msprefs['ignore_fields'] if x not in
+            self.overrides}
+        changed = {k for k, v in self.overrides.iteritems() if v ==
+            Qt.Unchecked}
         msprefs['ignore_fields'] = list(ignored_fields.union(changed))
 
     def user_default_state(self, field):
@@ -249,10 +249,10 @@ class FieldsModel(QAbstractListModel):  # {{{
         self.endResetModel()
 
     def commit_user_defaults(self):
-        default_ignored_fields = set([x for x in msprefs['user_default_ignore_fields'] if x not in
-            self.overrides])
-        changed = set([k for k, v in self.overrides.iteritems() if v ==
-            Qt.Unchecked])
+        default_ignored_fields = {x for x in msprefs['user_default_ignore_fields'] if x not in
+            self.overrides}
+        changed = {k for k, v in self.overrides.iteritems() if v ==
+            Qt.Unchecked}
         msprefs['user_default_ignore_fields'] = list(default_ignored_fields.union(changed))
 
 # }}}
@@ -305,6 +305,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         r('swap_author_names', msprefs)
         r('fewer_tags', msprefs)
         r('find_first_edition_date', msprefs)
+        self.opt_find_first_edition_date.setVisible(False)
         r('append_comments', msprefs)
 
         self.configure_plugin_button.clicked.connect(self.configure_plugin)
@@ -323,8 +324,9 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         self.select_default_button.clicked.connect(self.fields_model.select_user_defaults)
         self.select_default_button.clicked.connect(self.changed_signal)
         self.set_as_default_button.clicked.connect(self.fields_model.commit_user_defaults)
-        self.tag_map_rules = None
+        self.tag_map_rules = self.author_map_rules = None
         self.tag_map_rules_button.clicked.connect(self.change_tag_map_rules)
+        self.author_map_rules_button.clicked.connect(self.change_author_map_rules)
 
     def configure_plugin(self):
         for index in self.sources_view.selectionModel().selectedRows():
@@ -358,12 +360,21 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
             self.tag_map_rules = d.rules
             self.changed_signal.emit()
 
+    def change_author_map_rules(self):
+        from calibre.gui2.author_mapper import RulesDialog
+        d = RulesDialog(self)
+        if msprefs.get('author_map_rules'):
+            d.rules = msprefs['author_map_rules']
+        if d.exec_() == d.Accepted:
+            self.author_map_rules = d.rules
+            self.changed_signal.emit()
+
     def initialize(self):
         ConfigWidgetBase.initialize(self)
         self.sources_model.initialize()
         self.sources_view.resizeColumnsToContents()
         self.fields_model.initialize()
-        self.tag_map_rules = None
+        self.tag_map_rules = self.author_map_rules = None
 
     def restore_defaults(self):
         ConfigWidgetBase.restore_defaults(self)
@@ -379,10 +390,15 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
                 msprefs['tag_map_rules'] = self.tag_map_rules
             else:
                 msprefs.pop('tag_map_rules', None)
+        if self.author_map_rules is not None:
+            if self.author_map_rules:
+                msprefs['author_map_rules'] = self.author_map_rules
+            else:
+                msprefs.pop('author_map_rules', None)
         return ConfigWidgetBase.commit(self)
 
-if __name__ == '__main__':
-    from PyQt5.Qt import QApplication
-    app = QApplication([])
-    test_widget('Sharing', 'Metadata download')
 
+if __name__ == '__main__':
+    from calibre.gui2 import Application
+    app = Application([])
+    test_widget('Sharing', 'Metadata download')

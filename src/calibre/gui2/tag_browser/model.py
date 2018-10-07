@@ -2,7 +2,7 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from future_builtins import map
+from polyglot.builtins import map
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -173,7 +173,7 @@ class TagTreeItem(object):  # {{{
         if role == Qt.FontRole:
             return bf()
         if role == Qt.ToolTipRole:
-            return self.tooltip
+            return self.tooltip if gprefs['tag_browser_show_tooltips'] else None
         if role == DRAG_IMAGE_ROLE:
             self.ensure_icon()
             return self.icon_state_map[0]
@@ -199,21 +199,23 @@ class TagTreeItem(object):  # {{{
                 self.ensure_icon()
             return self.icon_state_map[tag.state]
         if role == Qt.ToolTipRole:
-            tt = [self.tooltip] if self.tooltip else []
-            if tag.original_categories:
-                tt.append('%s:%s' % (','.join(tag.original_categories), tag.original_name))
-            else:
-                tt.append('%s:%s' % (tag.category, tag.original_name))
-            ar = self.average_rating
-            if ar:
-                tt.append(_('Average rating for books in this category: %.1f') % ar)
-            elif self.type == self.TAG and ar is not None:
-                tt.append(_('Books in this category are unrated'))
-            if self.type == self.TAG and self.tag.category == 'search':
-                tt.append(_('Search expression:') + ' ' + self.tag.search_expression)
-            if self.type == self.TAG:
-                tt.append(_('Number of books: %s') % self.item_count)
-            return '\n'.join(tt)
+            if gprefs['tag_browser_show_tooltips']:
+                tt = [self.tooltip] if self.tooltip else []
+                if tag.original_categories:
+                    tt.append('%s:%s' % (','.join(tag.original_categories), tag.original_name))
+                else:
+                    tt.append('%s:%s' % (tag.category, tag.original_name))
+                ar = self.average_rating
+                if ar:
+                    tt.append(_('Average rating for books in this category: %.1f') % ar)
+                elif self.type == self.TAG and ar is not None:
+                    tt.append(_('Books in this category are unrated'))
+                if self.type == self.TAG and self.tag.category == 'search':
+                    tt.append(_('Search expression:') + ' ' + self.tag.search_expression)
+                if self.type == self.TAG:
+                    tt.append(_('Number of books: %s') % self.item_count)
+                return '\n'.join(tt)
+            return None
         if role == DRAG_IMAGE_ROLE:
             self.ensure_icon()
             return self.icon_state_map[0]
@@ -743,7 +745,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         return ans
 
     def dropMimeData(self, md, action, row, column, parent):
-        fmts = set([unicode(x) for x in md.formats()])
+        fmts = {unicode(x) for x in md.formats()}
         if not fmts.intersection(set(self.mimeTypes())):
             return False
         if "application/calibre+from_library" in fmts:
@@ -878,7 +880,7 @@ class TagsModel(QAbstractItemModel):  # {{{
         cat_contents = categories.get(on_node.category_key[1:], None)
         if cat_contents is None:
             return
-        cat_contents = set([(v, c) for v,c,ign in cat_contents])
+        cat_contents = {(v, c) for v,c,ign in cat_contents}
 
         fm_src = self.db.metadata_for_field(column)
         label = fm_src['label']
@@ -901,7 +903,7 @@ class TagsModel(QAbstractItemModel):  # {{{
             if value:
                 if not isinstance(value, list):
                     value = [value]
-                cat_contents |= set([(v, column) for v in value])
+                cat_contents |= {(v, column) for v in value}
 
         categories[on_node.category_key[1:]] = [[v, c, 0] for v,c in cat_contents]
         self.db.new_api.set_pref('user_categories', categories)
@@ -1045,6 +1047,9 @@ class TagsModel(QAbstractItemModel):  # {{{
         idx = QAbstractItemModel.createIndex(self, row, column,
                 id(internal_pointer))
         return idx
+
+    def category_row_map(self):
+        return {category.category_key:row for row, category in enumerate(self.root_item.children)}
 
     def index_for_category(self, name):
         for row, category in enumerate(self.root_item.children):

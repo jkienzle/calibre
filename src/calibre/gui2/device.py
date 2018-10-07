@@ -28,7 +28,6 @@ from calibre import preferred_encoding, prints, force_unicode, as_unicode, sanit
 from calibre.utils.filenames import ascii_filename
 from calibre.devices.errors import (FreeSpaceError, WrongDestinationError,
         BlacklistedDevice)
-from calibre.devices.apple.driver import ITUNES_ASYNC
 from calibre.devices.folder_device.driver import FOLDER_DEVICE
 from calibre.constants import DEBUG
 from calibre.utils.config import tweaks, device_prefs
@@ -335,7 +334,7 @@ class DeviceManager(Thread):  # {{{
                 if e.show_me:
                     traceback.print_exc()
 
-    # Mount devices that don't use USB, such as the folder device and iTunes
+    # Mount devices that don't use USB, such as the folder device
     # This will be called on the GUI thread. Because of this, we must store
     # information that the scanner thread will use to do the real work.
     def mount_device(self, kls, kind, path):
@@ -807,7 +806,7 @@ class DeviceMenu(QMenu):  # {{{
 
         mitem = self.addAction(QIcon(I('eject.png')), _('Eject device'))
         mitem.setEnabled(False)
-        mitem.triggered.connect(lambda x : self.disconnect_mounted_device.emit())
+        connect_lambda(mitem.triggered, self, lambda self, x: self.disconnect_mounted_device.emit())
         self.disconnect_mounted_device_action = mitem
         self.addSeparator()
 
@@ -819,8 +818,7 @@ class DeviceMenu(QMenu):  # {{{
 
         annot = self.addAction(_('Fetch annotations (experimental)'))
         annot.setEnabled(False)
-        annot.triggered.connect(lambda x :
-                self.fetch_annotations.emit())
+        connect_lambda(annot.triggered, self, lambda self, x: self.fetch_annotations.emit())
         self.annotation_action = annot
         self.enable_device_actions(False)
 
@@ -953,10 +951,7 @@ class DeviceMixin(object):  # {{{
         if dir is not None:
             self.device_manager.mount_device(kls=FOLDER_DEVICE, kind='folder', path=dir)
 
-    def connect_to_itunes(self):
-        self.device_manager.mount_device(kls=ITUNES_ASYNC, kind='itunes', path=None)
-
-    # disconnect from both folder and itunes devices
+    # disconnect from folder devices
     def disconnect_mounted_device(self):
         self.device_manager.umount_device()
 
@@ -1773,7 +1768,7 @@ class DeviceMixin(object):  # {{{
         except:
             return False
 
-        string_pat = re.compile('(?u)\W|[_]')
+        string_pat = re.compile(r'(?u)\W|[_]')
 
         def clean_string(x):
             x = x.lower() if x else ''

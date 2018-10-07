@@ -35,8 +35,8 @@ class SelectNames(QDialog):  # {{{
         self._names.setSelectionMode(self._names.ExtendedSelection)
         l.addWidget(self._names)
 
-        self._or = QRadioButton(_('Match any of the selected %s names')%txt)
-        self._and = QRadioButton(_('Match all of the selected %s names')%txt)
+        self._or = QRadioButton(_('Match any of the selected %s')%txt)
+        self._and = QRadioButton(_('Match all of the selected %s')%txt)
         self._or.setChecked(True)
         l.addWidget(self._or)
         l.addWidget(self._and)
@@ -143,7 +143,7 @@ class CreateVirtualLibrary(QDialog):  # {{{
         self.hl = hl = QLabel(_('''
             <h2>Virtual libraries</h2>
 
-            <p>Using <i>virtual libraries</i> you can restrict calibre to only show
+            <p>With <i>virtual libraries</i>, you can restrict calibre to only show
             you books that match a search. When a virtual library is in effect, calibre
             behaves as though the library contains only the matched books. The Tag browser
             display only the tags/authors/series/etc. that belong to the matched books and any searches
@@ -352,6 +352,7 @@ class SearchRestrictionMixin(object):
         virt_libs = db.prefs.get('virtual_libraries', {})
         virt_libs[name] = search
         db.new_api.set_pref('virtual_libraries', virt_libs)
+        db.new_api.clear_search_caches()
 
     def do_create_edit(self, name=None):
         db = self.library_view.model().db
@@ -365,8 +366,7 @@ class SearchRestrictionMixin(object):
                 self.apply_virtual_library(cd.library_name)
             self.rebuild_vl_tabs()
 
-    def virtual_library_menu_about_to_show(self):
-        m = self.virtual_library_menu
+    def build_virtual_library_menu(self, m, add_tabs_action=True):
         m.clear()
 
         a = m.addAction(_('Create Virtual library'))
@@ -380,10 +380,11 @@ class SearchRestrictionMixin(object):
         self.build_virtual_library_list(a, self.remove_vl_triggered)
         m.addMenu(a)
 
-        if gprefs['show_vl_tabs']:
-            m.addAction(_('Hide virtual library tabs'), self.vl_tabs.disable_bar)
-        else:
-            m.addAction(_('Show virtual libraries as tabs'), self.vl_tabs.enable_bar)
+        if add_tabs_action:
+            if gprefs['show_vl_tabs']:
+                m.addAction(_('Hide virtual library tabs'), self.vl_tabs.disable_bar)
+            else:
+                m.addAction(_('Show virtual libraries as tabs'), self.vl_tabs.enable_bar)
 
         m.addSeparator()
 
@@ -420,6 +421,9 @@ class SearchRestrictionMixin(object):
         for vl in sorted(virt_libs.keys(), key=sort_key):
             a = m.addAction(self.checked if vl == current_lib else self.empty, vl.replace('&', '&&'))
             a.triggered.connect(partial(self.apply_virtual_library, library=vl))
+
+    def virtual_library_menu_about_to_show(self):
+        self.build_virtual_library_menu(self.virtual_library_menu)
 
     def rebuild_vl_tabs(self):
         self.vl_tabs.rebuild()

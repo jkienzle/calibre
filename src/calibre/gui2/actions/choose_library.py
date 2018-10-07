@@ -1,6 +1,7 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
@@ -79,7 +80,7 @@ class LibraryUsageStats(object):  # {{{
         if lpath in locs:
             locs.remove(lpath)
         limit = tweaks['many_libraries'] if limit is None else limit
-        key = sort_key if len(locs) > limit else lambda x:self.stats[x]
+        key = (lambda x:sort_key(os.path.basename(x))) if len(locs) > limit else self.stats.get
         locs.sort(key=key, reverse=len(locs)<=limit)
         for loc in locs:
             yield self.pretty(loc), loc
@@ -187,8 +188,8 @@ class BackupStatus(QDialog):  # {{{
             dirty_text = '%s' % db.dirty_queue_length()
         except:
             dirty_text = _('none')
-        self.msg.setText('<p>' +
-                _('Book metadata files remaining to be written: %s') % dirty_text)
+        self.msg.setText('<p>' + _(
+            'Book metadata files remaining to be written: %s') % dirty_text)
         QTimer.singleShot(1000, self.update)
 
     def mark_all_dirty(self):
@@ -209,6 +210,7 @@ class ChooseLibraryAction(InterfaceAction):
     restore_view_state = pyqtSignal(object)
 
     def genesis(self):
+        self.prev_lname = self.last_lname = ''
         self.count_changed(0)
         self.action_choose = self.menuless_qaction
         self.action_exim = ac = QAction(_('Export/import all calibre data'), self.gui)
@@ -248,9 +250,11 @@ class ChooseLibraryAction(InterfaceAction):
         for i in range(5):
             ac = self.create_action(spec=('', None, None, None),
                     attr='switch_action%d'%i)
+            ac.setObjectName(str(i))
             self.switch_actions.append(ac)
             ac.setVisible(False)
-            ac.triggered.connect(partial(self.qs_requested, i),
+            connect_lambda(ac.triggered, self, lambda self:
+                    self.switch_requested(self.qs_locations[int(self.gui.sender().objectName())]),
                     type=Qt.QueuedConnection)
             self.choose_menu.addAction(ac)
 
@@ -319,7 +323,9 @@ class ChooseLibraryAction(InterfaceAction):
 
     def library_changed(self, db):
         lname = self.stats.library_used(db)
-        self.last_lname = lname
+        if lname != self.last_lname:
+            self.prev_lname = self.last_lname
+            self.last_lname = lname
         if len(lname) > 16:
             lname = lname[:16] + u'…'
         a = self.qaction
@@ -350,10 +356,15 @@ class ChooseLibraryAction(InterfaceAction):
         self.delete_menu.clear()
         quick_actions, rename_actions, delete_actions = [], [], []
         for name, loc in locations:
+            is_prev_lib = name == self.prev_lname
             name = name.replace('&', '&&')
             ac = self.quick_menu.addAction(name, Dispatcher(partial(self.switch_requested,
                 loc)))
             ac.setStatusTip(_('Switch to: %s') % loc)
+            if is_prev_lib:
+                f = ac.font()
+                f.setBold(True)
+                ac.setFont(f)
             quick_actions.append(ac)
             ac = self.rename_menu.addAction(name, Dispatcher(partial(self.rename_requested,
                 name, loc)))
@@ -391,6 +402,7 @@ class ChooseLibraryAction(InterfaceAction):
     def location_selected(self, loc):
         enabled = loc == 'library'
         self.qaction.setEnabled(enabled)
+        self.menuless_qaction.setEnabled(enabled)
 
     def rename_requested(self, name, location):
         LibraryDatabase = db_class()
@@ -398,8 +410,9 @@ class ChooseLibraryAction(InterfaceAction):
         base = os.path.dirname(loc)
         old_name = name.replace('&&', '&')
         newname, ok = QInputDialog.getText(self.gui, _('Rename') + ' ' + old_name,
-                '<p>'+_('Choose a new name for the library <b>%s</b>. ')%name +
-                '<p>'+_('Note that the actual library folder will be renamed.'),
+                '<p>'+_(
+                    'Choose a new name for the library <b>%s</b>. ')%name + '<p>'+_(
+                    'Note that the actual library folder will be renamed.'),
                 text=old_name)
         newname = sanitize_file_name_unicode(unicode(newname))
         if not ok or not newname or newname == old_name:
@@ -409,8 +422,7 @@ class ChooseLibraryAction(InterfaceAction):
             return error_dialog(self.gui, _('Already exists'),
                     _('The folder %s already exists. Delete it first.') %
                     newloc, show=True)
-        if (iswindows and len(newloc) >
-                LibraryDatabase.WINDOWS_LIBRARY_PATH_LIMIT):
+        if (iswindows and len(newloc) > LibraryDatabase.WINDOWS_LIBRARY_PATH_LIMIT):
             return error_dialog(self.gui, _('Too long'),
                     _('Path to library too long. Must be less than'
                     ' %d characters.')%LibraryDatabase.WINDOWS_LIBRARY_PATH_LIMIT,
@@ -470,8 +482,7 @@ class ChooseLibraryAction(InterfaceAction):
         LibraryDatabase = db_class()
         m = self.gui.library_view.model()
         db = m.db
-        if (iswindows and len(db.library_path) >
-                LibraryDatabase.WINDOWS_LIBRARY_PATH_LIMIT):
+        if (iswindows and len(db.library_path) > LibraryDatabase.WINDOWS_LIBRARY_PATH_LIMIT):
             return error_dialog(self.gui, _('Too long'),
                     _('Path to library too long. Must be less than'
                     ' %d characters. Move your library to a location with'
@@ -582,17 +593,14 @@ class ChooseLibraryAction(InterfaceAction):
         for i in xrange(3):
             gc.collect()
         if ref() is not None:
-            print 'DB object alive:', ref()
+            print('DB object alive:', ref())
             for r in gc.get_referrers(ref())[:10]:
-                print r
-                print
-        print 'before:', self.before_mem
-        print 'after:', memory()
-        print
+                print(r)
+                print()
+        print('before:', self.before_mem)
+        print('after:', memory())
+        print()
         self.dbref = self.before_mem = None
-
-    def qs_requested(self, idx, *args):
-        self.switch_requested(self.qs_locations[idx])
 
     def count_changed(self, new_count):
         self.update_tooltip(new_count)

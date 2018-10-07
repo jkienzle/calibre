@@ -13,8 +13,9 @@ from functools import partial
 
 from calibre.ebooks.oeb.polish.container import get_container
 from calibre.ebooks.oeb.polish.stats import StatsCollector
-from calibre.ebooks.oeb.polish.subset import subset_all_fonts
+from calibre.ebooks.oeb.polish.subset import subset_all_fonts, iter_subsettable_fonts
 from calibre.ebooks.oeb.polish.images import compress_images
+from calibre.ebooks.oeb.polish.upgrade import upgrade_book
 from calibre.ebooks.oeb.polish.embed import embed_all_fonts
 from calibre.ebooks.oeb.polish.cover import set_cover
 from calibre.ebooks.oeb.polish.replace import smarten_punctuation
@@ -33,6 +34,7 @@ ALL_OPTS = {
     'smarten_punctuation':False,
     'remove_unused_css':False,
     'compress_images': False,
+    'upgrade_book': False,
 }
 
 CUSTOMIZATION = {
@@ -112,6 +114,10 @@ that need to parse them all.</p>
 affecting image quality.</p>
 '''),
 
+'upgrade_book': _('''\
+<p>Upgrade the internal structures of the book, if possible. For instance,
+upgrades EPUB 2 books to EPUB 3 books.</p>
+'''),
 }
 
 
@@ -145,8 +151,12 @@ def polish_one(ebook, opts, report, customization=None):
     jacket = None
     changed = False
     customization = customization or CUSTOMIZATION.copy()
+    has_subsettable_fonts = False
+    for x in iter_subsettable_fonts(ebook):
+        has_subsettable_fonts = True
+        break
 
-    if opts.subset or opts.embed:
+    if (opts.subset and has_subsettable_fonts) or opts.embed:
         stats = StatsCollector(ebook, do_embed=opts.embed)
 
     if opts.opf:
@@ -196,12 +206,16 @@ def polish_one(ebook, opts, report, customization=None):
         rt(_('Embedding referenced fonts'))
         if embed_all_fonts(ebook, stats, report):
             changed = True
+            has_subsettable_fonts = True
         report('')
 
     if opts.subset:
-        rt(_('Subsetting embedded fonts'))
-        if subset_all_fonts(ebook, stats.font_stats, report):
-            changed = True
+        if has_subsettable_fonts:
+            rt(_('Subsetting embedded fonts'))
+            if subset_all_fonts(ebook, stats.font_stats, report):
+                changed = True
+        else:
+            rt(_('No embedded fonts to subset'))
         report('')
 
     if opts.remove_unused_css:
@@ -214,6 +228,12 @@ def polish_one(ebook, opts, report, customization=None):
     if opts.compress_images:
         rt(_('Losslessly compressing images'))
         if compress_images(ebook, report)[0]:
+            changed = True
+        report('')
+
+    if opts.upgrade_book:
+        rt(_('Upgrading book, if possible'))
+        if upgrade_book(ebook, report):
             changed = True
         report('')
 
@@ -284,6 +304,7 @@ def option_parser():
     o('--smarten-punctuation', '-p', help=CLI_HELP['smarten_punctuation'])
     o('--remove-unused-css', '-u', help=CLI_HELP['remove_unused_css'])
     o('--compress-images', '-i', help=CLI_HELP['compress_images'])
+    o('--upgrade-book', '-U', help=CLI_HELP['upgrade_book'])
 
     o('--verbose', help=_('Produce more verbose output, useful for debugging.'))
 

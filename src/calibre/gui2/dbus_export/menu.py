@@ -130,7 +130,7 @@ class DBusMenu(QObject):
     def publish_new_menu(self, qmenu=None):
         self.init_maps(qmenu)
         if qmenu is not None:
-            qmenu.destroyed.connect(lambda obj=None:self.publish_new_menu())
+            connect_lambda(qmenu.destroyed, self, lambda self:self.publish_new_menu())
             ac = qmenu.menuAction()
             self.add_action(ac)
         self.dbus_api.LayoutUpdated(self.dbus_api.revision, 0)
@@ -237,7 +237,7 @@ class DBusMenu(QObject):
         return parent_id, props, self.get_layout_children(parent_id, depth, property_names)
 
     def get_layout_children(self, parent_id, depth, property_names):
-        ans = dbus.Array(signature='(ia{sv}av)')
+        ans = dbus.Array(signature='v')
         ac = self.id_to_action(parent_id)
         if ac is not None and depth != 0 and ac.menu() is not None:
             for child in menu_actions(ac.menu()):
@@ -387,6 +387,7 @@ def test():
     menu.publish_new_menu(m)
     app.exec_()
     del dbus_name
+
 
 if __name__ == '__main__':
     test()

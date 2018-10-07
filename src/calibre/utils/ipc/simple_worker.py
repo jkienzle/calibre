@@ -20,9 +20,10 @@ from calibre.utils.ipc.launch import Worker
 
 class WorkerError(Exception):
 
-    def __init__(self, msg, orig_tb=''):
+    def __init__(self, msg, orig_tb='', log_path=None):
         Exception.__init__(self, msg)
         self.orig_tb = orig_tb
+        self.log_path = log_path
 
 
 class ConnectedWorker(Thread):
@@ -38,13 +39,11 @@ class ConnectedWorker(Thread):
         self.res = None
 
     def run(self):
-        conn = tb = None
+        conn = None
         try:
             conn = eintr_retry_call(self.listener.accept)
-        except:
-            tb = traceback.format_exc()
-        if conn is None:
-            self.tb = tb
+        except BaseException:
+            self.tb = traceback.format_exc()
             return
         self.accepted = True
         with closing(conn):
@@ -227,6 +226,10 @@ def fork_job(mod_name, func_name, args=(), kwargs={}, timeout=300,  # seconds
         communicate(ans, w, listener, (mod_name, func_name, args, kwargs,
             module_is_source_code), timeout=timeout, heartbeat=heartbeat,
             abort=abort)
+    except WorkerError as e:
+        if not no_output:
+            e.log_path = w.log_path
+        raise
     finally:
         t = Thread(target=w.kill)
         t.daemon=True
@@ -260,7 +263,7 @@ def compile_code(src):
     namespace = {
             'time':time, 're':re, 'os':os, 'io':io,
     }
-    exec src in namespace
+    exec(src, namespace)
     return namespace
 
 
@@ -324,4 +327,3 @@ def offload():
                 res['tb'] = traceback.format_exc()
 
             eintr_retry_call(conn.send, res)
-

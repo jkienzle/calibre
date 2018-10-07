@@ -1,18 +1,19 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import with_statement
+from __future__ import with_statement, print_function
 
 __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import os, tempfile, shutil, subprocess, glob, re, time, textwrap, cPickle, shlex, json, errno, hashlib, sys
+import os, tempfile, shutil, subprocess, glob, re, time, textwrap, shlex, json, errno, hashlib, sys
 from collections import defaultdict
 from locale import normalize as normalize_locale
 from functools import partial
 
 from setup import Command, __appname__, __version__, require_git_master, build_cache_dir, edit_file
 from setup.parallel_build import parallel_check_output
+from polyglot.builtins import iteritems
 is_ci = os.environ.get('CI', '').lower() == 'true'
 
 
@@ -276,6 +277,7 @@ class Translations(POT):  # {{{
         self.compile_content_server_translations()
         self.freeze_locales()
         self.compile_user_manual_translations()
+        self.compile_website_translations()
 
     def compile_group(self, files, handle_stats=None, file_ok=None, action_per_file=None):
         from calibre.constants import islinux
@@ -293,7 +295,8 @@ class Translations(POT):  # {{{
             base = os.path.dirname(dest)
             if not os.path.exists(base):
                 os.makedirs(base)
-            data, current_hash = self.hash_and_data(src)
+            data, h = self.hash_and_data(src)
+            current_hash = h.digest()
             saved_hash, saved_data = self.read_cache(src)
             if current_hash == saved_hash:
                 with open(dest, 'wb') as d:
@@ -335,9 +338,10 @@ class Translations(POT):  # {{{
             ln = normalize_locale(locale).partition('.')[0]
             if ln in lcdata:
                 ld = lcdata[ln]
-                lcdest = self.j(self.d(dest), 'lcdata.pickle')
+                lcdest = self.j(self.d(dest), 'lcdata.calibre_msgpack')
+                from calibre.utils.serialize import msgpack_dumps
                 with open(lcdest, 'wb') as lcf:
-                    lcf.write(cPickle.dumps(ld, -1))
+                    lcf.write(msgpack_dumps(ld))
 
         stats = {}
 
@@ -355,7 +359,7 @@ class Translations(POT):  # {{{
             'en_GB', 'en_CA', 'en_AU', 'si', 'ur', 'sc', 'ltg', 'nds',
             'te', 'yi', 'fo', 'sq', 'ast', 'ml', 'ku', 'fr_CA', 'him',
             'jv', 'ka', 'fur', 'ber', 'my', 'fil', 'hy', 'ug'}
-        for f, (locale, dest) in fmap.iteritems():
+        for f, (locale, dest) in iteritems(fmap):
             iscpo = {'bn':'bn_IN', 'zh_HK':'zh_CN'}.get(locale, locale)
             iso639 = self.j(self.TRANSLATIONS, 'iso_639', '%s.po'%iscpo)
             if os.path.exists(iso639):
@@ -376,14 +380,16 @@ class Translations(POT):  # {{{
         except EnvironmentError as err:
             if err.errno != errno.EEXIST:
                 raise
-        cPickle.dump(stats, open(dest, 'wb'), -1)
+        from calibre.utils.serialize import msgpack_dumps
+        with open(dest, 'wb') as f:
+            f.write(msgpack_dumps(stats))
 
     def hash_and_data(self, f):
         with open(f, 'rb') as s:
             data = s.read()
         h = hashlib.sha1(data)
         h.update(f.encode('utf-8'))
-        return data, h.digest()
+        return data, h
 
     def compile_content_server_translations(self):
         self.info('Compiling content-server translations')
@@ -391,7 +397,8 @@ class Translations(POT):  # {{{
         from calibre.utils.zipfile import ZipFile, ZIP_DEFLATED, ZipInfo, ZIP_STORED
         with ZipFile(self.j(self.RESOURCES, 'content-server', 'locales.zip'), 'w', ZIP_DEFLATED) as zf:
             for src in glob.glob(os.path.join(self.TRANSLATIONS, 'content-server', '*.po')):
-                data, current_hash = self.hash_and_data(src)
+                data, h = self.hash_and_data(src)
+                current_hash = h.digest()
                 saved_hash, saved_data = self.read_cache(src)
                 if current_hash == saved_hash:
                     raw = saved_data
@@ -400,8 +407,9 @@ class Translations(POT):  # {{{
                     raw = None
                     po_data = data.decode('utf-8')
                     data = json.loads(msgfmt(po_data))
-                    translated_entries = {k:v for k, v in data['entries'].iteritems() if v and sum(map(len, v))}
-                    data['entries'] = translated_entries
+                    translated_entries = {k:v for k, v in iteritems(data['entries']) if v and sum(map(len, v))}
+                    data[u'entries'] = translated_entries
+                    data[u'hash'] = h.hexdigest()
                     cdata = b'{}'
                     if translated_entries:
                         raw = json.dumps(data, ensure_ascii=False, sort_keys=True)
@@ -448,7 +456,62 @@ class Translations(POT):  # {{{
 
     @property
     def stats(self):
-        return self.j(self.d(self.DEST), 'stats.pickle')
+        return self.j(self.d(self.DEST), 'stats.calibre_msgpack')
+
+    def compile_website_translations(self):
+        from calibre.utils.zipfile import ZipFile, ZipInfo, ZIP_STORED
+        from calibre.ptempfile import TemporaryDirectory
+        from calibre.utils.localization import get_iso639_translator, get_language, get_iso_language
+        self.info('Compiling website translations...')
+        srcbase = self.j(self.d(self.SRC), 'translations', 'website')
+        fmap = {}
+        files = []
+        stats = {}
+        done = []
+
+        def handle_stats(src, nums):
+            locale = fmap[src]
+            trans = nums[0]
+            total = trans if len(nums) == 1 else (trans + nums[1])
+            stats[locale] = int(round(100 * trans / total))
+
+        with TemporaryDirectory() as tdir, ZipFile(self.j(srcbase, 'locales.zip'), 'w', ZIP_STORED) as zf:
+            for f in os.listdir(srcbase):
+                if f.endswith('.po'):
+                    l = f.partition('.')[0]
+                    pf = l.split('_')[0]
+                    if pf in {'en'}:
+                        continue
+                    d = os.path.join(tdir, l + '.mo')
+                    f = os.path.join(srcbase, f)
+                    fmap[f] = l
+                    files.append((f, d))
+            self.compile_group(files, handle_stats=handle_stats)
+
+            for locale, translated in iteritems(stats):
+                if translated >= 20:
+                    with open(os.path.join(tdir, locale + '.mo'), 'rb') as f:
+                        raw = f.read()
+                    zi = ZipInfo(os.path.basename(f.name))
+                    zi.compress_type = ZIP_STORED
+                    zf.writestr(zi, raw)
+                    done.append(locale)
+            dl = done + ['en']
+
+            lang_names = {}
+            for l in dl:
+                if l == 'en':
+                    t = get_language
+                else:
+                    t = get_iso639_translator(l).ugettext
+                    t = partial(get_iso_language, t)
+                lang_names[l] = {x: t(x) for x in dl}
+            zi = ZipInfo('lang-names.json')
+            zi.compress_type = ZIP_STORED
+            zf.writestr(zi, json.dumps(lang_names, ensure_ascii=False).encode('utf-8'))
+        dest = self.j(self.d(self.stats), 'website-languages.txt')
+        with open(dest, 'wb') as f:
+            f.write(' '.join(sorted(done)))
 
     def compile_user_manual_translations(self):
         self.info('Compiling user manual translations...')
@@ -479,7 +542,7 @@ class Translations(POT):  # {{{
                 stats['untranslated'] += nums[1]
 
         self.compile_group(files, handle_stats=handle_stats)
-        for locale, stats in all_stats.iteritems():
+        for locale, stats in iteritems(all_stats):
             with open(self.j(srcbase, locale, 'stats.json'), 'wb') as f:
                 json.dump(stats, f)
             total = stats['translated'] + stats['untranslated']
@@ -558,7 +621,7 @@ class GetTranslations(Translations):  # {{{
                         changes[slug].add(lang)
                 if changed:
                     f.save()
-        for slug, languages in changes.iteritems():
+        for slug, languages in iteritems(changes):
             print('Pushing fixes for languages: %s in %s' % (', '.join(languages), slug))
             self.tx('push -r calibre.%s -t -l %s' % (slug, ','.join(languages)))
 
@@ -595,6 +658,15 @@ class GetTranslations(Translations):  # {{{
             p.wait()
             return errs
 
+        def check_for_control_chars(f):
+            raw = open(f, 'rb').read().decode('utf-8')
+            pat = re.compile(type(u'')(r'[\0-\x08\x0b\x0c\x0e-\x1f\x7f\x80-\x9f]'))
+            errs = []
+            for i, line in enumerate(raw.splitlines()):
+                if pat.search(line) is not None:
+                    errs.append('There are ASCII control codes on line number: {}'.format(i + 1))
+            return '\n'.join(errs)
+
         for f in files:
             errs = check(f)
             if errs:
@@ -603,6 +675,11 @@ class GetTranslations(Translations):  # {{{
                 edit_file(f)
                 if check(f):
                     raise SystemExit('Aborting as not all errors were fixed')
+            errs = check_for_control_chars(f)
+            if errs:
+                print(f, 'has ASCII control codes in it')
+                print(errs)
+                raise SystemExit(1)
 
     def check_website(self):
         errors = os.path.join(tempfile.gettempdir(), 'calibre-translation-errors')
@@ -639,7 +716,7 @@ class ISO639(Command):  # {{{
 
     description = 'Compile language code maps for performance'
     DEST = os.path.join(os.path.dirname(POT.SRC), 'resources', 'localization',
-            'iso639.pickle')
+            'iso639.calibre_msgpack')
 
     def run(self, opts):
         src = self.j(self.d(self.SRC), 'setup', 'iso_639_3.xml')
@@ -689,7 +766,9 @@ class ISO639(Command):  # {{{
         x = {'by_2':by_2, 'by_3b':by_3b, 'by_3t':by_3t, 'codes2':codes2,
                 'codes3b':codes3b, 'codes3t':codes3t, '2to3':m2to3,
                 '3to2':m3to2, '3bto3t':m3bto3t, 'name_map':nm}
-        cPickle.dump(x, open(dest, 'wb'), -1)
+        from calibre.utils.serialize import msgpack_dumps
+        with open(dest, 'wb') as f:
+            f.write(msgpack_dumps(x))
 
     def clean(self):
         if os.path.exists(self.DEST):
@@ -702,7 +781,7 @@ class ISO3166(ISO639):  # {{{
 
     description = 'Compile country code maps for performance'
     DEST = os.path.join(os.path.dirname(POT.SRC), 'resources', 'localization',
-            'iso3166.pickle')
+            'iso3166.calibre_msgpack')
 
     def run(self, opts):
         src = self.j(self.d(self.SRC), 'setup', 'iso3166.xml')
@@ -729,5 +808,7 @@ class ISO3166(ISO639):  # {{{
             if three:
                 three_map[three] = two
         x = {'names':name_map, 'codes':frozenset(codes), 'three_map':three_map}
-        cPickle.dump(x, open(dest, 'wb'), -1)
+        from calibre.utils.serialize import msgpack_dumps
+        with open(dest, 'wb') as f:
+            f.write(msgpack_dumps(x))
 # }}}

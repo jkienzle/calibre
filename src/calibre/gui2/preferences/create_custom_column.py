@@ -120,8 +120,8 @@ class CreateCustomColumn(QDialog):
             self.exec_()
             return
 
-        self.setWindowTitle(_('Edit a custom column'))
-        self.heading_label.setText('<b>' + _('Edit a custom column'))
+        self.setWindowTitle(_('Edit custom column'))
+        self.heading_label.setText('<b>' + _('Edit custom column'))
         self.shortcuts.setVisible(False)
         idx = current_row
         if idx < 0:
@@ -210,7 +210,7 @@ class CreateCustomColumn(QDialog):
             self.composite_box.setText(
                 {
                     'isbn': '{identifiers:select(isbn)}',
-                    'formats': "{:'approximate_formats()'}",
+                    'formats': "{:'re(approximate_formats(), ',', ', ')'}",
                     }[which])
             self.composite_sort_by.setCurrentIndex(0)
         if which == 'text':
@@ -301,7 +301,7 @@ class CreateCustomColumn(QDialog):
         self.format_box = fb = QLineEdit(self)
         h.addWidget(fb)
         self.format_default_label = la = QLabel('')
-        la.setOpenExternalLinks(True)
+        la.setOpenExternalLinks(True), la.setWordWrap(True)
         h.addWidget(la)
         self.format_label = add_row('', h)
 
@@ -372,19 +372,19 @@ class CreateCustomColumn(QDialog):
         cmc.setToolTip(_("If checked, this column will appear in the Tag browser as a category"))
         l.addWidget(cmc)
         self.composite_contains_html = cch = QCheckBox(_("Show as HTML in Book details"))
-        cch.setToolTip('<p>' +
-                _('If checked, this column will be displayed as HTML in '
-                  'Book details and the Content server. This can be used to '
-                  'construct links with the template language. For example, '
-                  'the template '
-                  '<pre>&lt;big&gt;&lt;b&gt;{title}&lt;/b&gt;&lt;/big&gt;'
-                  '{series:| [|}{series_index:| [|]]}</pre>'
-                  'will create a field displaying the title in bold large '
-                  'characters, along with the series, for example <br>"<big><b>'
-                  'An Oblique Approach</b></big> [Belisarius [1]]". The template '
-                  '<pre>&lt;a href="https://www.beam-ebooks.de/ebook/{identifiers'
-                  ':select(beam)}"&gt;Beam book&lt;/a&gt;</pre> '
-                  'will generate a link to the book on the Beam e-books site.') + '</p>')
+        cch.setToolTip('<p>' + _(
+            'If checked, this column will be displayed as HTML in '
+            'Book details and the Content server. This can be used to '
+            'construct links with the template language. For example, '
+            'the template '
+            '<pre>&lt;big&gt;&lt;b&gt;{title}&lt;/b&gt;&lt;/big&gt;'
+            '{series:| [|}{series_index:| [|]]}</pre>'
+            'will create a field displaying the title in bold large '
+            'characters, along with the series, for example <br>"<big><b>'
+            'An Oblique Approach</b></big> [Belisarius [1]]". The template '
+            '<pre>&lt;a href="https://www.beam-ebooks.de/ebook/{identifiers'
+            ':select(beam)}"&gt;Beam book&lt;/a&gt;</pre> '
+            'will generate a link to the book on the Beam e-books site.') + '</p>')
         l.addWidget(cch)
         add_row(None, l)
 
@@ -403,7 +403,29 @@ class CreateCustomColumn(QDialog):
             if col_type == 'datetime':
                 l, dl = _('&Format for dates'), _('Default: dd MMM yyyy.')
                 self.format_box.setToolTip(_(
-                    "<p>Date format. Use 1-4 \'d\'s for day, 1-4 \'M\'s for month, and 2 or 4 \'y\'s for year.</p>\n"
+                    '<p>Date format.</p>'
+                    '<p>The formatting codes are:'
+                    '<ul>'
+                    '<li>d    : the day as number without a leading zero (1 to 31)</li>'
+                    '<li>dd   : the day as number with a leading zero (01 to 31)</li>'
+                    '<li>ddd  : the abbreviated localized day name (e.g. "Mon" to "Sun").</li>'
+                    '<li>dddd : the long localized day name (e.g. "Monday" to "Sunday").</li>'
+                    '<li>M    : the <b>month</b> as number without a leading zero (1 to 12).</li>'
+                    '<li>MM   : the <b>month</b> as number with a leading zero (01 to 12)</li>'
+                    '<li>MMM  : the abbreviated localized <b>month</b> name (e.g. "Jan" to "Dec").</li>'
+                    '<li>MMMM : the long localized <b>month</b> name (e.g. "January" to "December").</li>'
+                    '<li>yy   : the year as two digit number (00 to 99).</li>'
+                    '<li>yyyy : the year as four digit number.</li>'
+                    '<li>h    : the hours without a leading 0 (0 to 11 or 0 to 23, depending on am/pm)</li>'
+                    '<li>hh   : the hours with a leading 0 (00 to 11 or 00 to 23, depending on am/pm)</li>'
+                    '<li>m    : the <b>minutes</b> without a leading 0 (0 to 59)</li>'
+                    '<li>mm   : the <b>minutes</b> with a leading 0 (00 to 59)</li>'
+                    '<li>s    : the seconds without a leading 0 (0 to 59)</li>'
+                    '<li>ss   : the seconds with a leading 0 (00 to 59)</li>'
+                    '<li>ap   : use a 12-hour clock instead of a 24-hour clock, with "ap" replaced by the localized string for am or pm</li>'
+                    '<li>AP   : use a 12-hour clock instead of a 24-hour clock, with "AP" replaced by the localized string for AM or PM</li>'
+                    '<li>iso  : the date with time and timezone. Must be the only format present</li>'
+                    '</ul></p>'
                     "<p>For example:\n"
                     "<ul>\n"
                     "<li>ddd, d MMM yyyy gives Mon, 5 Jan 2010<li>\n"
@@ -414,13 +436,13 @@ class CreateCustomColumn(QDialog):
                     '<p>' + _('Default: Not formatted. For format language details see'
                     ' <a href="https://docs.python.org/library/string.html#format-string-syntax">the Python documentation</a>'))
                 if col_type == 'int':
-                    self.format_box.setToolTip('<p>' +
-                        _('Examples: The format <code>{0:0>4d}</code> '
+                    self.format_box.setToolTip('<p>' + _(
+                        'Examples: The format <code>{0:0>4d}</code> '
                         'gives a 4-digit number with leading zeros. The format '
                         '<code>{0:d}&nbsp;days</code> prints the number then the word "days"')+ '</p>')
                 else:
-                    self.format_box.setToolTip('<p>' +
-                        _('Examples: The format <code>{0:.1f}</code> gives a floating '
+                    self.format_box.setToolTip('<p>' + _(
+                        'Examples: The format <code>{0:.1f}</code> gives a floating '
                         'point number with 1 digit after the decimal point. The format '
                         '<code>Price:&nbsp;$&nbsp;{0:,.2f}</code> prints '
                         '"Price&nbsp;$&nbsp;" then displays the number with 2 digits '
@@ -447,7 +469,7 @@ class CreateCustomColumn(QDialog):
             return self.simple_error('', _('No lookup name was provided'))
         if col.startswith('#'):
             col = col[1:]
-        if re.match('^\w*$', col) is None or not col[0].isalpha() or col.lower() != col:
+        if re.match(r'^\w*$', col) is None or not col[0].isalpha() or col.lower() != col:
             return self.simple_error('', _('The lookup name must contain only '
                     'lower case letters, digits and underscores, and start with a letter'))
         if col.endswith('_index'):

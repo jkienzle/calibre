@@ -26,8 +26,8 @@ from calibre.srv.metadata import (
 from calibre.srv.routes import endpoint, json
 from calibre.srv.utils import get_library_data, get_use_roman
 from calibre.utils.config import prefs, tweaks
-from calibre.utils.icu import sort_key
-from calibre.utils.localization import get_lang
+from calibre.utils.icu import sort_key, numeric_sort_key
+from calibre.utils.localization import get_lang, lang_map_for_ui
 from calibre.utils.search_query_parser import ParseException
 
 POSTABLE = frozenset({'GET', 'POST', 'HEAD'})
@@ -48,16 +48,14 @@ def robots(ctx, rd):
     return b'User-agent: *\nDisallow: /'
 
 
-@endpoint('/auto-reload-port', auth_required=False, cache_control='no-cache')
-def auto_reload(ctx, rd):
+@endpoint('/ajax-setup', auth_required=False, cache_control='no-cache', postprocess=json)
+def ajax_setup(ctx, rd):
     auto_reload_port = getattr(rd.opts, 'auto_reload_port', 0)
-    rd.outheaders.set('Content-Type', 'text/plain')
-    return str(max(0, auto_reload_port))
-
-
-@endpoint('/allow-console-print', cache_control='no-cache', auth_required=False)
-def allow_console_print(ctx, rd):
-    return 'y' if getattr(rd.opts, 'allow_console_print', False) else 'n'
+    return {
+        'auto_reload_port': max(0, auto_reload_port),
+        'allow_console_print': bool(getattr(rd.opts, 'allow_console_print', False)),
+        'ajax_timeout': rd.opts.ajax_timeout,
+    }
 
 
 print_lock = Lock()
@@ -115,7 +113,24 @@ def get_translations():
     return _cached_translations
 
 
-DEFAULT_NUMBER_OF_BOOKS = 50
+def custom_list_template():
+    ans = getattr(custom_list_template, 'ans', None)
+    if ans is None:
+        ans = {
+            'thumbnail': True,
+            'thumbnail_height': 140,
+            'height': 'auto',
+            'comments_fields': ['comments'],
+            'lines': [
+                _('<b>{title}</b> by {authors}'),
+                _('{series_index} of <i>{series}</i>') + '|||{rating}',
+                '{tags}',
+                _('Date: {timestamp}') + '|||' + _('Published: {pubdate}') + '|||' + _('Publisher: {publisher}'),
+                '',
+            ]
+        }
+        custom_list_template.ans = ans
+    return ans
 
 
 def basic_interface_data(ctx, rd):
@@ -126,23 +141,29 @@ def basic_interface_data(ctx, rd):
                           for x in available_input_formats()},
         'gui_pubdate_display_format': tweaks['gui_pubdate_display_format'],
         'gui_timestamp_display_format': tweaks['gui_timestamp_display_format'],
-        'gui_last_modified_display_format':
-        tweaks['gui_last_modified_display_format'],
+        'gui_last_modified_display_format': tweaks['gui_last_modified_display_format'],
+        'completion_mode': tweaks['completion_mode'],
         'use_roman_numerals_for_series_number': get_use_roman(),
         'translations': get_translations(),
         'icon_map': icon_map(),
         'icon_path': ctx.url_for('/icon', which=''),
+        'custom_list_template': getattr(ctx, 'custom_list_template', None) or custom_list_template(),
+        'num_per_page': rd.opts.num_per_page,
     }
     ans['library_map'], ans['default_library_id'] = ctx.library_info(rd)
     return ans
 
 
-@endpoint('/interface-data/update', postprocess=json)
-def update_interface_data(ctx, rd):
+@endpoint('/interface-data/update/{translations_hash=None}', postprocess=json)
+def update_interface_data(ctx, rd, translations_hash):
     '''
     Return the interface data needed for the server UI
     '''
-    return basic_interface_data(ctx, rd)
+    ans = basic_interface_data(ctx, rd)
+    t = ans['translations']
+    if t and (t.get('hash') or translations_hash) and t.get('hash') == translations_hash:
+        del ans['translations']
+    return ans
 
 
 def get_field_list(db):
@@ -173,7 +194,7 @@ def get_library_init_data(ctx, rd, db, num, sorts, orders, vl):
         ans['sortable_fields'] = sorted(
             ((sanitize_sort_field_name(db.field_metadata, k), v)
              for k, v in sf.iteritems()),
-            key=lambda (field, name): sort_key(name)
+            key=lambda field_name: sort_key(field_name[1])
         )
         ans['field_metadata'] = db.field_metadata.all_metadata()
         ans['virtual_libraries'] = db._pref('virtual_libraries', {})
@@ -204,7 +225,7 @@ def books(ctx, rd):
     '''
     ans = {}
     try:
-        num = int(rd.query.get('num', DEFAULT_NUMBER_OF_BOOKS))
+        num = int(rd.query.get('num', rd.opts.num_per_page))
     except Exception:
         raise HTTPNotFound('Invalid number of books: %r' % rd.query.get('num'))
     library_id, db, sorts, orders, vl = get_basic_query_data(ctx, rd)
@@ -236,7 +257,7 @@ def interface_data(ctx, rd):
     ans['library_id'], db, sorts, orders, vl = get_basic_query_data(ctx, rd)
     ans['user_session_data'] = ud
     try:
-        num = int(rd.query.get('num', DEFAULT_NUMBER_OF_BOOKS))
+        num = int(rd.query.get('num', rd.opts.num_per_page))
     except Exception:
         raise HTTPNotFound('Invalid number of books: %r' % rd.query.get('num'))
     ans.update(get_library_init_data(ctx, rd, db, num, sorts, orders, vl))
@@ -254,7 +275,7 @@ def more_books(ctx, rd):
     db, library_id = get_library_data(ctx, rd)[:2]
 
     try:
-        num = int(rd.query.get('num', DEFAULT_NUMBER_OF_BOOKS))
+        num = int(rd.query.get('num', rd.opts.num_per_page))
     except Exception:
         raise HTTPNotFound('Invalid number of books: %r' % rd.query.get('num'))
     try:
@@ -307,7 +328,7 @@ def get_books(ctx, rd):
     '''
     library_id, db, sorts, orders, vl = get_basic_query_data(ctx, rd)
     try:
-        num = int(rd.query.get('num', DEFAULT_NUMBER_OF_BOOKS))
+        num = int(rd.query.get('num', rd.opts.num_per_page))
     except Exception:
         raise HTTPNotFound('Invalid number of books: %r' % rd.query.get('num'))
     searchq = rd.query.get('search', '')
@@ -368,3 +389,24 @@ def tag_browser(ctx, rd):
         return json(ctx, rd, tag_browser, categories_as_json(ctx, rd, db, opts, vl))
 
     return rd.etagged_dynamic_response(etag, generate)
+
+
+def all_lang_names():
+    ans = getattr(all_lang_names, 'ans', None)
+    if ans is None:
+        ans = all_lang_names.ans = tuple(sorted(lang_map_for_ui().itervalues(), key=numeric_sort_key))
+    return ans
+
+
+@endpoint('/interface-data/field-names/{field}', postprocess=json)
+def field_names(ctx, rd, field):
+    '''
+    Get a list of all names for the specified field
+    Optional: ?library_id=<default library>
+    '''
+    if field == 'languages':
+        ans = all_lang_names()
+    else:
+        db, library_id = get_library_data(ctx, rd)[:2]
+        ans = tuple(sorted(db.all_field_names(field), key=numeric_sort_key))
+    return ans

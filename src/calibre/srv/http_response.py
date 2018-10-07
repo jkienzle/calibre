@@ -12,7 +12,8 @@ from io import BytesIO, DEFAULT_BUFFER_SIZE
 from itertools import chain, repeat, izip_longest
 from operator import itemgetter
 from functools import wraps
-from future_builtins import map
+
+from polyglot.builtins import reraise, map, is_py3
 
 from calibre import guess_type, force_unicode
 from calibre.constants import __version__, plugins
@@ -29,10 +30,13 @@ from calibre.utils.monotonic import monotonic
 Range = namedtuple('Range', 'start stop size')
 MULTIPART_SEPARATOR = uuid.uuid4().hex.decode('ascii')
 COMPRESSIBLE_TYPES = {'application/json', 'application/javascript', 'application/xml', 'application/oebps-package+xml'}
-zlib, zlib2_err = plugins['zlib2']
-if zlib2_err:
-    raise RuntimeError('Failed to laod the zlib2 module with error: ' + zlib2_err)
-del zlib2_err
+if is_py3:
+    import zlib
+else:
+    zlib, zlib2_err = plugins['zlib2']
+    if zlib2_err:
+        raise RuntimeError('Failed to load the zlib2 module with error: ' + zlib2_err)
+    del zlib2_err
 
 
 def header_list_to_file(buf):  # {{{
@@ -210,7 +214,7 @@ class RequestData(object):  # {{{
     username = None
 
     def __init__(self, method, path, query, inheaders, request_body_file, outheaders, response_protocol,
-                 static_cache, opts, remote_addr, remote_port, is_local_connection, translator_cache, tdir):
+                 static_cache, opts, remote_addr, remote_port, is_local_connection, translator_cache, tdir, forwarded_for):
 
         (self.method, self.path, self.query, self.inheaders, self.request_body_file, self.outheaders,
          self.response_protocol, self.static_cache, self.translator_cache) = (
@@ -218,6 +222,7 @@ class RequestData(object):  # {{{
             response_protocol, static_cache, translator_cache
         )
         self.remote_addr, self.remote_port, self.is_local_connection = remote_addr, remote_port, is_local_connection
+        self.forwarded_for = forwarded_for
         self.opts = opts
         self.status_code = httplib.OK
         self.outcookie = Cookie()
@@ -432,7 +437,7 @@ class HTTPConnection(HTTPRequest):
             self.method, self.path, self.query, inheaders, request_body_file,
             outheaders, self.response_protocol, self.static_cache, self.opts,
             self.remote_addr, self.remote_port, self.is_local_connection,
-            self.translator_cache, self.tdir
+            self.translator_cache, self.tdir, self.forwarded_for
         )
         self.queue_job(self.run_request_handler, data)
 
@@ -477,7 +482,7 @@ class HTTPConnection(HTTPRequest):
                 if e.log:
                     self.log.warn(e.log)
                 return self.simple_response(e.http_code, msg=e.message or '', close_after_response=e.close_connection, extra_headers=eh)
-            raise etype, e, tb
+            reraise(etype, e, tb)
 
         data, output = result
         output = self.finalize_output(output, data, self.method is HTTP1)
@@ -551,7 +556,7 @@ class HTTPConnection(HTTPRequest):
             return
         if isinstance(output, ReadableOutput):
             self.use_sendfile = output.use_sendfile and self.opts.use_sendfile and sendfile_to_socket_async is not None and self.ssl_context is None
-            # sendfile() does nto work with SSL sockets since encryption has to
+            # sendfile() does not work with SSL sockets since encryption has to
             # be done in userspace
             if output.ranges is not None:
                 if isinstance(output.ranges, Range):

@@ -1,9 +1,10 @@
+from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 
 ''' Post installation script for linux '''
 
-import sys, os, cPickle, textwrap, stat, errno
+import sys, os, textwrap, stat, errno
 from subprocess import check_call, check_output
 from functools import partial
 
@@ -329,7 +330,7 @@ class ZshCompleter(object):  # {{{
                                 '--input-encoding' not in o._long_opts]
                 if not opts:
                     continue
-                opts = '\\\n  '.join(tuple(self.get_options(opts)))
+                opts = '\\\n  '.join(tuple(sorted(self.get_options(opts))))
                 w('\n%s() {'%(func%fmt))
                 w('\n  _arguments -s \\\n  ' + opts)
                 w('\n}\n')
@@ -372,27 +373,27 @@ class ZshCompleter(object):  # {{{
             opt_lines.append(ostrings + help_txt + ' \\')
         opt_lines = ('\n' + (' ' * 8)).join(opt_lines)
 
-        f.write((ur'''
+        f.write((u'''
 _ebook_edit() {
     local curcontext="$curcontext" state line ebookfile expl
     typeset -A opt_args
 
-    _arguments -C -s \
+    _arguments -C -s \\
         %s
-        "1:ebook file:_files -g '(#i)*.(%s)'" \
+        "1:ebook file:_files -g '(#i)*.(%s)'" \\
         '*:file in ebook:->files' && return 0
 
     case $state in
         files)
             ebookfile=${~${(Q)line[1]}}
 
-            if [[ -f "$ebookfile" && "$ebookfile" =~ '\.[eE][pP][uU][bB]$' ]]; then
+            if [[ -f "$ebookfile" && "$ebookfile" =~ '\\.[eE][pP][uU][bB]$' ]]; then
                 _zip_cache_name="$ebookfile"
                 _zip_cache_list=( ${(f)"$(zipinfo -1 $_zip_cache_name 2>/dev/null)"} )
             else
                 return 1
             fi
-            _wanted files expl 'file from ebook' \
+            _wanted files expl 'file from ebook' \\
             _multi_parts / _zip_cache_list && return 0
             ;;
     esac
@@ -644,12 +645,12 @@ class PostInstall:
         import traceback
         tb = '\n\t'.join(traceback.format_exc().splitlines())
         self.info('\t'+tb)
-        print
+        print()
 
     def warning(self, *args, **kwargs):
-        print '\n'+'_'*20, 'WARNING','_'*20
+        print('\n'+'_'*20, 'WARNING','_'*20)
         prints(*args, **kwargs)
-        print '_'*50
+        print('_'*50)
         print ('\n')
         self.warnings.append((args, kwargs))
         sys.stdout.flush()
@@ -671,7 +672,8 @@ class PostInstall:
         self.opts.staging_etc = '/etc' if self.opts.staging_root == '/usr' else \
                 os.path.join(self.opts.staging_root, 'etc')
 
-        scripts = cPickle.loads(P('scripts.pickle', data=True))
+        from calibre.utils.serialize import msgpack_loads
+        scripts = msgpack_loads(P('scripts.calibre_msgpack', data=True))
         self.manifest = manifest or []
         if getattr(sys, 'frozen_path', False):
             if os.access(self.opts.staging_bindir, os.W_OK):
@@ -715,7 +717,7 @@ class PostInstall:
             self.info('\n\nThere were %d warnings\n'%len(self.warnings))
             for args, kwargs in self.warnings:
                 self.info('*', *args, **kwargs)
-                print
+                print()
 
     def create_uninstaller(self):
         base = self.opts.staging_bindir
@@ -753,7 +755,7 @@ class PostInstall:
             write_completion(bash_comp_dest, zsh)
         except TypeError as err:
             if 'resolve_entities' in str(err):
-                print 'You need python-lxml >= 2.0.5 for calibre'
+                print('You need python-lxml >= 2.0.5 for calibre')
                 sys.exit(1)
             raise
         except EnvironmentError as e:
@@ -841,7 +843,7 @@ class PostInstall:
                 f.close()
                 des = ('calibre-gui.desktop', 'calibre-lrfviewer.desktop',
                         'calibre-ebook-viewer.desktop', 'calibre-ebook-edit.desktop')
-                appdata = os.path.join(os.path.dirname(self.opts.staging_sharedir), 'appdata')
+                appdata = os.path.join(os.path.dirname(self.opts.staging_sharedir), 'metainfo')
                 if not os.path.exists(appdata):
                     try:
                         os.mkdir(appdata)
@@ -1017,9 +1019,9 @@ ETWEAK = '''\
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=Edit E-book
-GenericName=Edit E-books
-Comment=Edit e-books in various formats
+Name=E-book Editor
+GenericName=Editor for E-books
+Comment=Edit E-books in various formats
 TryExec=ebook-edit
 Exec=ebook-edit --detach %f
 Icon=calibre-ebook-edit
@@ -1037,6 +1039,7 @@ TryExec=calibre
 Exec=calibre --detach %F
 Icon=calibre-gui
 Categories=Office;
+X-GNOME-UsesNotifications=true
 '''
 
 
@@ -1092,7 +1095,7 @@ def write_appdata(key, entry, base, translators):
     fpath = os.path.join(base, '%s.appdata.xml' % key)
     screenshots = E.screenshots()
     for w, h, url in entry['screenshots']:
-        s = E.screenshot(url, width=str(w), height=str(h))
+        s = E.screenshot(E.image(url, width=str(w), height=str(h)))
         screenshots.append(s)
     screenshots[0].set('type', 'default')
     description = E.description()
@@ -1104,8 +1107,8 @@ def write_appdata(key, entry, base, translators):
                 description.append(E.p(tp))
                 description[-1].set('{http://www.w3.org/XML/1998/namespace}lang', lang)
 
-    root = E.application(
-        E.id(key + '.desktop', type='desktop'),
+    root = E.component(
+        E.id(key + '.desktop'),
         E.name(entry['name']),
         E.metadata_license('CC0-1.0'),
         E.project_license('GPL-3.0'),
@@ -1113,6 +1116,7 @@ def write_appdata(key, entry, base, translators):
         description,
         E.url('https://calibre-ebook.com', type='homepage'),
         screenshots,
+        type='desktop'
     )
     for lang, t in translators.iteritems():
         tp = t.ugettext(entry['summary'])

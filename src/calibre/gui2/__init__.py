@@ -4,29 +4,30 @@ __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
 import os, sys, Queue, threading, glob, signal
 from contextlib import contextmanager
 from threading import RLock, Lock
-from urllib import unquote
 from PyQt5.QtWidgets import QStyle  # Gives a nicer error message than import from Qt
 from PyQt5.Qt import (
     QFileInfo, QObject, QBuffer, Qt, QByteArray, QTranslator, QSocketNotifier,
     QCoreApplication, QThread, QEvent, QTimer, pyqtSignal, QDateTime, QFontMetrics,
     QDesktopServices, QFileDialog, QFileIconProvider, QSettings, QIcon, QStringListModel,
-    QApplication, QDialog, QUrl, QFont, QFontDatabase, QLocale, QFontInfo)
+    QApplication, QDialog, QUrl, QFont, QFontDatabase, QLocale, QFontInfo, QT_VERSION)
 
-from calibre import prints
+from calibre import prints, as_unicode
 from calibre.constants import (islinux, iswindows, isbsd, isfrozen, isosx, is_running_from_develop,
         plugins, config_dir, filesystem_encoding, isxp, DEBUG, __version__, __appname__ as APP_UID)
 from calibre.ptempfile import base_dir
+from calibre.gui2.linux_file_dialogs import check_for_linux_native_dialogs, linux_native_dialog
+from calibre.gui2.qt_file_dialogs import FileDialog
 from calibre.utils.config import Config, ConfigProxy, dynamic, JSONConfig
 from calibre.ebooks.metadata import MetaInformation
 from calibre.utils.date import UNDEFINED_DATE
 from calibre.utils.localization import get_lang
-from calibre.utils.filenames import expanduser
 from calibre.utils.file_type_icons import EXT_MAP
 
 try:
     NO_URL_FORMATTING = QUrl.None_
 except AttributeError:
-    NO_URL_FORMATTING = QUrl.None
+    NO_URL_FORMATTING = getattr(QUrl, 'None')
+
 
 # Setup gprefs {{{
 gprefs = JSONConfig('gui')
@@ -87,6 +88,13 @@ def create_defs():
             'Similar Books', 'Tweak ePub', None, 'Remove Books',
             )
 
+    defs['action-layout-context-menu-split'] = (
+            'Edit Metadata', 'Send To Device', 'Save To Disk',
+            'Connect Share', 'Copy To Library', None,
+            'Convert Books', 'View', 'Open Folder', 'Show Book Details',
+            'Similar Books', 'Tweak ePub', None, 'Remove Books',
+            )
+
     defs['action-layout-context-menu-device'] = (
             'View', 'Save To Disk', None, 'Remove Books', None,
             'Add To Library', 'Edit Collections', 'Match Books'
@@ -139,6 +147,7 @@ def create_defs():
     defs['cover_grid_show_title'] = False
     defs['cover_grid_texture'] = None
     defs['show_vl_tabs'] = False
+    defs['vl_tabs_closable'] = True
     defs['show_highlight_toggle_button'] = False
     defs['add_comments_to_email'] = False
     defs['cb_preserve_aspect_ratio'] = False
@@ -148,6 +157,7 @@ def create_defs():
     defs['emblem_position'] = 'left'
     defs['metadata_diff_mark_rejected'] = False
     defs['tag_browser_show_counts'] = True
+    defs['tag_browser_show_tooltips'] = True
     defs['row_numbers_in_book_list'] = True
     defs['hidpi'] = 'auto'
     defs['tag_browser_item_padding'] = 0.5
@@ -156,6 +166,11 @@ def create_defs():
     defs['qv_dclick_changes_column'] = True
     defs['qv_retkey_changes_column'] = True
     defs['qv_follows_column'] = False
+    defs['book_details_narrow_comments_layout'] = 'float'
+    defs['book_list_split'] = False
+    defs['wrap_toolbar_text'] = False
+    defs['dnd_merge'] = True
+    defs['booklist_grid'] = False
 
 
 create_defs()
@@ -337,9 +352,9 @@ def extension(path):
 def warning_dialog(parent, title, msg, det_msg='', show=False,
         show_copy_button=True):
     from calibre.gui2.dialogs.message_box import MessageBox
-    d = MessageBox(MessageBox.WARNING, _('WARNING:')+ ' ' +
-            title, msg, det_msg, parent=parent,
-            show_copy_button=show_copy_button)
+    d = MessageBox(MessageBox.WARNING, _('WARNING:'
+        )+ ' ' + title, msg, det_msg, parent=parent,
+        show_copy_button=show_copy_button)
     if show:
         return d.exec_()
     return d
@@ -348,9 +363,9 @@ def warning_dialog(parent, title, msg, det_msg='', show=False,
 def error_dialog(parent, title, msg, det_msg='', show=False,
         show_copy_button=True):
     from calibre.gui2.dialogs.message_box import MessageBox
-    d = MessageBox(MessageBox.ERROR, _('ERROR:')+ ' ' +
-            title, msg, det_msg, parent=parent,
-                    show_copy_button=show_copy_button)
+    d = MessageBox(MessageBox.ERROR, _('ERROR:'
+        ) + ' ' + title, msg, det_msg, parent=parent,
+        show_copy_button=show_copy_button)
     if show:
         return d.exec_()
     return d
@@ -613,198 +628,22 @@ def file_icon_provider():
     return _file_icon_provider
 
 
-def select_initial_dir(q):
-    while q:
-        c = os.path.dirname(q)
-        if c == q:
-            break
-        if os.path.exists(c):
-            return c
-        q = c
-    return expanduser(u'~')
-
-
-class FileDialog(QObject):
-
-    def __init__(self, title=_('Choose Files'),
-                       filters=[],
-                       add_all_files_filter=True,
-                       parent=None,
-                       modal=True,
-                       name='',
-                       mode=QFileDialog.ExistingFiles,
-                       default_dir=u'~',
-                       no_save_dir=False,
-                       combine_file_and_saved_dir=False
-                       ):
-        QObject.__init__(self)
-        ftext = ''
-        if filters:
-            for filter in filters:
-                text, extensions = filter
-                extensions = ['*'+(i if i.startswith('.') else '.'+i) for i in
-                        extensions]
-                ftext += '%s (%s);;'%(text, ' '.join(extensions))
-        if add_all_files_filter or not ftext:
-            ftext += 'All files (*)'
-        if ftext.endswith(';;'):
-            ftext = ftext[:-2]
-
-        self.dialog_name = name if name else 'dialog_' + title
-        self.selected_files = None
-        self.fd = None
-
-        if combine_file_and_saved_dir:
-            bn = os.path.basename(default_dir)
-            prev = dynamic.get(self.dialog_name,
-                    expanduser(u'~'))
-            if os.path.exists(prev):
-                if os.path.isfile(prev):
-                    prev = os.path.dirname(prev)
-            else:
-                prev = expanduser(u'~')
-            initial_dir = os.path.join(prev, bn)
-        elif no_save_dir:
-            initial_dir = expanduser(default_dir)
-        else:
-            initial_dir = dynamic.get(self.dialog_name,
-                    expanduser(default_dir))
-        if not isinstance(initial_dir, basestring):
-            initial_dir = expanduser(default_dir)
-        if not initial_dir or (not os.path.exists(initial_dir) and not (
-                mode == QFileDialog.AnyFile and (no_save_dir or combine_file_and_saved_dir))):
-            initial_dir = select_initial_dir(initial_dir)
-        self.selected_files = []
-        use_native_dialog = 'CALIBRE_NO_NATIVE_FILEDIALOGS' not in os.environ
-        with sanitize_env_vars():
-            opts = QFileDialog.Option()
-            if not use_native_dialog:
-                opts |= QFileDialog.DontUseNativeDialog
-            if mode == QFileDialog.AnyFile:
-                f = QFileDialog.getSaveFileName(parent, title,
-                    initial_dir, ftext, "", opts)
-                if f and f[0]:
-                    self.selected_files.append(f[0])
-            elif mode == QFileDialog.ExistingFile:
-                f = QFileDialog.getOpenFileName(parent, title,
-                    initial_dir, ftext, "", opts)
-                if f and f[0] and os.path.exists(f[0]):
-                    self.selected_files.append(f[0])
-            elif mode == QFileDialog.ExistingFiles:
-                fs = QFileDialog.getOpenFileNames(parent, title, initial_dir,
-                        ftext, "", opts)
-                if fs and fs[0]:
-                    for f in fs[0]:
-                        f = unicode(f)
-                        if not f:
-                            continue
-                        if not os.path.exists(f):
-                            # QFileDialog for some reason quotes spaces
-                            # on linux if there is more than one space in a row
-                            f = unquote(f)
-                        if f and os.path.exists(f):
-                            self.selected_files.append(f)
-            else:
-                if mode == QFileDialog.Directory:
-                    opts |= QFileDialog.ShowDirsOnly
-                f = unicode(QFileDialog.getExistingDirectory(parent, title, initial_dir, opts))
-                if os.path.exists(f):
-                    self.selected_files.append(f)
-        if self.selected_files:
-            self.selected_files = [unicode(q) for q in self.selected_files]
-            saved_loc = self.selected_files[0]
-            if os.path.isfile(saved_loc):
-                saved_loc = os.path.dirname(saved_loc)
-            if not no_save_dir:
-                dynamic[self.dialog_name] = saved_loc
-        self.accepted = bool(self.selected_files)
-
-    def get_files(self):
-        if self.selected_files is None:
-            return tuple(os.path.abspath(unicode(i)) for i in self.fd.selectedFiles())
-        return tuple(self.selected_files)
-
-
 has_windows_file_dialog_helper = False
 if iswindows and 'CALIBRE_NO_NATIVE_FILEDIALOGS' not in os.environ:
     from calibre.gui2.win_file_dialogs import is_ok as has_windows_file_dialog_helper
     has_windows_file_dialog_helper = has_windows_file_dialog_helper()
+has_linux_file_dialog_helper = False
+if not iswindows and not isosx and 'CALIBRE_NO_NATIVE_FILEDIALOGS' not in os.environ and getattr(sys, 'frozen', False):
+    has_linux_file_dialog_helper = check_for_linux_native_dialogs()
+
 if has_windows_file_dialog_helper:
     from calibre.gui2.win_file_dialogs import choose_files, choose_images, choose_dir, choose_save_file
+elif has_linux_file_dialog_helper:
+    choose_dir, choose_files, choose_save_file, choose_images = map(
+        linux_native_dialog, 'dir files save_file images'.split())
 else:
-
-    def choose_dir(window, name, title, default_dir='~', no_save_dir=False):
-        fd = FileDialog(title=title, filters=[], add_all_files_filter=False,
-                parent=window, name=name, mode=QFileDialog.Directory,
-                default_dir=default_dir, no_save_dir=no_save_dir)
-        dir = fd.get_files()
-        fd.setParent(None)
-        if dir:
-            return dir[0]
-
-    def choose_files(window, name, title,
-                    filters=[], all_files=True, select_only_single_file=False, default_dir=u'~'):
-        '''
-        Ask user to choose a bunch of files.
-        :param name: Unique dialog name used to store the opened directory
-        :param title: Title to show in dialogs titlebar
-        :param filters: list of allowable extensions. Each element of the list
-                        must be a 2-tuple with first element a string describing
-                        the type of files to be filtered and second element a list
-                        of extensions.
-        :param all_files: If True add All files to filters.
-        :param select_only_single_file: If True only one file can be selected
-        '''
-        mode = QFileDialog.ExistingFile if select_only_single_file else QFileDialog.ExistingFiles
-        fd = FileDialog(title=title, name=name, filters=filters, default_dir=default_dir,
-                        parent=window, add_all_files_filter=all_files, mode=mode,
-                        )
-        fd.setParent(None)
-        if fd.accepted:
-            return fd.get_files()
-        return None
-
-    def choose_save_file(window, name, title, filters=[], all_files=True, initial_path=None, initial_filename=None):
-        '''
-        Ask user to choose a file to save to. Can be a non-existent file.
-        :param filters: list of allowable extensions. Each element of the list
-                        must be a 2-tuple with first element a string describing
-                        the type of files to be filtered and second element a list
-                        of extensions.
-        :param all_files: If True add All files to filters.
-        :param initial_path: The initially selected path (does not need to exist). Cannot be used with initial_filename.
-        :param initial_filename: If specified, the initially selected path is this filename in the previously used directory. Cannot be used with initial_path.
-        '''
-        kwargs = dict(title=title, name=name, filters=filters,
-                        parent=window, add_all_files_filter=all_files, mode=QFileDialog.AnyFile)
-        if initial_path is not None:
-            kwargs['no_save_dir'] = True
-            kwargs['default_dir'] = initial_path
-        elif initial_filename is not None:
-            kwargs['combine_file_and_saved_dir'] = True
-            kwargs['default_dir'] = initial_filename
-        fd = FileDialog(**kwargs)
-        fd.setParent(None)
-        ans = None
-        if fd.accepted:
-            ans = fd.get_files()
-            if ans:
-                ans = ans[0]
-        return ans
-
-    def choose_images(window, name, title, select_only_single_file=True, formats=None):
-        mode = QFileDialog.ExistingFile if select_only_single_file else QFileDialog.ExistingFiles
-        if formats is None:
-            from calibre.gui2.dnd import image_extensions
-            formats = image_extensions()
-        fd = FileDialog(title=title, name=name,
-                        filters=[(_('Images'), list(formats))],
-                        parent=window, add_all_files_filter=False, mode=mode,
-                        )
-        fd.setParent(None)
-        if fd.accepted:
-            return fd.get_files()
-        return None
+    from calibre.gui2.qt_file_dialogs import choose_files, choose_images, choose_dir, choose_save_file
+    choose_files, choose_images, choose_dir, choose_save_file
 
 
 def choose_osx_app(window, name, title, default_dir='/Applications'):
@@ -960,6 +799,8 @@ class Application(QApplication):
 
     def __init__(self, args, force_calibre_style=False, override_program_name=None, headless=False, color_prefs=gprefs):
         self.file_event_hook = None
+        if isfrozen and QT_VERSION <= 0x050700 and 'wayland' in os.environ.get('QT_QPA_PLATFORM', ''):
+            os.environ['QT_QPA_PLATFORM'] = 'xcb'
         if override_program_name:
             args = [override_program_name] + args[1:]
         if headless:
@@ -978,6 +819,7 @@ class Application(QApplication):
         QApplication.setApplicationName(APP_UID)
         QApplication.__init__(self, qargs)
         self.setAttribute(Qt.AA_UseHighDpiPixmaps)
+        self.setAttribute(Qt.AA_SynthesizeTouchForUnhandledMouseEvents, False)
         try:
             base_dir()
         except EnvironmentError as err:
@@ -1006,6 +848,11 @@ class Application(QApplication):
             if s is not None:
                 font.setStretch(s)
             QApplication.setFont(font)
+        if not isosx and not iswindows:
+            # Qt 5.10.1 on Linux resets the global font on first event loop tick.
+            # So workaround it by setting the font once again in a timer.
+            font_from_prefs = self.font()
+            QTimer.singleShot(0, lambda : QApplication.setFont(font_from_prefs))
         self.line_height = max(12, QFontMetrics(self.font()).lineSpacing())
 
         dl = QLocale(get_lang())
@@ -1085,7 +932,7 @@ class Application(QApplication):
         if iswindows or isosx:
             using_calibre_style = gprefs['ui_style'] != 'system'
         else:
-            using_calibre_style = 'CALIBRE_USE_SYSTEM_THEME' not in os.environ
+            using_calibre_style = os.environ.get('CALIBRE_USE_SYSTEM_THEME', '0') == '0'
         if force_calibre_style:
             using_calibre_style = True
         self.using_calibre_style = using_calibre_style
@@ -1113,6 +960,7 @@ class Application(QApplication):
             'MessageBoxCritical': u'dialog_error.png',
             'MessageBoxQuestion': u'dialog_question.png',
             'BrowserReload': u'view-refresh.png',
+            'LineEditClearButton': u'clear_left.png',
         }.iteritems():
             if v not in pcache:
                 p = I(v)
@@ -1460,3 +1308,50 @@ def secure_web_page(qwebpage_or_qwebsettings):
 
 empty_model = QStringListModel([''])
 empty_index = empty_model.index(0)
+
+
+def get_app_uid():
+    import ctypes
+    from ctypes import wintypes
+    lpBuffer = wintypes.LPWSTR()
+    try:
+        AppUserModelID = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID
+    except Exception:  # Vista has no app uids
+        return
+    AppUserModelID.argtypes = [wintypes.LPWSTR]
+    AppUserModelID.restype = wintypes.HRESULT
+    try:
+        AppUserModelID(ctypes.cast(ctypes.byref(lpBuffer), wintypes.LPWSTR))
+    except Exception:
+        return
+    appid = lpBuffer.value
+    ctypes.windll.ole32.CoTaskMemFree(lpBuffer)
+    return appid
+
+
+def set_app_uid(val):
+    import ctypes
+    from ctypes import wintypes
+    try:
+        AppUserModelID = ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID
+    except Exception:  # Vista has no app uids
+        return False
+    AppUserModelID.argtypes = [wintypes.LPCWSTR]
+    AppUserModelID.restype = wintypes.HRESULT
+    try:
+        AppUserModelID(unicode(val))
+    except Exception as err:
+        prints(u'Failed to set app uid with error:', as_unicode(err))
+        return False
+    return True
+
+
+def add_to_recent_docs(path):
+    from win32com.shell import shell, shellcon
+    path = unicode(path)
+    app_id = get_app_uid()
+    if app_id is None:
+        shell.SHAddToRecentDocs(shellcon.SHARD_PATHW, path)
+    else:
+        item = shell.SHCreateItemFromParsingName(path, None, shell.IID_IShellItem)
+        shell.SHAddToRecentDocs(shellcon.SHARD_APPIDINFO, (item, app_id))

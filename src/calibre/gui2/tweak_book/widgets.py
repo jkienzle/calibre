@@ -20,6 +20,7 @@ from PyQt5.Qt import (
 
 from calibre import prepare_string_for_xml, human_readable
 from calibre.constants import iswindows
+from calibre.ebooks.oeb.polish.cover import get_raster_cover_name
 from calibre.ebooks.oeb.polish.utils import lead_text, guess_type
 from calibre.gui2 import error_dialog, choose_files, choose_save_file, info_dialog, choose_images
 from calibre.gui2.tweak_book import tprefs, current_container
@@ -188,6 +189,7 @@ class ImportForeign(Dialog):  # {{{
 
     def setup_ui(self):
         self.l = l = QFormLayout(self)
+        l.setFieldGrowthPolicy(l.AllNonFixedFieldsGrow)
         self.setLayout(l)
 
         la = self.la = QLabel(_(
@@ -205,7 +207,7 @@ class ImportForeign(Dialog):  # {{{
         b.setIcon(QIcon(I('document_open.png')))
         b.setText(_('Choose file'))
         h1.addWidget(b)
-        l.addRow(_('Source file'), h1)
+        l.addRow(_('Source file:'), h1)
         b.clicked.connect(self.choose_source)
         b.setFocus(Qt.OtherFocusReason)
 
@@ -217,7 +219,7 @@ class ImportForeign(Dialog):  # {{{
         b.setIcon(QIcon(I('document_open.png')))
         b.setText(_('Choose file'))
         h1.addWidget(b)
-        l.addRow(_('Destination file'), h1)
+        l.addRow(_('Destination file:'), h1)
         b.clicked.connect(self.choose_destination)
 
         l.addRow(self.bb)
@@ -568,7 +570,7 @@ class NamesModel(QAbstractListModel):
 def create_filterable_names_list(names, filter_text=None, parent=None, model=NamesModel):
     nl = QListView(parent)
     nl.m = m = model(names, parent=nl)
-    m.filtered.connect(lambda all_items: nl.scrollTo(m.index(0)))
+    connect_lambda(m.filtered, nl, lambda nl, all_items: nl.scrollTo(m.index(0)))
     nl.setModel(m)
     if model is NamesModel:
         nl.d = NamesDelegate(nl)
@@ -727,7 +729,7 @@ class InsertLink(Dialog):
         c = get_container(sys.argv[-1], tweak_mode=True)
         d = cls(c, next(c.spine_names)[0])
         if d.exec_() == d.Accepted:
-            print (d.href, d.text)
+            print(d.href, d.text)
 
 # }}}
 
@@ -1080,7 +1082,11 @@ class AddCover(Dialog):
                        ' to the image.')))
         p.setChecked(tprefs['add_cover_preserve_aspect_ratio'])
         p.setVisible(self.container.book_type != 'azw3')
-        p.stateChanged.connect(lambda s:tprefs.set('add_cover_preserve_aspect_ratio', s == Qt.Checked))
+
+        def on_state_change(s):
+            tprefs.set('add_cover_preserve_aspect_ratio', s == Qt.Checked)
+
+        p.stateChanged.connect(on_state_change)
         self.info_label = il = QLabel('\xa0')
         h.addWidget(p), h.addStretch(1), h.addWidget(il)
         l.addLayout(h)
@@ -1091,6 +1097,11 @@ class AddCover(Dialog):
         b.setIcon(QIcon(I('document_open.png')))
         self.names.setFocus(Qt.OtherFocusReason)
         self.names.selectionModel().currentChanged.connect(self.current_image_changed)
+        cname = get_raster_cover_name(self.container)
+        if cname:
+            row = self.names.model().find_name(cname)
+            if row > -1:
+                self.names.setCurrentIndex(self.names.model().index(row))
 
     def double_clicked(self):
         self.accept()

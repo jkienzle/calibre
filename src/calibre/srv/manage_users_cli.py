@@ -70,16 +70,17 @@ def manage_users_cli(path=None):
         return get_valid(_('Enter the username'), validate)
 
     def get_pass(username):
+        from calibre.utils.unicode_getpass import getpass
+
         while True:
-            from getpass import getpass
             one = getpass(
-                _('Enter the new password for %s: ') % username).decode(enc)
+                _('Enter the new password for %s: ') % username)
             if not one:
                 prints(_('Empty passwords are not allowed'))
                 continue
             two = getpass(
                 _('Re-enter the new password for %s, to verify: ') % username
-            ).decode(enc)
+            )
             if one != two:
                 prints(_('Passwords do not match'))
                 continue
@@ -139,7 +140,7 @@ def manage_users_cli(path=None):
             for k, v in r['library_restrictions'].iteritems():
                 prints(k + ':', v)
         else:
-            prints(_('{} has the no additional per-library restrictions'))
+            prints(_('{} has no additional per-library restrictions').format(username))
         c = choice(
             choices=[
                 _('Allow access to all libraries'),
