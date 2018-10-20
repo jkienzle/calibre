@@ -444,7 +444,7 @@ class BooksView(QTableView):  # {{{
                 col_font = self._model.styled_columns.get(col)
                 m = ans.addMenu(_('Change font style for %s') % name)
                 for x, t, f in (
-                        ('normal', _('Normal font'), None), ('bold', _('Bold Font'), self._model.bold_font),
+                        ('normal', _('Normal font'), None), ('bold', _('Bold font'), self._model.bold_font),
                         ('italic', _('Italic font'), self._model.italic_font), ('bi', _('Bold and Italic font'), self._model.bi_font),
                 ):
                     a = m.addAction(t, partial(handler, action='font_' + x))
@@ -489,9 +489,14 @@ class BooksView(QTableView):  # {{{
         has_context_menu = hasattr(view, 'column_header_context_menu')
         if self.is_library_view and has_context_menu:
             view.column_header_context_menu.addSeparator()
-            view.column_header_context_menu.addAction(
-                _('Un-split the book list') if self.pin_view.isVisible() else _('Split the book list'),
-                partial(self.column_header_context_handler, action='split', column=col or 'title'))
+            if not hasattr(view.column_header_context_menu, 'bl_split_action'):
+                view.column_header_context_menu.bl_split_action = view.column_header_context_menu.addAction(
+                        'xxx', partial(self.column_header_context_handler, action='split', column='title'))
+            ac = view.column_header_context_menu.bl_split_action
+            if self.pin_view.isVisible():
+                ac.setText(_('Un-split the book list'))
+            else:
+                ac.setText(_('Split the book list'))
         if has_context_menu:
             view.column_header_context_menu.popup(view.column_header.mapToGlobal(pos))
     # }}}
