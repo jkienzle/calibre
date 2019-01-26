@@ -140,9 +140,16 @@ def cdb_set_fields(ctx, rd, book_id, library_id):
             data = json_loads(raw)
         else:
             raise HTTPBadRequest('Only JSON or msgpack requests are supported')
-        changes, loaded_book_ids = data['changes'], frozenset(map(int, data['loaded_book_ids']))
     except Exception:
         raise HTTPBadRequest('Invalid encoded data')
+    try:
+        changes, loaded_book_ids = data['changes'], frozenset(map(int, data.get('loaded_book_ids', ())))
+        all_dirtied = bool(data.get('all_dirtied'))
+        if not isinstance(changes, dict):
+            raise TypeError('changes must be a dict')
+    except Exception:
+        raise HTTPBadRequest(
+        '''Data must be of the form {'changes': {'title': 'New Title', ...}, 'loaded_book_ids':[book_id1, book_id2, ...]'}''')
     dirtied = set()
     cdata = changes.pop('cover', False)
     if cdata is not False:
@@ -162,4 +169,6 @@ def cdb_set_fields(ctx, rd, book_id, library_id):
     for field, value in changes.iteritems():
         dirtied |= db.set_field(field, {book_id: value})
     ctx.notify_changes(db.backend.library_path, metadata(dirtied))
-    return {bid: book_as_json(db, book_id) for bid in (dirtied & loaded_book_ids) | {book_id}}
+    all_ids = dirtied if all_dirtied else (dirtied & loaded_book_ids)
+    all_ids |= {book_id}
+    return {bid: book_as_json(db, book_id) for bid in all_ids}

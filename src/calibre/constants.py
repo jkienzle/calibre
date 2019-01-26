@@ -6,7 +6,7 @@ from polyglot.builtins import map
 import sys, locale, codecs, os, importlib, collections
 
 __appname__   = u'calibre'
-numeric_version = (3, 33, 1)
+numeric_version = (3, 38, 1)
 __version__   = u'.'.join(map(unicode, numeric_version))
 __author__    = u"Kovid Goyal <kovid@kovidgoyal.net>"
 
@@ -165,7 +165,6 @@ class Plugins(collections.Mapping):
                 'cPalmdoc',
                 'progress_indicator',
                 'chmlib',
-                'chm_extra',
                 'icu',
                 'speedup',
                 'unicode_names',

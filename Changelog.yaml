@@ -6,7 +6,7 @@
 # Also, each release can have new and improved recipes.
 
 # - version: 3.?.?
-#   date: 2018-??-??
+#   date: 2019-??-??
 #
 #   new features:
 #     - title:
@@ -19,6 +19,188 @@
 #
 #   new recipes:
 #     - title:
+
+- version: 3.38.1
+  date: 2019-01-18
+
+  new features:
+    - title: "Tag browser: When using the Find function have unaccented characters match their accented equivalents, if the setting for it is set in Preferences->Searching"
+
+    - title: "DOCX Input: When converting indices, put each sub-entry on its own line."
+      tickets: [1811611]
+
+    - title: "Edit book: Insert hyperlink: Add history for the template"
+
+    - title: "Edit book: Insert hyperlink: Add a few more variables for the link template: _SOURCE_FILENAME_, _DEST_FILENAME_ and _ANCHOR_"
+
+  bug fixes:
+    - title: "Catalogs: Set the language of created catalogs to the calibre interface language instead of English"
+      tickets: [1810936]
+
+    - title: "DOCX Input: Do not display section breaks that have a numbering style applied to them."
+      tickets: [1811611]
+
+    - title: "Content server: Fix listening on :: not also listening on IPv4 interfaces on Windows"
+
+    - title: "DOCX Output: Fix heading styles that have the same font size as body text getting incorrect font sizes after conversion."
+      tickets: [1811616]
+
+    - title: "EPUB/MOBI Catalogs: Fix prefix rules not working when calibre UI language is something other than English"
+
+    - title: "EPUB/MOBI Catalogs: Fix exclusion by tag not working for tags that have spaces in them"
+
+    - title: "Subset fonts: Fix error when trying to subset unicode characters that require two UTF-16 code points on Windows."
+      tickets: [1811224]
+
+    - title: "Content server: Fix option to restrict displayed user field not working in the /opds view"
+
+    - title: "Tag browser: Fix incorrect icon for user categories."
+      tickets: [1810217]
+
+    - title: "PDF Output: Fix conversion failing when fonts with non-English names are used."
+      tickets: [1812218]
+
+    - title: "3.38.1 fixes a typo in 3.38.0 that caused the Polish books function to not work when polishing small numbers of books"
+
+  improved recipes:
+    - Chicago Tribune
+    - New York Times Book Review
+
+  new recipes:
+    - title: Nature
+      author: Jose Ortiz
+
+- version: 3.37.0
+  date: 2019-01-04
+
+  bug fixes:
+    - title: "Switch from cssutils to css_parser for parsing CSS. Fixes various minor, long standing bugs"
+
+    - title: "calibredb: Fix adding books from directories to a remote server running on Windows not working"
+
+    - title: "Edit Book: Fix style attribute on <html> tags not being preserved when editing AZW3 files."
+      tickets: [1810193]
+
+    - title: "Get Books: Use an external browser for Google Books"
+      tickets: [1810205]
+
+    - title: "Saving to disk: Fix errors on Linux/macOS if the title/authors are long enough to make individual path components larger than 255 characters."
+      tickets: [1807525]
+
+    - title: "PDF Input: Fix non-breaking spaces represented as entities in the output of pdftohtml, which breaks some search/replace expressions"
+
+    - title: "Edit book: Fix a crash when mousing over links in an instance of the editor launched standalone on macOS Mojave"
+      tickets: [1805521]
+
+    - title: "Conversion: When converting with font size rescaling disabled, convert font size names to rem unit rather than pt units."
+      tickets: [1809671]
+
+    - title: "Windows: When registering calibre programs as possible handlers for various file types, dont set the AllowSilentDefaultTakeOver registry key"
+
+    - title: "macOS: PDF Output: Fix bold fonts not working on Mojave."
+      tickets: [1799750]
+
+    - title: "Content server: Fix strings with double quotes not being translated."
+
+  improved recipes:
+    - Il Post
+
+- version: 3.36.0
+  date: 2018-12-21
+
+  new features:
+    - title: "Happy Holidays to everyone!"
+
+    - title: "Kobo driver: Add supported for newly released firmware update"
+
+  bug fixes:
+    - title: "Kobo driver: Fix a regression in the last release that caused book title
+to appear as Unknown if metadata management was set to manual in calibre."
+      tickets: [1807914]
+
+    - title: "PDF Output: Do not fail if one of the fonts from the source document has no name metadata"
+
+  improved recipes:
+    - Wall Street Journal
+    - ESPN
+    - Al Jazeera (English)
+
+
+- version: 3.35.0
+  date: 2018-12-07
+
+  new features:
+    - title: "Edit book: Insert hyperlink: Allow specifying a template to control the markup that is inserted for the hyperlink."
+      tickets: [1804250]
+
+    - title: "Metadata download: Add an option (in Preferences->Metadata download) to keep multiple results from individual metadata sources, useful if you prefer to pick the best result by hand and use only one or two metadata sources."
+      tickets: [1802293]
+
+    - title: "KoboTouch driver: Extend the metadata updated in the Kobo device database to all metadata displayed on the device. The update is only done for books already on the device. Needs to be enabled via Preferences->Plugins->Customize the KoboTouch device plugin."
+
+  bug fixes:
+    - title: "E-book viewer: Fix a regression that broke viewing of HTMLZ files"
+      tickets: [1691976]
+
+    - title: "Edit book: Fix suggestions in completion popup not being sorted."
+      tickets: [1803985]
+
+    - title: "Windows: Fix restarting calibre with system tray icon enabled causing duplicate defunct icons in the tray."
+      tickets: [1803034]
+
+  improved recipes:
+    - Wired Magazine
+    - Wall Street Journal
+    - Telepolis
+    - Yahoo News
+    - Associated Press
+    - Mother Jones
+
+  new recipes:
+    - title: Macrobusinness
+      author: 2018robert
+
+    - title: Sports Illustrated
+      author: Kovid Goyal
+
+    - title: Le Peuple Breton
+      author: Lionel Plais
+
+    - title: Mandiner
+      author: pofa
+
+
+- version: 3.34.0
+  date: 2018-11-08
+
+  new features:
+    - title: "Support for the new Kindle Paperwhite 2018"
+      tickets: [1802088]
+
+    - title: "Metadata plugboards: Allow defining plugboards that modify comments metadata as well"
+
+    - title: "E-book viewer: Add a keyboard shortcut (Ctrl+M) for toggling between paged and flow mode"
+
+  bug fixes:
+    - title: "EPUB Input: Handle invalid EPUB files that have their NCX documents in the spine."
+      tickets: [1796497]
+
+    - title: "EPUB3 Input: Handle EPUB 3 files that incorrectly use EPUB 2 markup to identify cover images."
+
+    - title: "Content server: Fix --url-prefix feature not working with book conversion"
+
+  improved recipes:
+    - Business Standard
+    - Washington Post
+    - General Knowledge Today
+    - How To Geek
+
+  new recipes:
+    - title: Arts and Letters Daily
+      author: pjpaulpj
+
+    - title: Magyar Idok
+      author: pofa
 
 - version: 3.33.1
   date: 2018-10-19
@@ -181,7 +363,7 @@
     - title: "Content server: When defining a color scheme for the in browser viewer allow specifying the link color as well as the foreground and background."
       tickets: [1735904]
 
-    - title: "Edit book: Show a popup after a fix all html/beautify all files so the user can easily see what was changed, if needed."
+    - title: "Edit book: Show a popup after a fix all HTML/Beautify all files so the user can easily see what was changed, if needed."
       tickets: [1785482]
 
     - title: "Kindle driver: Create cover thumbnails on the device when transferring KFX format books"
