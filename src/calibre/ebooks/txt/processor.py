@@ -102,25 +102,44 @@ def convert_basic(txt, title='', epub_split_size_kb=0):
 DEFAULT_MD_EXTENSIONS = ('footnotes', 'tables', 'toc')
 
 
-def convert_markdown(txt, title='', extensions=DEFAULT_MD_EXTENSIONS):
-    from calibre.ebooks.conversion.plugins.txt_input import MD_EXTENSIONS
+def create_markdown_object(extensions):
+    # Need to load markdown extensions without relying on pkg_resources
+    import importlib
     from calibre.ebooks.markdown import Markdown
-    extensions = ['calibre.ebooks.markdown.extensions.' + x.lower() for x in extensions if x.lower() in MD_EXTENSIONS]
-    md = Markdown(extensions=extensions)
+    from markdown import Extension
+
+    class NotBrainDeadMarkdown(Markdown):
+        def build_extension(self, ext_name, configs):
+            if '.' in ext_name or ':' in ext_name:
+                return Markdown.build_extension(self, ext_name, configs)
+            ext_name = 'markdown.extensions.' + ext_name
+            module = importlib.import_module(ext_name)
+            if hasattr(module, 'makeExtension'):
+                return module.makeExtension(**configs)
+            for name, x in vars(module).items():
+                if type(x) is type and issubclass(x, Extension) and x is not Extension:
+                    return x(**configs)
+            raise ImportError('No extension class in {}'.format(ext_name))
+
+    from calibre.ebooks.conversion.plugins.txt_input import MD_EXTENSIONS
+    extensions = [x.lower() for x in extensions]
+    extensions = [x for x in extensions if x in MD_EXTENSIONS]
+    md = NotBrainDeadMarkdown(extensions=extensions)
+    return md
+
+
+def convert_markdown(txt, title='', extensions=DEFAULT_MD_EXTENSIONS):
+    md = create_markdown_object(extensions)
     return HTML_TEMPLATE % (title, md.convert(txt))
 
 
 def convert_markdown_with_metadata(txt, title='', extensions=DEFAULT_MD_EXTENSIONS):
-    from calibre.ebooks.conversion.plugins.txt_input import MD_EXTENSIONS
-    from calibre.ebooks.markdown import Markdown
     from calibre.ebooks.metadata.book.base import Metadata
     from calibre.utils.date import parse_only_date
     from calibre.db.write import get_series_values
-    extensions = ['calibre.ebooks.markdown.extensions.' + x.lower() for x in extensions if x.lower() in MD_EXTENSIONS]
-    meta_ext = 'calibre.ebooks.markdown.extensions.meta'
-    if meta_ext not in extensions:
-        extensions.append(meta_ext)
-    md = Markdown(extensions=extensions)
+    if 'meta' not in extensions:
+        extensions.append('meta')
+    md = create_markdown_object(extensions)
     html = md.convert(txt)
     mi = Metadata(title or _('Unknown'))
     m = md.Meta
