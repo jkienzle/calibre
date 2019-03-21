@@ -7,13 +7,14 @@ __license__ = 'GPL v3'
 __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 
 import httplib, sys, inspect, re, time, numbers, json as jsonlib, textwrap
-from urllib import quote as urlquote
 from itertools import izip
 from operator import attrgetter
 
 from calibre.srv.errors import HTTPSimpleResponse, HTTPNotFound, RouteError
 from calibre.srv.utils import http_date
 from calibre.utils.serialize import msgpack_dumps, json_dumps, MSGPACK_MIME
+from polyglot.builtins import unicode_type, range
+from polyglot.urllib import quote as urlquote
 
 default_methods = frozenset(('HEAD', 'GET'))
 
@@ -140,7 +141,7 @@ class Route(object):
                     if '{' in default or '}' in default:
                         raise route_error('The characters {} are not allowed in default values')
                     default = self.defaults[name] = eval(default)
-                    if isinstance(default, (int, long, float)):
+                    if isinstance(default, numbers.Number):
                         self.type_checkers[name] = type(default)
                     if is_sponge and not isinstance(default, type('')):
                         raise route_error('Soak up path component must have a default value of string type')
@@ -201,9 +202,9 @@ class Route(object):
             raise RouteError('The variable(s) %s are not part of the route: %s' % (','.join(unknown), self.endpoint.route))
 
         def quoted(x):
-            if not isinstance(x, unicode) and not isinstance(x, bytes):
-                x = unicode(x)
-            if isinstance(x, unicode):
+            if not isinstance(x, (unicode_type, bytes)):
+                x = unicode_type(x)
+            if isinstance(x, unicode_type):
                 x = x.encode('utf-8')
             return urlquote(x, '')
         args = {k:'' for k in self.defaults}
@@ -258,8 +259,8 @@ class Router(object):
             lsz = max(len(r.matchers) for r in self)
         except ValueError:
             lsz = 0
-        self.min_size_map = {sz:frozenset(r for r in self if r.min_size <= sz) for sz in xrange(lsz + 1)}
-        self.max_size_map = {sz:frozenset(r for r in self if r.max_size >= sz) for sz in xrange(lsz + 1)}
+        self.min_size_map = {sz:frozenset(r for r in self if r.min_size <= sz) for sz in range(lsz + 1)}
+        self.max_size_map = {sz:frozenset(r for r in self if r.max_size >= sz) for sz in range(lsz + 1)}
         self.soak_routes = sorted(frozenset(r for r in self if r.soak_up_extra), key=attrgetter('min_size'), reverse=True)
 
     def find_route(self, path):

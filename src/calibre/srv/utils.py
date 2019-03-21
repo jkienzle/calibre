@@ -9,12 +9,10 @@ __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 import errno, socket, select, os, time
 from Cookie import SimpleCookie
 from contextlib import closing
-from urlparse import parse_qs
 import repr as reprlib
 from email.utils import formatdate
 from operator import itemgetter
-from polyglot.builtins import map
-from urllib import quote as urlquote
+from polyglot.builtins import map, unicode_type, range
 from binascii import hexlify, unhexlify
 
 from calibre import prints
@@ -25,6 +23,7 @@ from calibre.utils.localization import get_translator
 from calibre.utils.socket_inheritance import set_socket_inherit
 from calibre.utils.logging import ThreadSafeLog
 from calibre.utils.shared_file import share_open, raise_winerror
+from polyglot.urllib import parse_qs, quote as urlquote
 
 HTTP1  = 'HTTP/1.0'
 HTTP11 = 'HTTP/1.1'
@@ -287,7 +286,7 @@ def encode_path(*components):
 
 def encode_name(name):
     'Encode a name (arbitrary string) as URL safe characters. See decode_name() also.'
-    if isinstance(name, unicode):
+    if isinstance(name, unicode_type):
         name = name.encode('utf-8')
     return hexlify(name)
 
@@ -370,7 +369,7 @@ class RotatingStream(object):
         if not self.max_size or self.current_pos <= self.max_size or self.filename in ('/dev/stdout', '/dev/stderr'):
             return
         self.stream.close()
-        for i in xrange(self.history - 1, 0, -1):
+        for i in range(self.history - 1, 0, -1):
             src, dest = '%s.%d' % (self.filename, i), '%s.%d' % (self.filename, i+1)
             self.rename(src, dest)
         self.rename(self.filename, '%s.%d' % (self.filename, 1))

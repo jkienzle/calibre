@@ -8,6 +8,7 @@ import re, cStringIO, codecs
 
 from calibre import force_unicode
 from calibre.ebooks.metadata import MetaInformation, string_to_authors
+from polyglot.builtins import codepoint_to_chr, unicode_type, string_or_bytes
 
 title_pat    = re.compile(r'\{\\info.*?\{\\title(.*?)(?<!\\)\}', re.DOTALL)
 author_pat   = re.compile(r'\{\\info.*?\{\\author(.*?)(?<!\\)\}', re.DOTALL)
@@ -18,7 +19,7 @@ publisher_pat = re.compile(r'\{\\info.*?\{\\manager(.*?)(?<!\\)\}', re.DOTALL)
 
 def get_document_info(stream):
     """
-    Extract the \info block from an RTF file.
+    Extract the \\info block from an RTF file.
     Return the info block as a string and the position in the file at which it
     starts.
     @param stream: File like object pointing to the RTF file.
@@ -75,7 +76,7 @@ def detect_codepage(stream):
 
 
 def encode(unistr):
-    if not isinstance(unistr, unicode):
+    if not isinstance(unistr, unicode_type):
         unistr = force_unicode(unistr)
     return ''.join([str(c) if ord(c) < 128 else '\\u' + str(ord(c)) + '?' for c in unistr])
 
@@ -88,7 +89,7 @@ def decode(raw, codec):
         raw = raw.decode(codec)
 
     def uni(match):
-        return unichr(int(match.group(1)))
+        return codepoint_to_chr(int(match.group(1)))
     raw = re.sub(r'\\u([0-9]{3,4}).', uni, raw)
     return raw
 
@@ -145,7 +146,7 @@ def create_metadata(stream, options):
         md.append(r'{\title %s}'%(title,))
     if options.authors:
         au = options.authors
-        if not isinstance(au, basestring):
+        if not isinstance(au, string_or_bytes):
             au = u', '.join(au)
         author = encode(au)
         md.append(r'{\author %s}'%(author,))
@@ -232,4 +233,3 @@ def set_metadata(stream, options):
         stream.truncate()
         stream.write(src)
         stream.write(after)
-

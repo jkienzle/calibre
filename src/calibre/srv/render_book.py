@@ -9,9 +9,7 @@ from base64 import standard_b64encode, standard_b64decode
 from collections import defaultdict, OrderedDict
 from itertools import count
 from functools import partial
-from polyglot.builtins import map
-from urlparse import urlparse
-from urllib import quote
+from polyglot.builtins import map, unicode_type
 
 from css_parser import replaceUrls
 from css_parser.css import CSSRule
@@ -30,6 +28,7 @@ from calibre.ebooks.oeb.polish.toc import get_toc, get_landmarks
 from calibre.ebooks.oeb.polish.utils import guess_type
 from calibre.utils.short_uuid import uuid4
 from calibre.utils.logging import default_log
+from polyglot.urllib import quote, urlparse
 
 RENDER_VERSION = 1
 
@@ -325,7 +324,7 @@ class Container(ContainerBase):
                     frag = urlunquote(frag)
                     url = resource_template.format(encode_url(name, frag))
                 else:
-                    if isinstance(name, unicode):
+                    if isinstance(name, unicode_type):
                         name = name.encode('utf-8')
                     url = 'missing:' + force_unicode(quote(name), 'utf-8')
                 changed.add(base)

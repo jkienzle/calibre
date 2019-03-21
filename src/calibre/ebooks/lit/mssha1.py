@@ -9,6 +9,7 @@ __license__   = 'GPL v3'
 __copyright__ = '2008, Marshall T. Vandegrift <llasram@gmail.com>'
 
 import struct, copy
+from polyglot.builtins import range, long_type
 
 # ======================================================================
 # Bit-Manipulation helpers
@@ -61,10 +62,10 @@ def _bytelist2longBigEndian(list):
     j = 0
     i = 0
     while i < imax:
-        b0 = long(ord(list[j])) << 24
-        b1 = long(ord(list[j+1])) << 16
-        b2 = long(ord(list[j+2])) << 8
-        b3 = long(ord(list[j+3]))
+        b0 = long_type(ord(list[j])) << 24
+        b1 = long_type(ord(list[j+1])) << 16
+        b2 = long_type(ord(list[j+2])) << 8
+        b3 = long_type(ord(list[j+3]))
         hl[i] = b0 | b1 | b2 | b3
         i = i+1
         j = j+4
@@ -170,7 +171,7 @@ class mssha1(object):
         D = self.H3
         E = self.H4
 
-        for t in xrange(0, 80):
+        for t in range(0, 80):
             TEMP = _rotateLeft(A, 5) + f[t](B, C, D) + E + W[t] + K[t/20]
             E = D
             D = C
@@ -203,7 +204,7 @@ class mssha1(object):
         to the hashed string.
         """
 
-        leninBuf = long(len(inBuf))
+        leninBuf = long_type(len(inBuf))
 
         # Compute number of bytes mod 64.
         index = (self.count[1] >> 3) & 0x3F
@@ -341,7 +342,7 @@ if __name__ == '__main__':
             data = file.read(16384)
         file.close()
         digest = context.hexdigest().upper()
-        for i in xrange(0, 40, 8):
+        for i in range(0, 40, 8):
             print(digest[i:i+8], end=' ')
         print()
     main()

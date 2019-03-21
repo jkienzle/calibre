@@ -25,6 +25,12 @@ if is_py3:
     zip = builtins.__dict__['zip']
     map = builtins.__dict__['map']
     filter = builtins.__dict__['filter']
+    range = builtins.__dict__['range']
+
+    codepoint_to_chr = chr
+    unicode_type = str
+    string_or_bytes = str, bytes
+    long_type = int
 
     def iteritems(d):
         return iter(d.items())
@@ -35,6 +41,10 @@ if is_py3:
     def iterkeys(d):
         return iter(d)
 
+    def environ_item(x):
+        if isinstance(x, bytes):
+            x = x.decode('utf-8')
+        return x
 else:
     exec("""def reraise(tp, value, tb=None):
     try:
@@ -44,7 +54,13 @@ else:
 """)
 
     from future_builtins import zip, map, filter  # noqa
+    range = xrange
     import __builtin__ as builtins
+
+    codepoint_to_chr = unichr
+    unicode_type = unicode
+    string_or_bytes = unicode, bytes
+    long_type = long
 
     def iteritems(d):
         return d.iteritems()
@@ -54,3 +70,8 @@ else:
 
     def itervalues(d):
         return d.itervalues()
+
+    def environ_item(x):
+        if isinstance(x, unicode_type):
+            x = x.encode('utf-8')
+        return x

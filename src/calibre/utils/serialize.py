@@ -4,6 +4,9 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+from polyglot.builtins import unicode_type
+from calibre.constants import ispy3
+
 
 MSGPACK_MIME = 'application/x-msgpack'
 CANARY = 'jPoAv3zOyHvQ5JFNYg4hJ9'
@@ -24,7 +27,7 @@ def create_encoder(for_json=False):
 
     def encoder(obj):
         if isinstance(obj, datetime):
-            return encoded(0, unicode(obj.isoformat()), ExtType)
+            return encoded(0, unicode_type(obj.isoformat()), ExtType)
         if isinstance(obj, (set, frozenset)):
             return encoded(1, tuple(obj), ExtType)
         if getattr(obj, '__calibre_serializable__', False):
@@ -40,6 +43,8 @@ def create_encoder(for_json=False):
                 return encoded(3, fm_as_dict(obj), ExtType)
             elif isinstance(obj, Tag):
                 return encoded(4, obj.as_dict(), ExtType)
+        if for_json and isinstance(obj, bytes):
+            return obj.decode('utf-8')
         raise TypeError('Cannot serialize objects of type {}'.format(type(obj)))
 
     return encoder
@@ -112,3 +117,24 @@ def msgpack_loads(dump):
 def json_loads(data):
     import json
     return json.loads(data, object_hook=json_decoder)
+
+
+if ispy3:
+
+    def pickle_dumps(data):
+        import pickle
+        return pickle.dumps(data, -1)
+
+    def pickle_loads(dump):
+        import pickle
+        return pickle.loads(dump, encoding='utf-8')
+
+else:
+
+    def pickle_dumps(data):
+        import cPickle as pickle
+        return pickle.dumps(data, -1)
+
+    def pickle_loads(dump):
+        import cPickle as pickle
+        return pickle.loads(dump)

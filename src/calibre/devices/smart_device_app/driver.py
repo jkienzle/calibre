@@ -11,7 +11,6 @@ import socket, select, json, os, traceback, time, sys, random
 import posixpath
 from collections import defaultdict
 import hashlib, threading
-import Queue
 
 from functools import wraps
 from errno import EAGAIN, EINTR
@@ -38,6 +37,8 @@ from calibre.utils.filenames import ascii_filename as sanitize, shorten_componen
 from calibre.utils.mdns import (publish as publish_zeroconf, unpublish as
         unpublish_zeroconf, get_all_ips)
 from calibre.utils.socket_inheritance import set_socket_inherit
+from polyglot.builtins import unicode_type
+from polyglot import queue
 
 
 def synchronous(tlockname):
@@ -102,7 +103,7 @@ class ConnectionListener(Thread):
                                         {'otherDevice': d.get_gui_name()})
                         self.driver._send_byte_string(device_socket, (b'%d' % len(s)) + s)
                         sock.close()
-                    except Queue.Empty:
+                    except queue.Empty:
                         pass
 
             if getattr(self.driver, 'broadcast_socket', None) is not None:
@@ -147,7 +148,7 @@ class ConnectionListener(Thread):
 
                         try:
                             self.driver.connection_queue.put_nowait(device_socket)
-                        except Queue.Full:
+                        except queue.Full:
                             self._close_socket(device_socket)
                             device_socket = None
                             self.driver._debug('driver is not answering')
@@ -397,7 +398,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                     if isinstance(a, dict):
                         printable = {}
                         for k,v in a.iteritems():
-                            if isinstance(v, (str, unicode)) and len(v) > 50:
+                            if isinstance(v, (bytes, unicode_type)) and len(v) > 50:
                                 printable[k] = 'too long'
                             else:
                                 printable[k] = v
@@ -418,14 +419,14 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         if not isinstance(dinfo, dict):
             dinfo = {}
         if dinfo.get('device_store_uuid', None) is None:
-            dinfo['device_store_uuid'] = unicode(uuid.uuid4())
+            dinfo['device_store_uuid'] = unicode_type(uuid.uuid4())
         if dinfo.get('device_name') is None:
             dinfo['device_name'] = self.get_gui_name()
         if name is not None:
             dinfo['device_name'] = name
         dinfo['location_code'] = location_code
         dinfo['last_library_uuid'] = getattr(self, 'current_library_uuid', None)
-        dinfo['calibre_version'] = '.'.join([unicode(i) for i in numeric_version])
+        dinfo['calibre_version'] = '.'.join([unicode_type(i) for i in numeric_version])
         dinfo['date_last_connected'] = isoformat(now())
         dinfo['prefix'] = self.PREFIX
         return dinfo
@@ -478,7 +479,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         from calibre.library.save_to_disk import get_components
         from calibre.library.save_to_disk import config
         opts = config().parse()
-        if not isinstance(template, unicode):
+        if not isinstance(template, unicode_type):
             template = template.decode('utf-8')
         app_id = str(getattr(mdata, 'application_id', ''))
         id_ = mdata.get('id', fname)
@@ -665,7 +666,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
             if v:
                 v = json.loads(v, object_hook=from_json)
                 if print_debug_info and extra_debug:
-                        self._debug('receive after decode')  # , v)
+                    self._debug('receive after decode')  # , v)
                 return (self.reverse_opcodes[v[0]], v[1])
             self._debug('protocol error -- empty json string')
         except socket.timeout:
@@ -726,7 +727,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         from calibre.utils.date import now, parse_date
         try:
             key = self._make_metadata_cache_key(uuid, ext_or_lpath)
-            if isinstance(lastmod, unicode):
+            if isinstance(lastmod, unicode_type):
                 if lastmod == 'None':
                     return None
                 lastmod = parse_date(lastmod)
@@ -992,7 +993,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                     raise
                 except:
                     pass
-            except Queue.Empty:
+            except queue.Empty:
                 self.is_connected = False
             return self if self.is_connected else None
         return None
@@ -1154,7 +1155,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                                       (self.DEFAULT_THUMBNAIL_HEIGHT/3) * 4)
                 self._debug('cover width', self.THUMBNAIL_WIDTH)
             elif hasattr(self, 'THUMBNAIL_WIDTH'):
-                    delattr(self, 'THUMBNAIL_WIDTH')
+                delattr(self, 'THUMBNAIL_WIDTH')
 
             self.is_read_sync_col = result.get('isReadSyncCol', None)
             self._debug('Device is_read sync col', self.is_read_sync_col)
@@ -1968,7 +1969,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                     message = 'attaching port to broadcast socket failed. This is not fatal.'
                     self._debug(message)
 
-            self.connection_queue = Queue.Queue(1)
+            self.connection_queue = queue.Queue(1)
             self.connection_listener = ConnectionListener(self)
             self.connection_listener.start()
         return message

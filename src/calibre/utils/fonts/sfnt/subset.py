@@ -15,6 +15,7 @@ from functools import partial
 from calibre.utils.icu import safe_chr, ord_string
 from calibre.utils.fonts.sfnt.container import Sfnt
 from calibre.utils.fonts.sfnt.errors import UnsupportedFont, NoGlyphs
+from polyglot.builtins import unicode_type, range
 
 # TrueType outlines {{{
 
@@ -106,7 +107,7 @@ def pdf_subset(sfnt, glyphs):
 
 
 def safe_ord(x):
-    return ord_string(unicode(x))[0]
+    return ord_string(unicode_type(x))[0]
 
 
 def subset(raw, individual_chars, ranges=(), warnings=None):
@@ -114,7 +115,7 @@ def subset(raw, individual_chars, ranges=(), warnings=None):
 
     chars = set(map(safe_ord, individual_chars))
     for r in ranges:
-        chars |= set(xrange(safe_ord(r[0]), safe_ord(r[1])+1))
+        chars |= set(range(safe_ord(r[0]), safe_ord(r[1])+1))
 
     # Always add the space character for ease of use from the command line
     if safe_ord(' ') not in chars:
@@ -306,10 +307,10 @@ def test_mem():
     start_mem = memory()
     raw = P('fonts/liberation/LiberationSerif-Regular.ttf', data=True)
     calls = 1000
-    for i in xrange(calls):
+    for i in range(calls):
         subset(raw, (), (('a', 'z'),))
     del raw
-    for i in xrange(3):
+    for i in range(3):
         gc.collect()
     print ('Leaked memory per call:', (memory() - start_mem)/calls*1024, 'KB')
 
@@ -343,12 +344,12 @@ def all():
                 print('No glyphs!')
                 continue
             except UnsupportedFont as e:
-                unsupported.append((font['full_name'], font['path'], unicode(e)))
+                unsupported.append((font['full_name'], font['path'], unicode_type(e)))
                 print ('Unsupported!')
                 continue
             except Exception as e:
                 print ('Failed!')
-                failed.append((font['full_name'], font['path'], unicode(e)))
+                failed.append((font['full_name'], font['path'], unicode_type(e)))
             else:
                 averages.append(sum(new_stats.itervalues())/sum(old_stats.itervalues()) * 100)
                 print ('Reduced to:', '%.1f'%averages[-1] , '%')

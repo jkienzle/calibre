@@ -8,7 +8,6 @@ __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 
 import ssl, socket, select, os, traceback
 from io import BytesIO
-from Queue import Empty, Full
 from functools import partial
 
 from calibre import as_unicode
@@ -25,9 +24,11 @@ from calibre.utils.socket_inheritance import set_socket_inherit
 from calibre.utils.logging import ThreadSafeLog
 from calibre.utils.monotonic import monotonic
 from calibre.utils.mdns import get_external_ip
+from polyglot.builtins import range
+from polyglot.queue import Empty, Full
 
 READ, WRITE, RDWR, WAIT = 'READ', 'WRITE', 'RDWR', 'WAIT'
-WAKEUP, JOB_DONE = bytes(bytearray(xrange(2)))
+WAKEUP, JOB_DONE = bytes(bytearray(range(2)))
 IPPROTO_IPV6 = getattr(socket, "IPPROTO_IPV6", 41)
 
 

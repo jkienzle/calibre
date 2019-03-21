@@ -9,17 +9,17 @@ import atexit, os, sys
 from math import ceil
 from unicodedata import normalize
 from threading import Thread, Lock
-from Queue import Queue
 from operator import itemgetter
 from collections import OrderedDict
 from itertools import islice
 
 from itertools import izip
-from polyglot.builtins import map
+from polyglot.builtins import map, unicode_type, range
 
 from calibre import detect_ncpus as cpu_count, as_unicode
 from calibre.constants import plugins, filesystem_encoding
 from calibre.utils.icu import primary_sort_key, primary_find, primary_collator
+from polyglot.queue import Queue
 
 DEFAULT_LEVEL1 = '/'
 DEFAULT_LEVEL2 = '-_ 0123456789'
@@ -97,7 +97,7 @@ class Matcher(object):
                 w = [Worker(requests, results) for i in range(max(1, cpu_count()))]
                 [x.start() for x in w]
                 workers.extend(w)
-        items = map(lambda x: normalize('NFC', unicode(x)), filter(None, items))
+        items = map(lambda x: normalize('NFC', unicode_type(x)), filter(None, items))
         self.items = items = tuple(items)
         tasks = split(items, len(workers))
         self.task_maps = [{j: i for j, (i, _) in enumerate(task)} for task in tasks]
@@ -108,7 +108,7 @@ class Matcher(object):
         self.sort_keys = None
 
     def __call__(self, query, limit=None):
-        query = normalize('NFC', unicode(query))
+        query = normalize('NFC', unicode_type(query))
         with wlock:
             for i, scorer in enumerate(self.scorers):
                 workers[0].requests.put((i, scorer, query))
@@ -194,7 +194,7 @@ def process_item(ctx, haystack, needle):
         key = (hidx, nidx, last_idx)
         mem = ctx.memory.get(key, None)
         if mem is None:
-            for i in xrange(nidx, len(needle)):
+            for i in range(nidx, len(needle)):
                 n = needle[i]
                 if (len(haystack) - hidx < len(needle) - i):
                     score = 0
@@ -265,7 +265,7 @@ class CScorer(object):
         self.m = speedup.Matcher(
             items,
             primary_collator().capsule,
-            unicode(level1), unicode(level2), unicode(level3)
+            unicode_type(level1), unicode_type(level2), unicode_type(level3)
         )
 
     def __call__(self, query):
@@ -295,12 +295,12 @@ def test(return_tests=False):
                 m('one')
 
             start = memory()
-            for i in xrange(10):
+            for i in range(10):
                 doit(str(i))
             gc.collect()
             used10 = memory() - start
             start = memory()
-            for i in xrange(100):
+            for i in range(100):
                 doit(str(i))
             gc.collect()
             used100 = memory() - start

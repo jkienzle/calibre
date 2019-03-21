@@ -19,6 +19,7 @@ from calibre.ebooks.metadata import title_sort
 from calibre.utils.date import as_local_time
 from calibre import strftime, prints, sanitize_file_name_unicode
 from calibre.db.lazy import FormatsList
+from polyglot.builtins import unicode_type
 
 plugboard_any_device_value = 'any device'
 plugboard_any_format_value = 'any format'
@@ -133,7 +134,7 @@ def preprocess_template(template):
     template = template.replace('//', '/')
     template = template.replace('{author}', '{authors}')
     template = template.replace('{tag}', '{tags}')
-    if not isinstance(template, unicode):
+    if not isinstance(template, unicode_type):
         template = template.decode(preferred_encoding, 'replace')
     return template
 
@@ -235,7 +236,7 @@ def get_components(template, mi, id, timefmt='%b %Y', length=250,
                         divide_by=2.0)
             elif cm['datatype'] in ['int', 'float']:
                 if format_args[key] != 0:
-                    format_args[key] = unicode(format_args[key])
+                    format_args[key] = unicode_type(format_args[key])
                 else:
                     format_args[key] = ''
     if safe_format:
@@ -436,18 +437,17 @@ def update_serialized_metadata(book, common_data=None):
     plugboard_cache = common_data
     from calibre.customize.ui import apply_null_metadata
     with apply_null_metadata:
+        fmts = [fp.rpartition(os.extsep)[-1] for fp in book['fmts']]
+        mi, cdata = read_serialized_metadata(book)
 
-            fmts = [fp.rpartition(os.extsep)[-1] for fp in book['fmts']]
-            mi, cdata = read_serialized_metadata(book)
+        def report_error(fmt, tb):
+            result.append((fmt, tb))
 
-            def report_error(fmt, tb):
-                result.append((fmt, tb))
-
-            for fmt, fmtpath in zip(fmts, book['fmts']):
-                try:
-                    with lopen(fmtpath, 'r+b') as stream:
-                        update_metadata(mi, fmt, stream, (), cdata, error_report=report_error, plugboard_cache=plugboard_cache)
-                except Exception:
-                    report_error(fmt, traceback.format_exc())
+        for fmt, fmtpath in zip(fmts, book['fmts']):
+            try:
+                with lopen(fmtpath, 'r+b') as stream:
+                    update_metadata(mi, fmt, stream, (), cdata, error_report=report_error, plugboard_cache=plugboard_cache)
+            except Exception:
+                report_error(fmt, traceback.format_exc())
 
     return result

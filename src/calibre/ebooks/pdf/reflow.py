@@ -6,9 +6,11 @@ __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import sys, os
+import sys, os, numbers
 
 from lxml import etree
+
+from polyglot.builtins import unicode_type, range
 
 
 class Font(object):
@@ -73,10 +75,10 @@ class Text(Element):
 
         text.tail = ''
         self.text_as_string = etree.tostring(text, method='text',
-                encoding=unicode)
+                encoding=unicode_type)
         self.raw = text.text if text.text else u''
         for x in text.iterchildren():
-            self.raw += etree.tostring(x, method='xml', encoding=unicode)
+            self.raw += etree.tostring(x, method='xml', encoding=unicode_type)
         self.average_character_width = self.width/len(self.text_as_string)
 
     def coalesce(self, other, page_number):
@@ -220,7 +222,7 @@ class Box(list):
     def to_html(self):
         ans = ['<%s>'%self.tag]
         for elem in self:
-            if isinstance(elem, int):
+            if isinstance(elem, numbers.Integral):
                 ans.append('<a name="page_%d"/>'%elem)
             else:
                 ans.append(elem.to_html()+' ')
@@ -240,7 +242,7 @@ class ImageBox(Box):
         if len(self) > 0:
             ans.append('<br/>')
             for elem in self:
-                if isinstance(elem, int):
+                if isinstance(elem, numbers.Integral):
                     ans.append('<a name="page_%d"/>'%elem)
                 else:
                     ans.append(elem.to_html()+' ')
@@ -621,7 +623,7 @@ class PDFDocument(object):
         self.opts, self.log = opts, log
         parser = etree.XMLParser(recover=True)
         self.root = etree.fromstring(xml, parser=parser)
-        idc = iter(xrange(sys.maxint))
+        idc = iter(range(sys.maxint))
 
         self.fonts = []
         self.font_map = {}
@@ -695,7 +697,3 @@ class PDFDocument(object):
         raw = (u'\n'.join(html)).replace('</strong><strong>', '')
         with open('index.html', 'wb') as f:
             f.write(raw.encode('utf-8'))
-
-
-
-

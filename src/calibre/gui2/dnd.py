@@ -7,10 +7,8 @@ __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import posixpath, os, urllib, re
-from urlparse import urlparse
+import posixpath, os, re
 from threading import Thread
-from Queue import Queue, Empty
 
 from PyQt5.Qt import QPixmap, Qt, QDialog, QLabel, QVBoxLayout, \
         QDialogButtonBox, QProgressBar, QTimer, QUrl, QImageReader
@@ -20,12 +18,16 @@ from calibre.ptempfile import PersistentTemporaryFile
 from calibre import browser, as_unicode, prints
 from calibre.gui2 import error_dialog
 from calibre.utils.imghdr import what
+from polyglot.builtins import unicode_type
+from polyglot.urllib import unquote, urlparse
+from polyglot.queue import Queue, Empty
 
 
 def image_extensions():
     if not hasattr(image_extensions, 'ans'):
         image_extensions.ans = [bytes(x).decode('utf-8') for x in QImageReader.supportedImageFormats()]
     return image_extensions.ans
+
 
 # This is present for compatibility with old plugins, do not use
 IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'gif', 'png', 'bmp']
@@ -160,7 +162,7 @@ def path_from_qurl(qurl):
     raw = bytes(qurl.toEncoded(
         QUrl.PreferLocalFile | QUrl.RemoveScheme | QUrl.RemovePassword | QUrl.RemoveUserInfo |
         QUrl.RemovePort | QUrl.RemoveAuthority | QUrl.RemoveQuery | QUrl.RemoveFragment))
-    ans = urllib.unquote(raw).decode('utf-8', 'replace')
+    ans = unquote(raw).decode('utf-8', 'replace')
     if iswindows and ans.startswith('/'):
         ans = ans[1:]
     return ans
@@ -177,10 +179,10 @@ def dnd_has_extension(md, extensions, allow_all_extensions=False):
     if DEBUG:
         prints('\nDebugging DND event')
         for f in md.formats():
-            f = unicode(f)
+            f = unicode_type(f)
             raw = data_as_string(f, md)
             prints(f, len(raw), repr(raw[:300]), '\n')
-        print ()
+        print()
     if has_firefox_ext(md, extensions):
         return True
     urls = urls_from_md(md)
@@ -207,7 +209,7 @@ def dnd_get_image(md, image_exts=None):
     '''
     if md.hasImage():
         for x in md.formats():
-            x = unicode(x)
+            x = unicode_type(x)
             if x.startswith('image/'):
                 cdata = bytes(md.data(x))
                 pmap = QPixmap()
@@ -230,7 +232,7 @@ def dnd_get_image(md, image_exts=None):
     paths = [path_from_qurl(u) for u in urls]
     # First look for a local file
     images = [xi for xi in paths if
-            posixpath.splitext(urllib.unquote(xi))[1][1:].lower() in
+            posixpath.splitext(unquote(xi))[1][1:].lower() in
             image_exts]
     images = [xi for xi in images if os.path.exists(xi)]
     p = QPixmap()
@@ -276,7 +278,7 @@ def dnd_get_files(md, exts, allow_all_extensions=False, filter_exts=()):
         if allow_all_extensions and ext and ext not in filter_exts:
             return True
         return ext in exts and ext not in filter_exts
-    local_files = [p for p in local_files if is_ok(urllib.unquote(p))]
+    local_files = [p for p in local_files if is_ok(unquote(p))]
     local_files = [x for x in local_files if os.path.exists(x)]
     if local_files:
         return local_files, None
@@ -319,7 +321,7 @@ def _get_firefox_pair(md, exts, url, fname):
 
 
 def get_firefox_rurl(md, exts):
-    formats = frozenset([unicode(x) for x in md.formats()])
+    formats = frozenset([unicode_type(x) for x in md.formats()])
     url = fname = None
     if 'application/x-moz-file-promise-url' in formats and \
             'application/x-moz-file-promise-dest-filename' in formats:
@@ -362,5 +364,3 @@ def get_firefox_rurl(md, exts):
 
 def has_firefox_ext(md, exts):
     return bool(get_firefox_rurl(md, exts)[0])
-
-

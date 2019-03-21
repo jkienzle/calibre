@@ -1,5 +1,5 @@
-from __future__ import with_statement
 from __future__ import print_function
+
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal kovid@kovidgoyal.net'
 __docformat__ = 'restructuredtext en'
@@ -7,16 +7,22 @@ __docformat__ = 'restructuredtext en'
 '''
 Manage application-wide preferences.
 '''
-import os, cPickle, base64, datetime, json, plistlib
-from copy import deepcopy
-import optparse
 
-from calibre.constants import (config_dir, CONFIG_DIR_MODE, __appname__,
-        get_version, __author__, DEBUG, iswindows)
+import optparse
+import os
+import plistlib
+from copy import deepcopy
+
+from calibre.constants import (
+    CONFIG_DIR_MODE, __appname__, __author__, config_dir, get_version, iswindows
+)
+from calibre.utils.config_base import (
+    Config, ConfigInterface, ConfigProxy, Option, OptionSet, OptionValues,
+    StringConfig, json_dumps, json_loads, make_config_dir, plugin_dir, prefs,
+    read_raw_tweaks, read_tweaks, tweaks, write_tweaks, from_json, to_json
+)
 from calibre.utils.lock import ExclusiveFile
-from calibre.utils.config_base import (make_config_dir, Option, OptionValues,
-        OptionSet, ConfigInterface, Config, prefs, StringConfig, ConfigProxy,
-        read_raw_tweaks, read_tweaks, write_tweaks, tweaks, plugin_dir)
+
 
 # optparse uses gettext.gettext instead of _ from builtins, so we
 # monkey patch it.
@@ -26,7 +32,7 @@ if False:
     # Make pyflakes happy
     Config, ConfigProxy, Option, OptionValues, StringConfig
     OptionSet, ConfigInterface, read_tweaks, write_tweaks
-    read_raw_tweaks, tweaks, plugin_dir, prefs
+    read_raw_tweaks, tweaks, plugin_dir, prefs, from_json, to_json
 
 
 def check_config_write_access():
@@ -205,30 +211,57 @@ class DynamicConfig(dict):
         dict.__init__(self, {})
         self.name = name
         self.defaults = {}
-        self.file_path = os.path.join(config_dir, name+'.pickle')
         self.refresh()
 
+    @property
+    def file_path(self):
+        return os.path.join(config_dir, self.name+'.pickle.json')
+
     def decouple(self, prefix):
-        self.file_path = os.path.join(os.path.dirname(self.file_path), prefix + os.path.basename(self.file_path))
+        self.name = prefix + self.name
         self.refresh()
+
+    def read_old_serialized_representation(self):
+        from calibre.utils.shared_file import share_open
+        from calibre.utils.serialize import pickle_loads
+        path = self.file_path.rpartition('.')[0]
+        try:
+            with share_open(path, 'rb') as f:
+                raw = f.read()
+        except EnvironmentError:
+            raw = b''
+        try:
+            d = pickle_loads(raw).copy()
+        except Exception:
+            d = {}
+        return d
 
     def refresh(self, clear_current=True):
         d = {}
+        migrate = False
+        if clear_current:
+            self.clear()
         if os.path.exists(self.file_path):
             with ExclusiveFile(self.file_path) as f:
                 raw = f.read()
+            if raw:
                 try:
-                    d = cPickle.loads(raw) if raw.strip() else {}
-                except SystemError:
-                    pass
-                except:
-                    print('WARNING: Failed to unpickle stored config object, ignoring')
-                    if DEBUG:
-                        import traceback
-                        traceback.print_exc()
-                    d = {}
-        if clear_current:
-            self.clear()
+                    d = json_loads(raw)
+                except Exception as err:
+                    print('Failed to de-serialize JSON representation of stored dynamic data for {} with error: {}'.format(
+                        self.name, err))
+            else:
+                d = self.read_old_serialized_representation()
+                migrate = bool(d)
+        else:
+            d = self.read_old_serialized_representation()
+            migrate = bool(d)
+        if migrate and d:
+            raw = json_dumps(d)
+            with ExclusiveFile(self.file_path) as f:
+                f.seek(0), f.truncate()
+                f.write(raw)
+
         self.update(d)
 
     def __getitem__(self, key):
@@ -251,14 +284,15 @@ class DynamicConfig(dict):
         self.__setitem__(key, val)
 
     def commit(self):
-        if hasattr(self, 'file_path') and self.file_path:
-            if not os.path.exists(self.file_path):
-                make_config_dir()
-            with ExclusiveFile(self.file_path) as f:
-                raw = cPickle.dumps(self, -1)
-                f.seek(0)
-                f.truncate()
-                f.write(raw)
+        if not getattr(self, 'name', None):
+            return
+        if not os.path.exists(self.file_path):
+            make_config_dir()
+        raw = json_dumps(self)
+        with ExclusiveFile(self.file_path) as f:
+            f.seek(0)
+            f.truncate()
+            f.write(raw)
 
 
 dynamic = DynamicConfig()
@@ -383,36 +417,15 @@ class XMLConfig(dict):
         self.commit()
 
 
-def to_json(obj):
-    if isinstance(obj, bytearray):
-        return {'__class__': 'bytearray',
-                '__value__': base64.standard_b64encode(bytes(obj))}
-    if isinstance(obj, datetime.datetime):
-        from calibre.utils.date import isoformat
-        return {'__class__': 'datetime.datetime',
-                '__value__': isoformat(obj, as_utc=True)}
-    raise TypeError(repr(obj) + ' is not JSON serializable')
-
-
-def from_json(obj):
-    if '__class__' in obj:
-        if obj['__class__'] == 'bytearray':
-            return bytearray(base64.standard_b64decode(obj['__value__']))
-        if obj['__class__'] == 'datetime.datetime':
-            from calibre.utils.iso8601 import parse_iso8601
-            return parse_iso8601(obj['__value__'], assume_utc=True)
-    return obj
-
-
 class JSONConfig(XMLConfig):
 
     EXTENSION = '.json'
 
     def raw_to_object(self, raw):
-        return json.loads(raw.decode('utf-8'), object_hook=from_json)
+        return json_loads(raw)
 
     def to_raw(self):
-        return json.dumps(self, indent=2, default=to_json, sort_keys=True)
+        return json_dumps(self)
 
     def __getitem__(self, key):
         try:

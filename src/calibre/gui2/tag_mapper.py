@@ -20,6 +20,7 @@ from calibre.gui2.ui import get_gui
 from calibre.gui2.widgets2 import Dialog
 from calibre.utils.config import JSONConfig
 from calibre.utils.localization import localize_user_manual_link
+from polyglot.builtins import unicode_type, range
 
 tag_maps = JSONConfig('tag-map-rules')
 
@@ -171,14 +172,14 @@ class RuleEdit(QWidget):
     def rule(self, rule):
         def sc(name):
             c = getattr(self, name)
-            idx = c.findData(unicode(rule.get(name, '')))
+            idx = c.findData(unicode_type(rule.get(name, '')))
             if idx < 0:
                 idx = 0
             c.setCurrentIndex(idx)
         sc('action'), sc('match_type')
         ac = self.action.currentData()
-        self.query.setText(intelligent_strip(ac, unicode(rule.get('query', ''))))
-        self.replace.setText(intelligent_strip(ac, unicode(rule.get('replace', ''))))
+        self.query.setText(intelligent_strip(ac, unicode_type(rule.get('query', ''))))
+        self.replace.setText(intelligent_strip(ac, unicode_type(rule.get('replace', ''))))
 
     def validate(self):
         rule = self.rule
@@ -367,7 +368,7 @@ class Rules(QWidget):
     @property
     def rules(self):
         ans = []
-        for r in xrange(self.rule_list.count()):
+        for r in range(self.rule_list.count()):
             ans.append(self.rule_list.item(r).data(DATA_ROLE))
         return ans
 

@@ -19,7 +19,8 @@ from calibre.utils.localization import (canonicalize_lang, lang_map, get_udc)
 from calibre.db.search import CONTAINS_MATCH, EQUALS_MATCH, REGEXP_MATCH, _match
 from calibre.ebooks.metadata import title_sort, author_to_author_sort
 from calibre.ebooks.metadata.opf2 import metadata_to_opf
-from calibre import prints
+from calibre import prints, force_unicode
+from polyglot.builtins import unicode_type, string_or_bytes
 
 
 class MetadataBackup(Thread):  # {{{
@@ -136,7 +137,9 @@ del y, c, n, u
 
 
 def force_to_bool(val):
-    if isinstance(val, (str, unicode)):
+    if isinstance(val, (bytes, unicode_type)):
+        if isinstance(val, bytes):
+            val = force_unicode(val)
         try:
             val = icu_lower(val)
             if not val:
@@ -347,7 +350,7 @@ class ResultCache(SearchQueryParser):  # {{{
                 if item is None:
                     continue
                 v = item[loc]
-                if isinstance(v, (str, unicode)):
+                if isinstance(v, (bytes, unicode_type)):
                     v = parse_date(v)
                 if v is None or v <= UNDEFINED_DATE:
                     matches.add(item[0])
@@ -358,7 +361,7 @@ class ResultCache(SearchQueryParser):  # {{{
                 if item is None:
                     continue
                 v = item[loc]
-                if isinstance(v, (str, unicode)):
+                if isinstance(v, (bytes, unicode_type)):
                     v = parse_date(v)
                 if v is not None and v > UNDEFINED_DATE:
                     matches.add(item[0])
@@ -370,7 +373,7 @@ class ResultCache(SearchQueryParser):  # {{{
                 (p, relop) = self.date_search_relops[k]
                 query = query[p:]
         if relop is None:
-                (p, relop) = self.date_search_relops['=']
+            (p, relop) = self.date_search_relops['=']
 
         if query in self.local_today:
             qd = now()
@@ -402,7 +405,7 @@ class ResultCache(SearchQueryParser):  # {{{
             if item is None or item[loc] is None:
                 continue
             v = item[loc]
-            if isinstance(v, (str, unicode)):
+            if isinstance(v, (bytes, unicode_type)):
                 v = parse_date(v)
             if relop(v, qd, field_count):
                 matches.add(item[0])
@@ -447,7 +450,7 @@ class ResultCache(SearchQueryParser):  # {{{
                     (p, relop) = self.numeric_search_relops[k]
                     query = query[p:]
             if relop is None:
-                    (p, relop) = self.numeric_search_relops['=']
+                (p, relop) = self.numeric_search_relops['=']
 
             if dt == 'int':
                 cast = lambda x: int(x)
@@ -729,7 +732,7 @@ class ResultCache(SearchQueryParser):  # {{{
             # everything else, or 'all' matches
             matchkind, query = self._matchkind(query)
 
-            if not isinstance(query, unicode):
+            if not isinstance(query, unicode_type):
                 query = query.decode('utf-8')
 
             db_col = {}
@@ -790,7 +793,7 @@ class ResultCache(SearchQueryParser):  # {{{
                         continue
 
                     if q == 'true' and matchkind == CONTAINS_MATCH:
-                        if isinstance(item[loc], basestring):
+                        if isinstance(item[loc], string_or_bytes):
                             if item[loc].strip() == '':
                                 continue
                         matches.add(item[0])
@@ -914,7 +917,7 @@ class ResultCache(SearchQueryParser):  # {{{
             self.marked_ids_dict = dict.fromkeys(id_dict, u'true')
         else:
             # Ensure that all the items in the dict are text
-            self.marked_ids_dict = dict(izip(id_dict.iterkeys(), imap(unicode,
+            self.marked_ids_dict = dict(izip(id_dict.iterkeys(), imap(unicode_type,
                 id_dict.itervalues())))
 
         # Set the values in the cache

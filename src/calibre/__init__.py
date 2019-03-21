@@ -4,7 +4,7 @@ __copyright__ = '2008, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import sys, os, re, time, random, warnings
-from polyglot.builtins import builtins
+from polyglot.builtins import builtins, codepoint_to_chr, unicode_type, range
 builtins.__dict__['dynamic_property'] = lambda func: func(None)
 from math import floor
 from functools import partial
@@ -77,7 +77,7 @@ def get_types_map():
 
 
 def to_unicode(raw, encoding='utf-8', errors='strict'):
-    if isinstance(raw, unicode):
+    if isinstance(raw, unicode_type):
         return raw
     return raw.decode(encoding, errors)
 
@@ -113,7 +113,7 @@ def confirm_config_name(name):
 
 _filename_sanitize = re.compile(r'[\xae\0\\|\?\*<":>\+/]')
 _filename_sanitize_unicode = frozenset([u'\\', u'|', u'?', u'*', u'<',
-    u'"', u':', u'>', u'+', u'/'] + list(map(unichr, xrange(32))))
+    u'"', u':', u'>', u'+', u'/'] + list(map(codepoint_to_chr, range(32))))
 
 
 def sanitize_file_name(name, substitute='_', as_unicode=False):
@@ -126,7 +126,7 @@ def sanitize_file_name(name, substitute='_', as_unicode=False):
     *NOTE:* This function always returns byte strings, not unicode objects. The byte strings
     are encoded in the filesystem encoding of the platform, or UTF-8.
     '''
-    if isinstance(name, unicode):
+    if isinstance(name, unicode_type):
         name = name.encode(filesystem_encoding, 'ignore')
     one = _filename_sanitize.sub(substitute, name)
     one = re.sub(r'\s', ' ', one).strip()
@@ -198,7 +198,7 @@ def prints(*args, **kwargs):
     safe_encode = kwargs.get('safe_encode', False)
     count = 0
     for i, arg in enumerate(args):
-        if isinstance(arg, unicode):
+        if isinstance(arg, unicode_type):
             if iswindows:
                 from calibre.utils.terminal import Detect
                 cs = Detect(file)
@@ -222,8 +222,8 @@ def prints(*args, **kwargs):
             try:
                 arg = str(arg)
             except ValueError:
-                arg = unicode(arg)
-            if isinstance(arg, unicode):
+                arg = unicode_type(arg)
+            if isinstance(arg, unicode_type):
                 try:
                     arg = arg.encode(enc)
                 except UnicodeEncodeError:
@@ -288,7 +288,7 @@ def load_library(name, cdll):
 
 def filename_to_utf8(name):
     '''Return C{name} encoded in utf8. Unhandled characters are replaced. '''
-    if isinstance(name, unicode):
+    if isinstance(name, unicode_type):
         return name.encode('utf8')
     codec = 'cp1252' if iswindows else 'utf8'
     return name.decode(codec, 'replace').encode('utf8')
@@ -320,7 +320,7 @@ def extract(path, dir):
 
 
 def get_proxies(debug=True):
-    from urllib import getproxies
+    from polyglot.urllib import getproxies
     proxies = getproxies()
     for key, proxy in list(proxies.items()):
         if not proxy or '..' in proxy or key == 'auto':
@@ -382,10 +382,10 @@ def get_proxy_info(proxy_scheme, proxy_string):
     is not available in the string. If an exception occurs parsing the string
     this method returns None.
     '''
-    import urlparse
+    from polyglot.urllib import urlparse
     try:
         proxy_url = u'%s://%s'%(proxy_scheme, proxy_string)
-        urlinfo = urlparse.urlparse(proxy_url)
+        urlinfo = urlparse(proxy_url)
         ans = {
             u'scheme': urlinfo.scheme,
             u'hostname': urlinfo.hostname,
@@ -557,7 +557,7 @@ def strftime(fmt, t=None):
     else:
         ans = time.strftime(fmt, t).decode(preferred_encoding, 'replace')
     if early_year:
-        ans = ans.replace(u'_early year hack##', unicode(orig_year))
+        ans = ans.replace(u'_early year hack##', unicode_type(orig_year))
     return ans
 
 
@@ -669,7 +669,7 @@ def force_unicode(obj, enc=preferred_encoding):
 def as_unicode(obj, enc=preferred_encoding):
     if not isbytestring(obj):
         try:
-            obj = unicode(obj)
+            obj = unicode_type(obj)
         except:
             try:
                 obj = str(obj)

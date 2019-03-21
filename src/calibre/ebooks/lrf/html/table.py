@@ -1,12 +1,13 @@
 from __future__ import print_function
 __license__   = 'GPL v3'
 __copyright__ = '2008, Kovid Goyal <kovid at kovidgoyal.net>'
-import math, sys, re
+import math, sys, re, numbers
 
 from calibre.ebooks.lrf.fonts import get_font
 from calibre.ebooks.lrf.pylrs.pylrs import TextBlock, Text, CR, Span, \
                                              CharButton, Plot, Paragraph, \
                                              LrsTextTag
+from polyglot.builtins import string_or_bytes, range
 
 
 def ceil(num):
@@ -38,7 +39,7 @@ def tokens(tb):
             yield 2, None
         elif isinstance(x, Text):
             yield x.text, cattrs(attrs, {})
-        elif isinstance(x, basestring):
+        elif isinstance(x, string_or_bytes):
             yield x, cattrs(attrs, {})
         elif isinstance(x, (CharButton, LrsTextTag)):
             if x.contents:
@@ -136,7 +137,7 @@ class Cell(object):
         mwidth = 0
         for token, attrs in tokens(tb):
             font = default_font
-            if isinstance(token, int):  # Handle para and line breaks
+            if isinstance(token, numbers.Integral):  # Handle para and line breaks
                 continue
             if isinstance(token, Plot):
                 return self.pts_to_pixels(token.xsize)
@@ -177,7 +178,7 @@ class Cell(object):
             ls = self.pts_to_pixels(attrs.get('baselineskip', ts['baselineskip']))+\
                  self.pts_to_pixels(attrs.get('linespace', ts['linespace']))
             ws = self.pts_to_pixels(attrs.get('wordspace', ts['wordspace']))
-            if isinstance(token, int):  # Handle para and line breaks
+            if isinstance(token, numbers.Integral):  # Handle para and line breaks
                 if top != bottom:  # Previous element not a line break
                     top = bottom
                 else:
@@ -314,7 +315,7 @@ class Table(object):
         Return widths of columns + self.colpad
         '''
         rows, cols = self.number_or_rows(), self.number_of_columns()
-        widths = range(cols)
+        widths = list(range(cols))
         for c in range(cols):
             cellwidths = [0 for i in range(rows)]
             for r in range(rows):
@@ -324,8 +325,8 @@ class Table(object):
                     continue
             widths[c] = max(cellwidths)
 
-        min_widths = [self.minimum_width(i)+10 for i in xrange(cols)]
-        for i in xrange(len(widths)):
+        min_widths = [self.minimum_width(i)+10 for i in range(cols)]
+        for i in range(len(widths)):
             wp = self.width_percent(i)
             if wp >= 0.:
                 widths[i] = max(min_widths[i], ceil((wp/100.) * (maxwidth - (cols-1)*self.colpad)))
@@ -382,7 +383,3 @@ class Table(object):
 
                     yield tb, xpos[c], sypos, delta, None
                     sypos += tb.blockStyle.attrs['blockheight']
-
-
-
-

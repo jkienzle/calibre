@@ -32,6 +32,7 @@ from calibre import prints, fsync
 from calibre.ptempfile import PersistentTemporaryFile
 from calibre.constants import DEBUG
 from calibre.utils.config_base import prefs
+from polyglot.builtins import unicode_type, string_or_bytes
 
 EPUB_EXT  = '.epub'
 KEPUB_EXT = '.kepub'
@@ -43,7 +44,7 @@ def qhash(inputstr):
     instr = b""
     if isinstance(inputstr, bytes):
         instr = inputstr
-    elif isinstance(inputstr, unicode):
+    elif isinstance(inputstr, unicode_type):
         instr = inputstr.encode("utf8")
     else:
         return -1
@@ -1323,9 +1324,9 @@ class KOBO(USBMS):
                     hrTag['class'] = 'annotations_divider'
                     user_notes_soup.insert(0, hrTag)
 
-                mi.comments += unicode(user_notes_soup.prettify())
+                mi.comments += unicode_type(user_notes_soup.prettify())
             else:
-                mi.comments = unicode(user_notes_soup.prettify())
+                mi.comments = unicode_type(user_notes_soup.prettify())
             # Update library comments
             db.set_comment(db_id, mi.comments)
 
@@ -1824,7 +1825,7 @@ class KOBOTOUCH(KOBO):
                 bookshelves.append(row['ShelfName'])
 
             cursor.close()
-#            debug_print("KoboTouch:get_bookshelvesforbook - count bookshelves=" + unicode(count_bookshelves))
+#            debug_print("KoboTouch:get_bookshelvesforbook - count bookshelves=" + unicode_type(count_bookshelves))
             return bookshelves
 
         self.debug_index = 0
@@ -2394,7 +2395,7 @@ class KOBOTOUCH(KOBO):
 
             if self.manage_collections:
                 if collections:
-                    # debug_print("KoboTouch:update_device_database_collections - length collections=" + unicode(len(collections)))
+                    # debug_print("KoboTouch:update_device_database_collections - length collections=" + unicode_type(len(collections)))
 
                     # Need to reset the collections outside the particular loops
                     # otherwise the last item will not be removed
@@ -2834,7 +2835,7 @@ class KOBOTOUCH(KOBO):
 #            count_bookshelves = i + 1
 
         cursor.close()
-#        debug_print("KoboTouch:get_bookshelflist - count bookshelves=" + unicode(count_bookshelves))
+#        debug_print("KoboTouch:get_bookshelflist - count bookshelves=" + unicode_type(count_bookshelves))
 
         return bookshelves
 
@@ -2918,7 +2919,7 @@ class KOBOTOUCH(KOBO):
             cursor.execute(addquery, add_values)
         elif result['_IsDeleted'] == 'true':
             debug_print("KoboTouch:check_for_bookshelf - Shelf '%s' is deleted - undeleting. result['_IsDeleted']='%s'" % (
-                bookshelf_name, unicode(result['_IsDeleted'])))
+                bookshelf_name, unicode_type(result['_IsDeleted'])))
             cursor.execute(updatequery, test_values)
 
         cursor.close()
@@ -3542,14 +3543,14 @@ class KOBOTOUCH(KOBO):
             # a string, so looking for that.
             start_subclass_extra_options = OPT_MODIFY_CSS
             debugging_title = ''
-            if isinstance(settings.extra_customization[OPT_MODIFY_CSS], basestring):
+            if isinstance(settings.extra_customization[OPT_MODIFY_CSS], string_or_bytes):
                 debug_print("KoboTouch::migrate_old_settings - Don't have update_series option")
                 settings.update_series = config.get_option('update_series').default
                 settings.modify_css = config.get_option('modify_css').default
                 settings.support_newer_firmware = settings.extra_customization[OPT_UPDATE_SERIES_DETAILS]
                 debugging_title = settings.extra_customization[OPT_MODIFY_CSS]
                 start_subclass_extra_options = OPT_MODIFY_CSS + 1
-            elif isinstance(settings.extra_customization[OPT_SUPPORT_NEWER_FIRMWARE], basestring):
+            elif isinstance(settings.extra_customization[OPT_SUPPORT_NEWER_FIRMWARE], string_or_bytes):
                 debug_print("KoboTouch::migrate_old_settings - Don't have modify_css option")
                 settings.update_series = settings.extra_customization[OPT_UPDATE_SERIES_DETAILS]
                 settings.modify_css = config.get_option('modify_css').default
@@ -3564,7 +3565,7 @@ class KOBOTOUCH(KOBO):
                 debugging_title = settings.extra_customization[OPT_DEBUGGING_TITLE]
                 start_subclass_extra_options = OPT_DEBUGGING_TITLE + 1
 
-            settings.debugging_title = debugging_title if isinstance(debugging_title, basestring) else ''
+            settings.debugging_title = debugging_title if isinstance(debugging_title, string_or_bytes) else ''
             settings.update_device_metadata = settings.update_series
             settings.extra_customization = settings.extra_customization[start_subclass_extra_options:]
 

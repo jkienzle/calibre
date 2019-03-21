@@ -11,6 +11,7 @@ from collections import defaultdict
 
 from calibre.ptempfile import TemporaryDirectory
 from calibre.utils.icu import numeric_sort_key
+from polyglot.builtins import unicode_type, string_or_bytes
 
 application_locations = ('/Applications', '~/Applications', '~/Desktop')
 
@@ -19,9 +20,9 @@ application_locations = ('/Applications', '~/Applications', '~/Desktop')
 
 def generate_public_uti_map():
     from lxml import etree
-    import urllib
+    from polyglot.urllib import urlopen
     from html5_parser import parse
-    raw = urllib.urlopen(
+    raw = urlopen(
         'https://developer.apple.com/library/ios/documentation/Miscellaneous/Reference/UTIRef/Articles/System-DeclaredUniformTypeIdentifiers.html').read()
     root = parse(raw)
     tables = root.xpath('//table')[0::2]
@@ -29,8 +30,8 @@ def generate_public_uti_map():
     for table in tables:
         for tr in table.xpath('descendant::tr')[1:]:
             td = tr.xpath('descendant::td')
-            identifier = etree.tostring(td[0], method='text', encoding=unicode).strip()
-            tags = etree.tostring(td[2], method='text', encoding=unicode).strip()
+            identifier = etree.tostring(td[0], method='text', encoding=unicode_type).strip()
+            tags = etree.tostring(td[2], method='text', encoding=unicode_type).strip()
             identifier = identifier.split()[0].replace('\u200b', '')
             exts = [x.strip()[1:].lower() for x in tags.split(',') if x.strip().startswith('.')]
             for ext in exts:
@@ -239,7 +240,7 @@ def get_extensions_from_utis(utis, plist):
         for decl in plist.get(key, ()):
             if isinstance(decl, dict):
                 uti = decl.get('UTTypeIdentifier')
-                if isinstance(uti, basestring):
+                if isinstance(uti, string_or_bytes):
                     spec = decl.get('UTTypeTagSpecification')
                     if isinstance(spec, dict):
                         ext = spec.get('public.filename-extension')
@@ -286,10 +287,10 @@ def get_bundle_data(path):
             extensions |= get_extensions_from_utis(utis, plist)
         else:
             for ext in dtype.get('CFBundleTypeExtensions', ()):
-                if isinstance(ext, basestring):
+                if isinstance(ext, string_or_bytes):
                     extensions.add(ext.lower())
             for mt in dtype.get('CFBundleTypeMIMETypes', ()):
-                if isinstance(mt, basestring):
+                if isinstance(mt, string_or_bytes):
                     for ext in mimetypes.guess_all_extensions(mt, strict=False):
                         extensions.add(ext.lower())
     return ans
@@ -328,7 +329,7 @@ def get_icon(path, pixmap_to_data=None, as_data=False, size=64):
         from PyQt5.Qt import QImage, Qt
         names.sort(key=numeric_sort_key)
         for name in names:
-            m = re.search('(\d+)x\d+', name)
+            m = re.search(r'(\d+)x\d+', name)
             if m is not None and int(m.group(1)) >= size:
                 ans = QImage(os.path.join(iconset, name))
                 if not ans.isNull():

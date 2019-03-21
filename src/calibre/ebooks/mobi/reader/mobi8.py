@@ -10,7 +10,6 @@ __docformat__ = 'restructuredtext en'
 import struct, re, os
 from collections import namedtuple
 from itertools import repeat, izip
-from urlparse import urldefrag
 from uuid import uuid4
 
 from lxml import etree
@@ -25,6 +24,8 @@ from calibre.ebooks.metadata.toc import TOC
 from calibre.ebooks.mobi.utils import read_font_record
 from calibre.ebooks.oeb.parse_utils import parse_html
 from calibre.ebooks.oeb.base import XPath, XHTML, xml2text
+from polyglot.builtins import range
+from polyglot.urllib import urldefrag
 
 Part = namedtuple('Part',
     'num type filename start end aid')
@@ -193,7 +194,7 @@ class Mobi8Reader(object):
             baseptr = skelpos + skellen
             skeleton = text[skelpos:baseptr]
             inspos_warned = False
-            for i in xrange(divcnt):
+            for i in range(divcnt):
                 insertpos, idtext, filenum, seqnum, startpos, length = \
                                     self.elems[divptr]
                 if i == 0:
@@ -253,7 +254,7 @@ class Mobi8Reader(object):
         self.flowinfo.append(FlowInfo(None, None, None, None))
         svg_tag_pattern = re.compile(br'''(<svg[^>]*>)''', re.IGNORECASE)
         image_tag_pattern = re.compile(br'''(<(?:svg:)?image[^>]*>)''', re.IGNORECASE)
-        for j in xrange(1, len(self.flows)):
+        for j in range(1, len(self.flows)):
             flowpart = self.flows[j]
             nstr = '%04d' % j
             m = svg_tag_pattern.search(flowpart)

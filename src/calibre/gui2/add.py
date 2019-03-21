@@ -9,9 +9,8 @@ __copyright__ = '2014, Kovid Goyal <kovid at kovidgoyal.net>'
 import shutil, os, weakref, traceback, tempfile, time
 from threading import Thread
 from collections import OrderedDict
-from Queue import Empty
 from io import BytesIO
-from polyglot.builtins import map
+from polyglot.builtins import map, unicode_type, string_or_bytes
 
 from PyQt5.Qt import QObject, Qt, pyqtSignal
 
@@ -30,10 +29,11 @@ from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.utils import join_with_timeout
 from calibre.utils.config import prefs
 from calibre.utils.ipc.pool import Pool, Failure
+from polyglot.queue import Empty
 
 
 def validate_source(source, parent=None):  # {{{
-    if isinstance(source, basestring):
+    if isinstance(source, string_or_bytes):
         if not os.path.exists(source):
             error_dialog(parent, _('Cannot add books'), _(
                 'The path %s does not exist') % source, show=True)
@@ -173,7 +173,7 @@ class Adder(QObject):
             return tdir
 
         try:
-            if isinstance(self.source, basestring):
+            if isinstance(self.source, string_or_bytes):
                 find_files(self.source)
                 self.ignore_opf = True
             else:
@@ -271,7 +271,7 @@ class Adder(QObject):
             except Failure as err:
                 error_dialog(self.pd, _('Cannot add books'), _(
                 'Failed to add some books, click "Show details" for more information.'),
-                det_msg=unicode(err.failure_message) + '\n' + unicode(err.details), show=True)
+                det_msg=unicode_type(err.failure_message) + '\n' + unicode_type(err.details), show=True)
                 self.pd.canceled = True
             else:
                 # All tasks completed

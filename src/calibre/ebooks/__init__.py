@@ -7,8 +7,9 @@ Code for the conversion of ebook formats and the reading of metadata
 from various formats.
 '''
 
-import traceback, os, re
+import traceback, os, re, numbers
 from calibre import CurrentDir, prints
+from polyglot.builtins import unicode_type
 
 
 class ConversionError(Exception):
@@ -113,7 +114,7 @@ def extract_calibre_cover(raw, base, log):
     if matches is None:
         body = soup.find('body')
         if body is not None:
-            text = u''.join(map(unicode, body.findAll(text=True)))
+            text = u''.join(map(unicode_type, body.findAll(text=True)))
             if text.strip():
                 # Body has text, abort
                 return
@@ -210,7 +211,7 @@ def check_ebook_format(stream, current_guess):
 
 
 def normalize(x):
-    if isinstance(x, unicode):
+    if isinstance(x, unicode_type):
         import unicodedata
         x = unicodedata.normalize('NFC', x)
     return x
@@ -232,7 +233,7 @@ UNIT_RE = re.compile(r'^(-*[0-9]*[.]?[0-9]*)\s*(%|em|ex|en|px|mm|cm|in|pt|pc|rem
 
 def unit_convert(value, base, font, dpi, body_font_size=12):
     ' Return value in pts'
-    if isinstance(value, (int, long, float)):
+    if isinstance(value, numbers.Number):
         return value
     try:
         return float(value) * 72.0 / dpi

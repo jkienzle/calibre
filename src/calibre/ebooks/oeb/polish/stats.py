@@ -16,14 +16,16 @@ import regex
 from calibre.ebooks.oeb.base import XHTML
 from calibre.ebooks.oeb.polish.cascade import iterrules, resolve_styles, iterdeclaration
 from calibre.utils.icu import ord_string, safe_chr
+from polyglot.builtins import unicode_type
 from tinycss.fonts3 import parse_font_family
+from polyglot.builtins import range
 
 
 def normalize_font_properties(font):
     w = font.get('font-weight', None)
     if not w and w != 0:
         w = 'normal'
-    w = unicode(w)
+    w = unicode_type(w)
     w = {'normal':'400', 'bold':'700'}.get(w, w)
     if w not in {'100', '200', '300', '400', '500', '600', '700',
             '800', '900'}:
@@ -91,10 +93,10 @@ def get_matching_rules(rules, font):
     elif fw == 500:
         q = [500, 400, 300, 200, 100, 600, 700, 800, 900]
     elif fw < 400:
-        q = [fw] + list(xrange(fw-100, -100, -100)) + list(xrange(fw+100,
+        q = [fw] + list(range(fw-100, -100, -100)) + list(range(fw+100,
             100, 1000))
     else:
-        q = [fw] + list(xrange(fw+100, 100, 1000)) + list(xrange(fw-100,
+        q = [fw] + list(range(fw+100, 100, 1000)) + list(range(fw-100,
             -100, -100))
     for wt in q:
         m = [f for f in matches if f['weight'] == wt]
@@ -119,7 +121,7 @@ def get_element_text(elem, resolve_property, resolve_pseudo_property, capitalize
     if before:
         ans.append(before)
     if for_pseudo is not None:
-        ans.append(tostring(elem, method='text', encoding=unicode, with_tail=False))
+        ans.append(tostring(elem, method='text', encoding=unicode_type, with_tail=False))
     else:
         if elem.text:
             ans.append(elem.text)

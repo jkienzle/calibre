@@ -2,7 +2,7 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from polyglot.builtins import map
+from polyglot.builtins import map, unicode_type
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -15,6 +15,7 @@ from functools import partial
 from calibre import as_unicode
 from calibre.customize import (Plugin, numeric_version, platform,
         InvalidPlugin, PluginNotFound)
+from polyglot.builtins import string_or_bytes
 
 # PEP 302 based plugin loading mechanism, works around the bug in zipimport in
 # python 2.x that prevents importing from zip files in locations whose paths
@@ -34,7 +35,7 @@ def get_resources(zfp, name_or_list_of_names):
                 be just the bytes of the resource or None if it wasn't found.
     '''
     names = name_or_list_of_names
-    if isinstance(names, basestring):
+    if isinstance(names, string_or_bytes):
         names = [names]
     ans = {}
     with zipfile.ZipFile(zfp) as zf:
@@ -65,11 +66,11 @@ def get_icons(zfp, name_or_list_of_names):
     from PyQt5.Qt import QIcon, QPixmap
     names = name_or_list_of_names
     ans = get_resources(zfp, names)
-    if isinstance(names, basestring):
+    if isinstance(names, string_or_bytes):
         names = [names]
     if ans is None:
         ans = {}
-    if isinstance(ans, basestring):
+    if isinstance(ans, string_or_bytes):
         ans = dict([(names[0], ans)])
 
     ians = {}
@@ -216,7 +217,7 @@ class PluginLoader(object):
             if ans.minimum_calibre_version > numeric_version:
                 raise InvalidPlugin(
                     'The plugin at %s needs a version of calibre >= %s' %
-                    (as_unicode(path_to_zip_file), '.'.join(map(unicode,
+                    (as_unicode(path_to_zip_file), '.'.join(map(unicode_type,
                         ans.minimum_calibre_version))))
 
             if platform not in ans.supported_platforms:
@@ -231,7 +232,7 @@ class PluginLoader(object):
             raise
 
     def _locate_code(self, zf, path_to_zip_file):
-        names = [x if isinstance(x, unicode) else x.decode('utf-8') for x in
+        names = [x if isinstance(x, unicode_type) else x.decode('utf-8') for x in
                 zf.namelist()]
         names = [x[1:] if x[0] == '/' else x for x in names]
 

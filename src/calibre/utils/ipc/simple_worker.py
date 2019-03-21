@@ -7,7 +7,7 @@ __license__   = 'GPL v3'
 __copyright__ = '2012, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import os, cPickle, traceback, time, importlib
+import os, traceback, time, importlib
 from binascii import hexlify, unhexlify
 from multiprocessing.connection import Client
 from threading import Thread
@@ -16,6 +16,8 @@ from contextlib import closing
 from calibre.constants import iswindows
 from calibre.utils.ipc import eintr_retry_call
 from calibre.utils.ipc.launch import Worker
+from calibre.utils.serialize import msgpack_loads, msgpack_dumps
+from polyglot.builtins import unicode_type, string_or_bytes, environ_item
 
 
 class WorkerError(Exception):
@@ -129,9 +131,9 @@ def create_worker(env, priority='normal', cwd=None, func='main'):
 
     env = dict(env)
     env.update({
-        'CALIBRE_WORKER_ADDRESS': hexlify(cPickle.dumps(listener.address, -1)),
-        'CALIBRE_WORKER_KEY': hexlify(auth_key),
-        'CALIBRE_SIMPLE_WORKER': 'calibre.utils.ipc.simple_worker:%s' % func,
+        'CALIBRE_WORKER_ADDRESS': environ_item(hexlify(msgpack_dumps(listener.address))),
+        'CALIBRE_WORKER_KEY': environ_item(hexlify(auth_key)),
+        'CALIBRE_SIMPLE_WORKER': environ_item('calibre.utils.ipc.simple_worker:%s' % func),
     })
 
     w = Worker(env)
@@ -163,7 +165,7 @@ def start_pipe_worker(command, env=None, priority='normal', **process_args):
         args['close_fds'] = True
 
     exe = w.executable
-    cmd = [exe] if isinstance(exe, basestring) else exe
+    cmd = [exe] if isinstance(exe, string_or_bytes) else exe
     p = subprocess.Popen(cmd + ['--pipe-worker', command], **args)
     return p
 
@@ -251,9 +253,9 @@ def offload_worker(env={}, priority='normal', cwd=None):
 
 def compile_code(src):
     import re, io
-    if not isinstance(src, unicode):
-        match = re.search(r'coding[:=]\s*([-\w.]+)', src[:200])
-        enc = match.group(1) if match else 'utf-8'
+    if not isinstance(src, unicode_type):
+        match = re.search(br'coding[:=]\s*([-\w.]+)', src[:200])
+        enc = match.group(1).decode('utf-8') if match else 'utf-8'
         src = src.decode(enc)
     # Python complains if there is a coding declaration in a unicode string
     src = re.sub(r'^#.*coding\s*[:=]\s*([-\w.]+)', '#', src, flags=re.MULTILINE)
@@ -269,7 +271,7 @@ def compile_code(src):
 
 def main():
     # The entry point for the simple worker process
-    address = cPickle.loads(unhexlify(os.environ['CALIBRE_WORKER_ADDRESS']))
+    address = msgpack_loads(unhexlify(os.environ['CALIBRE_WORKER_ADDRESS']))
     key     = unhexlify(os.environ['CALIBRE_WORKER_KEY'])
     with closing(Client(address, authkey=key)) as conn:
         args = eintr_retry_call(conn.recv)
@@ -299,7 +301,7 @@ def main():
 
 def offload():
     # The entry point for the offload worker process
-    address = cPickle.loads(unhexlify(os.environ['CALIBRE_WORKER_ADDRESS']))
+    address = msgpack_loads(unhexlify(os.environ['CALIBRE_WORKER_ADDRESS']))
     key     = unhexlify(os.environ['CALIBRE_WORKER_KEY'])
     func_cache = {}
     with closing(Client(address, authkey=key)) as conn:

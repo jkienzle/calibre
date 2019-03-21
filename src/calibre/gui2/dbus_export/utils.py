@@ -12,11 +12,14 @@ import dbus
 
 from PyQt5.Qt import QSize, QImage, Qt, QKeySequence, QBuffer, QByteArray
 
+from polyglot.builtins import unicode_type
+
 
 def log(*args, **kw):
     kw['file'] = sys.stderr
     print('DBusExport:', *args, **kw)
     kw['file'].flush()
+
 
 from calibre.ptempfile import PersistentTemporaryDirectory
 
@@ -57,6 +60,7 @@ class IconCache(object):
         # Touch the theme path: GTK icon loading system checks the mtime of the
         # dir to decide whether it should look for new icons in the theme dir.
         os.utime(self.icon_theme_path, None)
+
 
 _icon_cache = None
 
@@ -145,7 +149,7 @@ def set_X_window_properties(win_id, **properties):
     for name, val in properties.iteritems():
         atom = atoms[name].reply().atom
         type_atom = xcb.xproto.Atom.STRING
-        if isinstance(val, unicode):
+        if isinstance(val, unicode_type):
             if utf8_string_atom is None:
                 utf8_string_atom = conn.core.InternAtom(True, len(b'UTF8_STRING'), b'UTF8_STRING').reply().atom
             type_atom = utf8_string_atom

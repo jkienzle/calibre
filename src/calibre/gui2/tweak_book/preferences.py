@@ -6,9 +6,10 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
 
+import numbers
 from operator import attrgetter, methodcaller
 from collections import namedtuple
-from polyglot.builtins import map
+from polyglot.builtins import map, unicode_type, range
 from itertools import product
 from copy import copy, deepcopy
 
@@ -50,8 +51,8 @@ class BasicSettings(QWidget):  # {{{
                 getter = getter or methodcaller('isChecked')
                 setter = setter or (lambda x, v: x.setChecked(v))
                 widget.toggled.connect(self.emit_changed)
-            elif isinstance(defval, (int, float)):
-                widget = (QSpinBox if isinstance(defval, int) else QDoubleSpinBox)(self)
+            elif isinstance(defval, numbers.Number):
+                widget = (QSpinBox if isinstance(defval, numbers.Integral) else QDoubleSpinBox)(self)
                 getter = getter or methodcaller('value')
                 setter = setter or (lambda x, v:x.setValue(v))
                 widget.valueChanged.connect(self.emit_changed)
@@ -75,7 +76,7 @@ class BasicSettings(QWidget):  # {{{
             widget.addItem(human or key, key)
 
         def getter(w):
-            ans = unicode(w.itemData(w.currentIndex()) or '')
+            ans = unicode_type(w.itemData(w.currentIndex()) or '')
             return {none_val:None}.get(ans, ans)
 
         def setter(w, val):
@@ -102,7 +103,7 @@ class BasicSettings(QWidget):  # {{{
         widget.defaults = prefs.defaults[name]
 
         def getter(w):
-            return list(map(unicode, (w.item(i).text() for i in xrange(w.count()))))
+            return list(map(unicode_type, (w.item(i).text() for i in range(w.count()))))
 
         def setter(w, val):
             order_map = {x:i for i, x in enumerate(val)}
@@ -342,7 +343,7 @@ class PreviewSettings(BasicSettings):
         self.setLayout(l)
 
         def family_getter(w):
-            return unicode(w.currentFont().family())
+            return unicode_type(w.currentFont().family())
 
         def family_setter(w, val):
             w.setCurrentFont(QFont(val))
@@ -452,14 +453,14 @@ class ToolbarSettings(QWidget):
     def read_settings(self, prefs=None):
         prefs = prefs or tprefs
         val = self.original_settings = {}
-        for i in xrange(1, self.bars.count()):
-            name = unicode(self.bars.itemData(i) or '')
+        for i in range(1, self.bars.count()):
+            name = unicode_type(self.bars.itemData(i) or '')
             val[name] = copy(prefs[name])
         self.current_settings = deepcopy(val)
 
     @property
     def current_name(self):
-        return unicode(self.bars.itemData(self.bars.currentIndex()) or '')
+        return unicode_type(self.bars.itemData(self.bars.currentIndex()) or '')
 
     def build_lists(self):
         from calibre.gui2.tweak_book.plugin import plugin_toolbar_actions
@@ -483,12 +484,12 @@ class ToolbarSettings(QWidget):
             ic = ac.icon()
             if not ic or ic.isNull():
                 ic = blank
-            ans = QListWidgetItem(ic, unicode(ac.text()).replace('&', ''), parent)
+            ans = QListWidgetItem(ic, unicode_type(ac.text()).replace('&', ''), parent)
             ans.setData(Qt.UserRole, key)
             ans.setToolTip(ac.toolTip())
             return ans
 
-        for key, ac in sorted(all_items.iteritems(), key=lambda k_ac: unicode(k_ac[1].text())):
+        for key, ac in sorted(all_items.iteritems(), key=lambda k_ac: unicode_type(k_ac[1].text())):
             if key not in applied:
                 to_item(key, ac, self.available)
         if name == 'global_book_toolbar' and 'donate' not in applied:
@@ -539,7 +540,7 @@ class ToolbarSettings(QWidget):
             s = self.current_settings[self.current_name]
         except KeyError:
             return
-        names = [unicode(i.data(Qt.UserRole) or '') for i in self.available.selectedItems()]
+        names = [unicode_type(i.data(Qt.UserRole) or '') for i in self.available.selectedItems()]
         if not names:
             return
         for n in names:
@@ -627,7 +628,7 @@ class TemplatesDialog(Dialog):  # {{{
 
     @property
     def current_syntax(self):
-        return unicode(self.syntaxes.currentText())
+        return unicode_type(self.syntaxes.currentText())
 
     def show_template(self):
         from calibre.gui2.tweak_book.templates import raw_template_for
@@ -645,7 +646,7 @@ class TemplatesDialog(Dialog):  # {{{
 
     def _save_syntax(self):
         custom = tprefs['templates']
-        custom[self.current_syntax] = unicode(self.editor.toPlainText())
+        custom[self.current_syntax] = unicode_type(self.editor.toPlainText())
         tprefs['templates'] = custom
 
     def restore_defaults(self):
@@ -724,7 +725,7 @@ class Preferences(QDialog):
         cl.setCurrentRow(0)
         cl.item(0).setSelected(True)
         w, h = cl.sizeHintForColumn(0), 0
-        for i in xrange(cl.count()):
+        for i in range(cl.count()):
             h = cl.sizeHintForRow(i)
             cl.item(i).setSizeHint(QSize(w, h))
 
@@ -744,7 +745,7 @@ class Preferences(QDialog):
         return self.toolbars_panel.changed
 
     def restore_all_defaults(self):
-        for i in xrange(self.stacks.count()):
+        for i in range(self.stacks.count()):
             w = self.stacks.widget(i)
             w.restore_defaults()
 
@@ -768,7 +769,7 @@ class Preferences(QDialog):
 
     def accept(self):
         tprefs.set('preferences_geom', bytearray(self.saveGeometry()))
-        for i in xrange(self.stacks.count()):
+        for i in range(self.stacks.count()):
             w = self.stacks.widget(i)
             w.commit()
         QDialog.accept(self)

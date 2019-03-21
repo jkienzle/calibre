@@ -6,6 +6,7 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2015, Kovid Goyal <kovid at kovidgoyal.net>'
 
+import numbers
 from collections import Counter, defaultdict
 from operator import attrgetter
 
@@ -14,6 +15,7 @@ from lxml import etree
 from calibre.ebooks import parse_css_length
 from calibre.ebooks.docx.writer.utils import convert_color, int_or_zero
 from calibre.utils.localization import lang_as_iso639_1
+from polyglot.builtins import unicode_type
 from tinycss.css21 import CSS21Parser
 
 css_parser = CSS21Parser()
@@ -45,7 +47,7 @@ def bmap(x):
 
 
 def is_dropcaps(html_tag, tag_style):
-    return len(html_tag) < 2 and len(etree.tostring(html_tag, method='text', encoding=unicode, with_tail=False)) < 5 and tag_style['float'] == 'left'
+    return len(html_tag) < 2 and len(etree.tostring(html_tag, method='text', encoding=unicode_type, with_tail=False)) < 5 and tag_style['float'] == 'left'
 
 
 class CombinedStyle(object):
@@ -231,7 +233,7 @@ class TextStyle(DOCXStyle):
         except (ValueError, TypeError, AttributeError):
             self.spacing = None
         va = css.first_vertical_align
-        if isinstance(va, (int, float)):
+        if isinstance(va, numbers.Number):
             self.vertical_align = str(int(va * 2))
         else:
             val = {
@@ -253,7 +255,7 @@ class TextStyle(DOCXStyle):
                 elif self.padding != padding:
                     self.padding = ignore
                 val = css['border-%s-width' % edge]
-                if not isinstance(val, (float, int, long)):
+                if not isinstance(val, numbers.Number):
                     val = {'thin':0.2, 'medium':1, 'thick':2}.get(val, 0)
                 val = min(96, max(2, int(val * 8)))
                 if self.border_width is None:
@@ -466,7 +468,7 @@ def read_css_block_borders(self, css, store_css_style=False):
                 setattr(self, 'margin_' + edge, 0)  # for e.g.: margin: auto
             setattr(self, 'css_margin_' + edge, css._style.get('margin-' + edge, ''))
             val = css['border-%s-width' % edge]
-            if not isinstance(val, (float, int, long)):
+            if not isinstance(val, numbers.Number):
                 val = {'thin':0.2, 'medium':1, 'thick':2}.get(val, 0)
             val = min(96, max(2, int(val * 8)))
             setattr(self, 'border_%s_width' % edge, val)

@@ -15,6 +15,8 @@ from pprint import pformat
 
 from gi.repository import Gtk, Gdk, GdkX11  # noqa
 
+from polyglot.builtins import unicode_type
+
 UI_INFO = """
 <ui>
   <menubar name='MenuBar'>
@@ -199,8 +201,8 @@ class MenuExampleWindow(Gtk.ApplicationWindow):
 
 
 def convert(v):
-    if isinstance(v, basestring):
-        return unicode(v)
+    if isinstance(v, (unicode_type, bytes)):
+        return unicode_type(v)
     if isinstance(v, dbus.Struct):
         return tuple(convert(val) for val in v)
     if isinstance(v, list):
@@ -275,7 +277,7 @@ class MyApplication(Gtk.Application):
             print ('Subscription group:', item[0])
             print ('Menu number:', item[1])
             for menu_item in item[2]:
-                menu_item = {unicode(k):convert(v) for k, v in menu_item.iteritems()}
+                menu_item = {unicode_type(k):convert(v) for k, v in menu_item.iteritems()}
                 if ':submenu' in menu_item:
                     groups.add(menu_item[':submenu'][0])
                 if ':section' in menu_item:
@@ -306,6 +308,7 @@ class MyApplication(Gtk.Application):
 
     def do_startup(self):
         Gtk.Application.do_startup(self)
+
 
 app = MyApplication(application_id='com.calibre-ebook.test-gtk')
 signal.signal(signal.SIGINT, signal.SIG_DFL)

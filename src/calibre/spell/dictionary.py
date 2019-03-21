@@ -18,6 +18,7 @@ from calibre.spell import parse_lang_code
 from calibre.utils.config import JSONConfig
 from calibre.utils.icu import capitalize
 from calibre.utils.localization import get_lang, get_system_locale
+from polyglot.builtins import unicode_type
 
 Dictionary = namedtuple('Dictionary', 'primary_locale locales dicpath affpath builtin name id')
 LoadedDictionary = namedtuple('Dictionary', 'primary_locale locales obj builtin name id')
@@ -176,7 +177,7 @@ class Dictionaries(object):
 
     def __init__(self):
         self.remove_hyphenation = re.compile('[\u2010-]+')
-        self.negative_pat = re.compile('-[.\d+]')
+        self.negative_pat = re.compile(r'-[.\d+]')
         self.fix_punctuation_pat = re.compile(r'''[:.]''')
         self.dictionaries = {}
         self.word_cache = {}
@@ -391,7 +392,7 @@ class Dictionaries(object):
 
         if d is not None:
             try:
-                ans = d.obj.suggest(unicode(word).replace('\u2010', '-'))
+                ans = d.obj.suggest(unicode_type(word).replace('\u2010', '-'))
             except ValueError:
                 pass
             else:

@@ -34,6 +34,7 @@ from calibre.gui2.tweak_book.widgets import BusyCursor
 from calibre.gui2.widgets2 import FlowLayout, HistoryComboBox
 from calibre.utils.icu import primary_contains
 from calibre.ebooks.conversion.search_replace import REGEX_FLAGS, compile_regular_expression
+from polyglot.builtins import unicode_type, range
 
 
 # The search panel {{{
@@ -365,7 +366,7 @@ class SearchWidget(QWidget):
     @dynamic_property
     def find(self):
         def fget(self):
-            return unicode(self.find_text.text())
+            return unicode_type(self.find_text.text())
 
         def fset(self, val):
             self.find_text.setText(val)
@@ -376,7 +377,7 @@ class SearchWidget(QWidget):
         def fget(self):
             if self.mode == 'function':
                 return self.functions.text()
-            return unicode(self.replace_text.text())
+            return unicode_type(self.replace_text.text())
 
         def fset(self, val):
             self.replace_text.setText(val)
@@ -535,7 +536,7 @@ class SearchesModel(QAbstractListModel):
     def __init__(self, parent):
         QAbstractListModel.__init__(self, parent)
         self.searches = tprefs['saved_searches']
-        self.filtered_searches = list(xrange(len(self.searches)))
+        self.filtered_searches = list(range(len(self.searches)))
 
     def rowCount(self, parent=QModelIndex()):
         return len(self.filtered_searches)
@@ -614,7 +615,7 @@ class SearchesModel(QAbstractListModel):
         return None
 
     def do_filter(self, text):
-        text = unicode(text)
+        text = unicode_type(text)
         self.beginResetModel()
         self.filtered_searches = []
         for i, search in enumerate(self.searches):
@@ -646,7 +647,7 @@ class SearchesModel(QAbstractListModel):
     def add_searches(self, count=1):
         self.beginResetModel()
         self.searches = tprefs['saved_searches']
-        self.filtered_searches.extend(xrange(len(self.searches) - count, len(self.searches), 1))
+        self.filtered_searches.extend(range(len(self.searches) - count, len(self.searches), 1))
         self.endResetModel()
 
     def remove_searches(self, rows):
@@ -797,7 +798,7 @@ class EditSearch(QFrame):  # {{{
     @property
     def current_search(self):
         search = self.search.copy()
-        f = unicode(self.find.toPlainText())
+        f = unicode_type(self.find.toPlainText())
         search['find'] = f
         search['dot_all'] = bool(self.dot_all.isChecked())
         search['case_sensitive'] = bool(self.case_sensitive.isChecked())
@@ -805,7 +806,7 @@ class EditSearch(QFrame):  # {{{
         if search['mode'] == 'function':
             r = self.function.text()
         else:
-            r = unicode(self.replace.toPlainText())
+            r = unicode_type(self.replace.toPlainText())
         search['replace'] = r
         return search
 
@@ -824,7 +825,7 @@ class EditSearch(QFrame):  # {{{
         search = self.search
         search['name'] = n
 
-        f = unicode(self.find.toPlainText())
+        f = unicode_type(self.find.toPlainText())
         if not f:
             error_dialog(self, _('Must specify find'), _(
                 'You must specify a find expression'), show=True)
@@ -839,7 +840,7 @@ class EditSearch(QFrame):  # {{{
                     'You must specify a function name in Function-Regex mode'), show=True)
                 return False
         else:
-            r = unicode(self.replace.toPlainText())
+            r = unicode_type(self.replace.toPlainText())
         search['replace'] = r
 
         search['dot_all'] = bool(self.dot_all.isChecked())

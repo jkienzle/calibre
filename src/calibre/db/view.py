@@ -7,10 +7,10 @@ __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import weakref, operator
+import weakref, operator, numbers
 from functools import partial
 from itertools import izip, imap
-from polyglot.builtins import map
+from polyglot.builtins import map, unicode_type, range
 
 from calibre.ebooks.metadata import title_sort
 from calibre.utils.config_base import tweaks, prefs
@@ -49,7 +49,7 @@ class TableRow(object):
         view = self.view()
         if isinstance(obj, slice):
             return [view._field_getters[c](self.book_id)
-                    for c in xrange(*obj.indices(len(view._field_getters)))]
+                    for c in range(*obj.indices(len(view._field_getters)))]
         else:
             return view._field_getters[obj](self.book_id)
 
@@ -57,7 +57,7 @@ class TableRow(object):
         return self.column_count
 
     def __iter__(self):
-        for i in xrange(self.column_count):
+        for i in range(self.column_count):
             yield self[i]
 
 
@@ -98,7 +98,7 @@ class View(object):
                     'marked': self.get_marked,
                     'series_sort':self.get_series_sort,
                 }.get(col, self._get)
-            if isinstance(col, int):
+            if isinstance(col, numbers.Integral):
                 label = self.cache.backend.custom_column_num_map[col]['label']
                 label = (self.cache.backend.field_metadata.custom_field_prefix + label)
             if label.endswith('_index'):
@@ -374,7 +374,7 @@ class View(object):
             self.marked_ids = dict.fromkeys(id_dict, u'true')
         else:
             # Ensure that all the items in the dict are text
-            self.marked_ids = dict(izip(id_dict.iterkeys(), imap(unicode,
+            self.marked_ids = dict(izip(id_dict.iterkeys(), imap(unicode_type,
                 id_dict.itervalues())))
         # This invalidates all searches in the cache even though the cache may
         # be shared by multiple views. This is not ideal, but...
@@ -432,4 +432,3 @@ class View(object):
         self._map_filtered = ids + self._map_filtered
         if prefs['mark_new_books']:
             self.toggle_marked_ids(ids)
-

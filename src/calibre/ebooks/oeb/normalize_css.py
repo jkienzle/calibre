@@ -6,7 +6,8 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
 
-from polyglot.builtins import zip
+import numbers
+from polyglot.builtins import zip, string_or_bytes
 from functools import wraps
 
 from css_parser.css import PropertyValue
@@ -127,10 +128,10 @@ def normalize_font(cssvalue, font_family_as_list=False):
         ans = {k:DEFAULTS[k] for k in composition}
         ans.update(parse_font(val))
     if font_family_as_list:
-        if isinstance(ans['font-family'], basestring):
+        if isinstance(ans['font-family'], string_or_bytes):
             ans['font-family'] = [x.strip() for x in ans['font-family'].split(',')]
     else:
-        if not isinstance(ans['font-family'], basestring):
+        if not isinstance(ans['font-family'], string_or_bytes):
             ans['font-family'] = serialize_font_family(ans['font-family'])
     return ans
 
@@ -392,7 +393,7 @@ def test_normalization(return_tests=False):  # {{{
                 tuple('0 0 0 0'.split()) : '0',
             }.iteritems():
                 for prefix in ('margin', 'padding'):
-                    css = {'%s-%s' % (prefix, x) : str(y)+'pt' if isinstance(y, (int, float)) else y for x, y in zip(('left', 'top', 'right', 'bottom'), s)}
+                    css = {'%s-%s' % (prefix, x) : str(y)+'pt' if isinstance(y, numbers.Number) else y for x, y in zip(('left', 'top', 'right', 'bottom'), s)}
                     css = '; '.join(('%s:%s' % (k, v) for k, v in css.iteritems()))
                     style = parseStyle(css)
                     condense_rule(style)

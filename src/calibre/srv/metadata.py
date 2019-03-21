@@ -10,7 +10,6 @@ from collections import namedtuple
 from datetime import datetime, time
 from functools import partial
 from threading import Lock
-from urllib import quote
 
 from calibre.constants import config_dir
 from calibre.db.categories import Tag
@@ -23,6 +22,8 @@ from calibre.utils.icu import collation_order
 from calibre.utils.localization import calibre_langcode_to_name
 from calibre.library.comments import comments_to_html, markdown
 from calibre.library.field_metadata import category_icon_map
+from polyglot.builtins import range
+from polyglot.urllib import quote
 
 IGNORED_FIELDS = frozenset('cover ondevice path marked au_map size'.split())
 
@@ -191,7 +192,7 @@ def icon_map():
         return _icon_map
 
 
-def categories_settings(query, db):
+def categories_settings(query, db, gst_container=GroupedSearchTerms):
     dont_collapse = frozenset(query.get('dont_collapse', '').split(','))
     partition_method = query.get('partition_method', 'first letter')
     if partition_method not in {'first letter', 'disable', 'partition'}:
@@ -213,7 +214,7 @@ def categories_settings(query, db):
     hidden_categories = frozenset(db.pref('tag_browser_hidden_categories', set()))
     return CategoriesSettings(
         dont_collapse, collapse_model, collapse_at, sort_by, template,
-        using_hierarchy, GroupedSearchTerms(db.pref('grouped_search_terms', {})),
+        using_hierarchy, gst_container(db.pref('grouped_search_terms', {})),
         hidden_categories, query.get('hide_empty_categories') == 'yes')
 
 
@@ -573,7 +574,7 @@ def dump_tags_model(m):
     def dump_node(index, level=-1):
         if level > -1:
             ans.append(indent*level + index.data(Qt.UserRole).dump_data())
-        for i in xrange(m.rowCount(index)):
+        for i in range(m.rowCount(index)):
             dump_node(m.index(i, 0, index), level + 1)
         if level == 0:
             ans.append('')

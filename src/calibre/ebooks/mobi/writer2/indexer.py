@@ -8,12 +8,14 @@ __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
+import numbers
 from struct import pack
-from cStringIO import StringIO
+import io
 from collections import OrderedDict, defaultdict
 
 from calibre.ebooks.mobi.utils import (encint, encode_number_as_hex,
         encode_tbs, align_block, RECORD_SIZE, CNCX as CNCX_)
+from polyglot.builtins import range
 
 
 class CNCX(CNCX_):  # {{{
@@ -164,8 +166,8 @@ class IndexEntry(object):
 
     @property
     def bytestring(self):
-        buf = StringIO()
-        if isinstance(self.index, int):
+        buf = io.BytesIO()
+        if isinstance(self.index, numbers.Integral):
             buf.write(encode_number_as_hex(self.index))
         else:
             raw = bytearray(self.index.encode('ascii'))
@@ -187,7 +189,7 @@ class IndexEntry(object):
         for tag in self.tag_nums:
             attr = self.attr_for_tag(tag)
             val = getattr(self, attr)
-            if isinstance(val, int):
+            if isinstance(val, numbers.Integral):
                 val = [val]
             for x in val:
                 buf.write(encint(x))
@@ -292,7 +294,7 @@ class TBS(object):  # {{{
                 self.book_tbs(data, first)
 
     def periodical_tbs(self, data, first, depth_map):
-        buf = StringIO()
+        buf = io.BytesIO()
 
         has_section_start = (depth_map[1] and
                 set(depth_map[1]).intersection(set(data['starts'])))
@@ -494,7 +496,7 @@ class Indexer(object):  # {{{
 
     def create_index_record(self, secondary=False):  # {{{
         header_length = 192
-        buf = StringIO()
+        buf = io.BytesIO()
         indices = list(SecondaryIndexEntry.entries()) if secondary else self.indices
 
         # Write index entries
@@ -537,7 +539,7 @@ class Indexer(object):  # {{{
     # }}}
 
     def create_header(self, secondary=False):  # {{{
-        buf = StringIO()
+        buf = io.BytesIO()
         if secondary:
             tagx_block = TAGX().secondary
         else:
@@ -601,7 +603,7 @@ class Indexer(object):  # {{{
 
         # The index of the last entry in the NCX
         idx = indices[-1].index
-        if isinstance(idx, int):
+        if isinstance(idx, numbers.Integral):
             idx = encode_number_as_hex(idx)
         else:
             idx = idx.encode('ascii')
@@ -844,7 +846,7 @@ class Indexer(object):  # {{{
 
         deepest = max(i.depth for i in self.indices)
 
-        for i in xrange(self.number_of_text_records):
+        for i in range(self.number_of_text_records):
             offset = i * RECORD_SIZE
             next_offset = offset + RECORD_SIZE
             data = {'ends':[], 'completes':[], 'starts':[],
@@ -890,5 +892,3 @@ class Indexer(object):  # {{{
     # }}}
 
 # }}}
-
-

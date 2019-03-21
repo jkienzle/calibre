@@ -10,6 +10,7 @@ from lxml.html.builder import TABLE, TR, TD
 
 from calibre.ebooks.docx.block_styles import inherit, read_shd as rs, read_border, binary_property, border_props, ParagraphStyle, border_to_css
 from calibre.ebooks.docx.char_styles import RunStyle
+from polyglot.builtins import range
 
 # Read from XML {{{
 read_shd = rs
@@ -94,6 +95,7 @@ def read_indent(parent, dest, XPath, get):
     for cs in XPath('./w:tblInd')(parent):
         ans = _read_width(cs, get)
     setattr(dest, 'indent', ans)
+
 
 border_edges = ('left', 'top', 'right', 'bottom', 'insideH', 'insideV')
 
@@ -504,8 +506,6 @@ class Table(object):
 
     def resolve_cell_style(self, tc, overrides, row, col, rows, cols_in_row):
         cs = CellStyle(self.namespace)
-        # from lxml.etree import tostring
-        # txt = tostring(tc, method='text', encoding=unicode)
         for o in overrides:
             if o in self.overrides:
                 ovr = self.overrides[o]
@@ -571,7 +571,7 @@ class Table(object):
             return
         # Handle vMerge
         max_col_num = max(len(r) for r in self.cell_map)
-        for c in xrange(max_col_num):
+        for c in range(max_col_num):
             cells = [row[c] if c < len(row) else None for row in self.cell_map]
             runs = [[]]
             for cell in cells:
@@ -699,4 +699,3 @@ class Tables(object):
         table = self.para_map.get(p, None)
         if table is not None:
             return table.style_map.get(p, (None, None))[1]
-
