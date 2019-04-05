@@ -18,7 +18,7 @@ from calibre.utils.icu import sort_key
 from calibre.utils.localization import localize_user_manual_link
 from polyglot.builtins import unicode_type
 
-from catalog_epub_mobi_ui import Ui_Form
+from .catalog_epub_mobi_ui import Ui_Form
 from PyQt5.Qt import (Qt, QAbstractItemView, QCheckBox, QComboBox,
         QDoubleSpinBox, QIcon, QInputDialog, QLineEdit, QRadioButton,
         QSize, QSizePolicy, QTableWidget, QTableWidgetItem, QTextEdit, QToolButton,
@@ -498,6 +498,28 @@ class PluginWidget(QWidget,Ui_Form):
         elif self.merge_after.isChecked():
             checked = 'after'
         include_hr = self.include_hr.isChecked()
+
+        # Init self.merge_source_field_name
+        self.merge_source_field_name = ''
+        cs = unicode_type(self.merge_source_field.currentText())
+        if cs and cs in self.merge_source_fields:
+            merge_source_spec = self.merge_source_fields[cs]
+            self.merge_source_field_name = merge_source_spec['field']
+
+        # Init self.header_note_source_field_name
+        self.header_note_source_field_name = ''
+        cs = unicode_type(self.header_note_source_field.currentText())
+        if cs and cs in self.header_note_source_fields:
+            header_note_source_spec = self.header_note_source_fields[cs]
+            self.header_note_source_field_name = header_note_source_spec['field']
+
+        # Init self.genre_source_field_name
+        self.genre_source_field_name = _('Tags')
+        cs = unicode_type(self.genre_source_field.currentText())
+        if cs != _('Tags') and cs and cs in self.genre_source_fields:
+            genre_source_spec = self.genre_source_fields[cs]
+            self.genre_source_field_name = genre_source_spec['field']
+
         opts_dict['merge_comments_rule'] = "%s:%s:%s" % \
             (self.merge_source_field_name, checked, include_hr)
 

@@ -7,7 +7,6 @@ __docformat__ = 'restructuredtext en'
 
 import re, codecs, os, numbers
 from collections import namedtuple
-from types import StringType, UnicodeType
 
 from calibre import (strftime)
 from calibre.customize import CatalogPlugin
@@ -351,7 +350,7 @@ class BIBTEX(CatalogPlugin):
             bibtexc.ascii_bibtex = True
 
         # Check citation choice and go to default in case of bad CLI
-        if isinstance(opts.impcit, (StringType, UnicodeType)) :
+        if isinstance(opts.impcit, string_or_bytes) :
             if opts.impcit == 'False' :
                 citation_bibtex= False
             elif opts.impcit == 'True' :
@@ -363,7 +362,7 @@ class BIBTEX(CatalogPlugin):
             citation_bibtex= opts.impcit
 
         # Check add file entry and go to default in case of bad CLI
-        if isinstance(opts.addfiles, (StringType, UnicodeType)) :
+        if isinstance(opts.addfiles, string_or_bytes) :
             if opts.addfiles == 'False' :
                 addfiles_bibtex = False
             elif opts.addfiles == 'True' :

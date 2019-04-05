@@ -5,7 +5,6 @@ Created on 4 Jun 2010
 '''
 from __future__ import print_function
 
-from base64 import b64encode, b64decode
 import json, traceback
 from datetime import datetime, time
 
@@ -13,6 +12,8 @@ from calibre.ebooks.metadata.book import SERIALIZABLE_FIELDS
 from calibre.constants import filesystem_encoding, preferred_encoding
 from calibre.library.field_metadata import FieldMetadata
 from calibre import isbytestring
+from polyglot.builtins import iteritems, itervalues
+from polyglot.binary import as_base64_unicode, from_base64_bytes
 
 # Translate datetimes to and from strings. The string form is the datetime in
 # UTC. The returned date is also UTC
@@ -56,7 +57,7 @@ def encode_thumbnail(thumbnail):
             thumbnail = (width, height, thumbnail)
         except Exception:
             return None
-    return (thumbnail[0], thumbnail[1], b64encode(str(thumbnail[2])))
+    return (thumbnail[0], thumbnail[1], as_base64_unicode(thumbnail[2]))
 
 
 def decode_thumbnail(tup):
@@ -65,7 +66,7 @@ def decode_thumbnail(tup):
     '''
     if tup is None:
         return None
-    return (tup[0], tup[1], b64decode(tup[2]))
+    return (tup[0], tup[1], from_base64_bytes(tup[2]))
 
 
 def object_to_unicode(obj, enc=preferred_encoding):
@@ -149,7 +150,7 @@ class JsonCodec(object):
     def encode_metadata_attr(self, book, key):
         if key == 'user_metadata':
             meta = book.get_all_user_metadata(make_copy=True)
-            for fm in meta.itervalues():
+            for fm in itervalues(meta):
                 if fm['datatype'] == 'datetime':
                     fm['#value#'] = datetime_to_string(fm['#value#'])
                 encode_is_multiple(fm)
@@ -184,7 +185,7 @@ class JsonCodec(object):
     def raw_to_book(self, json_book, book_class, prefix):
         try:
             book = book_class(prefix, json_book.get('lpath', None))
-            for key,val in json_book.iteritems():
+            for key,val in iteritems(json_book):
                 meta = self.decode_metadata(key, val)
                 if key == 'user_metadata':
                     book.set_all_user_metadata(meta)
@@ -201,7 +202,7 @@ class JsonCodec(object):
         if key == 'classifiers':
             key = 'identifiers'
         if key == 'user_metadata':
-            for fm in value.itervalues():
+            for fm in itervalues(value):
                 if fm['datatype'] == 'datetime':
                     fm['#value#'] = string_to_datetime(fm['#value#'])
                 decode_is_multiple(fm)

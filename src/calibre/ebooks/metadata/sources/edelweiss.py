@@ -9,7 +9,10 @@ __docformat__ = 'restructuredtext en'
 
 import time, re
 from threading import Thread
-from Queue import Queue, Empty
+try:
+    from queue import Empty, Queue
+except ImportError:
+    from Queue import Empty, Queue
 
 from calibre import as_unicode, random_user_agent
 from calibre.ebooks.metadata import check_isbn
@@ -231,7 +234,10 @@ class Edelweiss(Source):
     # }}}
 
     def create_query(self, log, title=None, authors=None, identifiers={}):
-        from urllib import urlencode
+        try:
+            from urllib.parse import urlencode
+        except ImportError:
+            from urllib import urlencode
         import time
         BASE_URL = ('https://www.edelweiss.plus/GetTreelineControl.aspx?'
         'controlName=/uc/listviews/controls/ListView_data.ascx&itemID=0&resultType=32&dashboardType=8&itemType=1&dataType=products&keywordSearch&')

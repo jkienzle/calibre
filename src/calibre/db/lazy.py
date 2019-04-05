@@ -393,7 +393,7 @@ class ProxyMetadata(Metadata):
 
     def all_field_keys(self):
         um = ga(self, '_user_metadata')
-        return frozenset(ALL_METADATA_FIELDS.union(um.iterkeys()))
+        return frozenset(ALL_METADATA_FIELDS.union(frozenset(um)))
 
     @property
     def _proxy_metadata(self):

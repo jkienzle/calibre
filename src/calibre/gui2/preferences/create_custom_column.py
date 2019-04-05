@@ -16,7 +16,7 @@ from PyQt5.Qt import (
 )
 
 from calibre.gui2 import error_dialog
-from polyglot.builtins import unicode_type
+from polyglot.builtins import iteritems, unicode_type
 
 
 class CreateCustomColumn(QDialog):
@@ -86,7 +86,7 @@ class CreateCustomColumn(QDialog):
             'is_multiple':True
         },
     )))
-    column_types_map = {k['datatype']:idx for idx, k in column_types.iteritems()}
+    column_types_map = {k['datatype']:idx for idx, k in iteritems(column_types)}
 
     def __init__(self, parent, current_row, current_key, standard_colheads, standard_colnames):
         QDialog.__init__(self, parent)
@@ -558,8 +558,8 @@ class CreateCustomColumn(QDialog):
             else:
                 display_dict = {'number_format': None}
         elif col_type == 'comments':
-            display_dict['heading_position'] = type(u'')(self.comments_heading_position.currentData())
-            display_dict['interpret_as'] = type(u'')(self.comments_type.currentData())
+            display_dict['heading_position'] = unicode_type(self.comments_heading_position.currentData())
+            display_dict['interpret_as'] = unicode_type(self.comments_type.currentData())
         elif col_type == 'rating':
             display_dict['allow_half_stars'] = bool(self.allow_half_stars.isChecked())
 

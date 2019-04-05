@@ -34,7 +34,7 @@ from calibre.gui2.tweak_book.widgets import BusyCursor
 from calibre.gui2.widgets2 import FlowLayout, HistoryComboBox
 from calibre.utils.icu import primary_contains
 from calibre.ebooks.conversion.search_replace import REGEX_FLAGS, compile_regular_expression
-from polyglot.builtins import unicode_type, range
+from polyglot.builtins import iteritems, unicode_type, range, error_message
 
 
 # The search panel {{{
@@ -160,7 +160,7 @@ class WhereBox(QComboBox):
             return wm[self.currentIndex()]
 
         def fset(self, val):
-            self.setCurrentIndex({v:k for k, v in wm.iteritems()}[val])
+            self.setCurrentIndex({v:k for k, v in iteritems(wm)}[val])
         return property(fget=fget, fset=fset)
 
     def showPopup(self):
@@ -569,8 +569,7 @@ class SearchesModel(QAbstractListModel):
     def dropMimeData(self, data, action, row, column, parent):
         if parent.isValid() or action != Qt.MoveAction or not data.hasFormat('x-calibre/searches-rows') or not self.filtered_searches:
             return False
-        rows = map(int, bytes(bytearray(data.data('x-calibre/searches-rows'))).decode('ascii').split(','))
-        rows.sort()
+        rows = sorted(map(int, bytes(bytearray(data.data('x-calibre/searches-rows'))).decode('ascii').split(',')))
         moved_searches = [self.searches[self.filtered_searches[r]] for r in rows]
         moved_searches_q = {id(s) for s in moved_searches}
         insert_at = max(0, min(row, len(self.filtered_searches)))
@@ -1221,7 +1220,7 @@ class SavedSearches(QWidget):
                 return err()
             searches = []
             for item in obj['searches']:
-                if not isinstance(item, dict) or not set(item.iterkeys()).issuperset(needed_keys):
+                if not isinstance(item, dict) or not set(item).issuperset(needed_keys):
                     return err
                 searches.append({k:item[k] for k in needed_keys})
 
@@ -1280,7 +1279,7 @@ def validate_search_request(name, searchable_names, has_marked_text, state, gui_
 class InvalidRegex(regex.error):
 
     def __init__(self, raw, e):
-        regex.error.__init__(self, e.message)
+        regex.error.__init__(self, error_message(e))
         self.regex = raw
 
 
@@ -1400,10 +1399,10 @@ def run_search(
     except InvalidRegex as e:
         return error_dialog(gui_parent, _('Invalid regex'), '<p>' + _(
             'The regular expression you entered is invalid: <pre>{0}</pre>With error: {1}').format(
-                prepare_string_for_xml(e.regex), e.message), show=True)
+                prepare_string_for_xml(e.regex), error_message(e)), show=True)
     except NoSuchFunction as e:
         return error_dialog(gui_parent, _('No such function'), '<p>' + _(
-            'No replace function with the name: %s exists') % prepare_string_for_xml(e.message), show=True)
+            'No replace function with the name: %s exists') % prepare_string_for_xml(error_message(e)), show=True)
 
     def no_match():
         QApplication.restoreOverrideCursor()
@@ -1422,7 +1421,7 @@ def run_search(
                     return True
                 if wrap and not files and editor.find(p, wrap=True, marked=marked, save_match='gui'):
                     return True
-            for fname, syntax in files.iteritems():
+            for fname, syntax in iteritems(files):
                 ed = editors.get(fname, None)
                 if ed is not None:
                     if not wrap and ed is editor:

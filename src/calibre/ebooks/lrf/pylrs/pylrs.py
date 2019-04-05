@@ -37,17 +37,12 @@ from __future__ import print_function
 #                           Plot, Image (outside of ImageBlock),
 #                           EmpLine, EmpDots
 
-import os, re, codecs, operator
+import os, re, codecs, operator, io
 from xml.sax.saxutils import escape
 from datetime import date
-try:
-    from elementtree.ElementTree import (Element, SubElement)
-    Element, SubElement
-except ImportError:
-    from xml.etree.ElementTree import (Element, SubElement)
+from xml.etree.ElementTree import Element, SubElement, ElementTree
 
-from elements import ElementWriter
-from pylrf import (LrfWriter, LrfObject, LrfTag, LrfToc,
+from .pylrf import (LrfWriter, LrfObject, LrfTag, LrfToc,
         STREAM_COMPRESSED, LrfTagStream, LrfStreamBase, IMAGE_TYPE_ENCODING,
         BINDING_DIRECTION_ENCODING, LINE_TYPE_ENCODING, LrfFileStream,
         STREAM_FORCE_COMPRESSED)
@@ -624,12 +619,8 @@ class Book(Delegator):
         # now, add some newlines to make it easier to look at
 
         _formatXml(root)
-
-        writer = ElementWriter(root, header=True,
-                               sourceEncoding=self.sourceencoding,
-                               spaceBeforeClose=False,
-                               outputEncodingName=outputEncodingName)
-        writer.write(f)
+        tree = ElementTree(element=root)
+        tree.write(f, encoding=outputEncodingName, xml_declaration=True)
 
 
 class BookInformation(Delegator):
@@ -679,9 +670,10 @@ class Info(Delegator):
 
         # fix up the doc info to match the LRF format
         # NB: generates an encoding attribute, which lrs2lrf does not
-        xmlInfo = ElementWriter(info, header=True, sourceEncoding=lrfWriter.getSourceEncoding(),
-                                spaceBeforeClose=False).toString()
-
+        tree = ElementTree(element=info)
+        f = io.BytesIO()
+        tree.write(f, encoding='utf-8', xml_declaration=True)
+        xmlInfo = f.getvalue().decode('utf-8')
         xmlInfo = re.sub(r"<CThumbnail.*?>\n", "", xmlInfo)
         xmlInfo = xmlInfo.replace("SumPage>", "Page>")
         lrfWriter.docInfoXml = xmlInfo
@@ -1161,7 +1153,7 @@ class TextStyle(LrsStyle):
                  "rubyadjust", "rubyalign", "rubyoverhang",
                  "empdotsposition", 'emplinetype', 'emplineposition']
 
-    validSettings = baseDefaults.keys() + alsoAllow
+    validSettings = list(baseDefaults) + alsoAllow
 
     defaults = baseDefaults.copy()
 
@@ -1222,7 +1214,7 @@ class PageStyle(LrsStyle):
     alsoAllow = ["header", "evenheader", "oddheader",
                  "footer", "evenfooter", "oddfooter"]
 
-    validSettings = baseDefaults.keys() + alsoAllow
+    validSettings = list(baseDefaults) + alsoAllow
     defaults = baseDefaults.copy()
 
     @classmethod
@@ -1721,7 +1713,7 @@ class Text(LrsContainer):
 
     def toLrfContainer(self, lrfWriter, parent):
         if self.text:
-            if isinstance(self.text, str):
+            if isinstance(self.text, bytes):
                 parent.appendLrfTag(LrfTag("rawtext", self.text))
             else:
                 parent.appendLrfTag(LrfTag("textstring", self.text))

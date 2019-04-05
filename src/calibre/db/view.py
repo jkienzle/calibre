@@ -9,8 +9,8 @@ __docformat__ = 'restructuredtext en'
 
 import weakref, operator, numbers
 from functools import partial
-from itertools import izip, imap
-from polyglot.builtins import map, unicode_type, range
+from polyglot.builtins import (iteritems, itervalues, map,
+        unicode_type, range)
 
 from calibre.ebooks.metadata import title_sort
 from calibre.utils.config_base import tweaks, prefs
@@ -72,7 +72,7 @@ def format_is_multiple(x, sep=',', repl=None):
 def format_identifiers(x):
     if not x:
         return None
-    return ','.join('%s:%s'%(k, v) for k, v in x.iteritems())
+    return ','.join('%s:%s'%(k, v) for k, v in iteritems(x))
 
 
 class View(object):
@@ -89,7 +89,7 @@ class View(object):
         self.search_restriction_name = self.base_restriction_name = ''
         self._field_getters = {}
         self.column_count = len(cache.backend.FIELD_MAP)
-        for col, idx in cache.backend.FIELD_MAP.iteritems():
+        for col, idx in iteritems(cache.backend.FIELD_MAP):
             label, fmt = col, lambda x:x
             func = {
                     'id': self._get_id,
@@ -374,14 +374,13 @@ class View(object):
             self.marked_ids = dict.fromkeys(id_dict, u'true')
         else:
             # Ensure that all the items in the dict are text
-            self.marked_ids = dict(izip(id_dict.iterkeys(), imap(unicode_type,
-                id_dict.itervalues())))
+            self.marked_ids = {k: unicode_type(v) for k, v in iteritems(id_dict)}
         # This invalidates all searches in the cache even though the cache may
         # be shared by multiple views. This is not ideal, but...
         cmids = set(self.marked_ids)
         self.cache.clear_search_caches(old_marked_ids | cmids)
         if old_marked_ids != cmids:
-            for funcref in self.marked_listeners.itervalues():
+            for funcref in itervalues(self.marked_listeners):
                 func = funcref()
                 if func is not None:
                     func(old_marked_ids, cmids)

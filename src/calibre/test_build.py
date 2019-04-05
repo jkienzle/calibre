@@ -2,7 +2,6 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from polyglot.builtins import map, unicode_type
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -13,7 +12,10 @@ Test a binary calibre build to ensure that all needed binary images/libraries ha
 '''
 
 import os, ctypes, sys, unittest, time
+
 from calibre.constants import plugins, iswindows, islinux, isosx
+from polyglot.builtins import iteritems, map, unicode_type
+
 is_ci = os.environ.get('CI', '').lower() == 'true'
 
 
@@ -97,7 +99,7 @@ class BuildTest(unittest.TestCase):
         from calibre.utils.cleantext import test_clean_xml_chars
         test_clean_xml_chars()
         from lxml import etree
-        raw = '<a/>'
+        raw = b'<a/>'
         root = etree.fromstring(raw)
         self.assertEqual(etree.tostring(root), raw)
 
@@ -112,7 +114,7 @@ class BuildTest(unittest.TestCase):
             s = msgpack_dumps(obj)
             self.assertEqual(obj, msgpack_loads(s))
         self.assertEqual(type(msgpack_loads(msgpack_dumps(b'b'))), bytes)
-        self.assertEqual(type(msgpack_loads(msgpack_dumps(u'b'))), type(u''))
+        self.assertEqual(type(msgpack_loads(msgpack_dumps(u'b'))), unicode_type)
         large = b'x' * (100 * 1024 * 1024)
         msgpack_loads(msgpack_dumps(large))
 
@@ -136,7 +138,7 @@ class BuildTest(unittest.TestCase):
         d = winutil.localeconv()
         au(d['thousands_sep'], 'localeconv')
         au(d['decimal_point'], 'localeconv')
-        for k, v in d.iteritems():
+        for k, v in iteritems(d):
             au(v, k)
         for k in os.environ.keys():
             au(winutil.getenv(unicode_type(k)), 'getenv-' + k)
@@ -173,7 +175,7 @@ class BuildTest(unittest.TestCase):
         # it should just work because the hard-coded paths of the Qt
         # installation should work. If they do not, then it is a distro
         # problem.
-        fmts = set(map(unicode_type, QImageReader.supportedImageFormats()))
+        fmts = set(map(lambda x: x.data().decode('utf-8'), QImageReader.supportedImageFormats()))
         testf = {'jpg', 'png', 'svg', 'ico', 'gif'}
         self.assertEqual(testf.intersection(fmts), testf, "Qt doesn't seem to be able to load some of its image plugins. Available plugins: %s" % fmts)
         data = P('images/blank.png', allow_user_override=False, data=True)
@@ -252,7 +254,7 @@ class BuildTest(unittest.TestCase):
 
     def test_netifaces(self):
         import netifaces
-        self.assertGreaterEqual(netifaces.interfaces(), 1, 'netifaces could find no network interfaces')
+        self.assertGreaterEqual(len(netifaces.interfaces()), 1, 'netifaces could find no network interfaces')
 
     def test_psutil(self):
         import psutil

@@ -8,7 +8,6 @@ from PyQt5.Qt import (
     QFontMetrics, QPen, QBrush, QGraphicsRectItem)
 
 from calibre.ebooks.lrf.fonts import LIBERATION_FONT_MAP
-from calibre.ebooks.BeautifulSoup import Tag
 from calibre.ebooks.hyphenate import hyphenate_word
 from polyglot.builtins import unicode_type, string_or_bytes
 
@@ -164,8 +163,13 @@ class TextBlock(object):
         pass
 
     has_content = property(fget=lambda self: self.peek_index < len(self.lines)-1)
-    XML_ENTITIES = dict(zip(Tag.XML_SPECIAL_CHARS_TO_ENTITIES.values(), Tag.XML_SPECIAL_CHARS_TO_ENTITIES.keys()))
-    XML_ENTITIES["quot"] = '"'
+    XML_ENTITIES = {
+            "apos" : "'",
+            "quot" : '"',
+            "amp" : "&",
+            "lt" : "<",
+            "gt" : ">"
+    }
 
     def __init__(self, tb, font_loader, respect_max_y, text_width, logger,
                  opts, ruby_tags, link_activated):
@@ -184,7 +188,7 @@ class TextBlock(object):
         self.font_loader, self.logger, self.opts = font_loader, logger, opts
         self.in_link = False
         self.link_activated = link_activated
-        self.max_y = self.bs.blockheight if (respect_max_y or self.bs.blockrule.lower() in ('vert-fixed', 'block-fixed')) else sys.maxint
+        self.max_y = self.bs.blockheight if (respect_max_y or self.bs.blockrule.lower() in ('vert-fixed', 'block-fixed')) else sys.maxsize
         self.height = 0
         self.peek_index = -1
 
@@ -369,7 +373,7 @@ class Line(QGraphicsItem):
             self.children = self.childItems
 
     def start_link(self, refobj, slot):
-        self.current_link = [self.current_width, sys.maxint, refobj, slot]
+        self.current_link = [self.current_width, sys.maxsize, refobj, slot]
 
     def end_link(self):
         if self.current_link is not None:
@@ -532,12 +536,12 @@ class Line(QGraphicsItem):
         matches = []
         try:
             while True:
-                word = words.next()
+                word = next(words)
                 word.highlight = False
                 if tokens[0] in unicode_type(word.string).lower():
                     matches.append(word)
                     for c in range(1, len(tokens)):
-                        word = words.next()
+                        word = next(words)
                         print(tokens[c], word.string)
                         if tokens[c] not in unicode_type(word.string):
                             return None

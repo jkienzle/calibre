@@ -8,8 +8,11 @@ import json
 import re
 import time
 from collections import defaultdict, namedtuple
-from urllib import quote_plus, urlencode
-from urlparse import parse_qs
+try:
+    from urllib.parse import parse_qs, quote_plus, urlencode
+except ImportError:
+    from urlparse import parse_qs
+    from urllib import quote_plus, urlencode
 
 from lxml import etree
 
@@ -41,7 +44,7 @@ def browser():
 
 
 def encode_query(**query):
-    q = {k.encode('utf-8'): v.encode('utf-8') for k, v in query.iteritems()}
+    q = {k.encode('utf-8'): v.encode('utf-8') for k, v in query.items()}
     return urlencode(q).decode('utf-8')
 
 

@@ -28,7 +28,7 @@ from calibre.utils.config import dynamic, prefs
 from calibre.utils.ipc import RC, gui_socket_address
 from calibre.utils.lock import singleinstance
 from calibre.utils.monotonic import monotonic
-from polyglot.builtins import unicode_type, range
+from polyglot.builtins import unicode_type, range, environ_item
 
 if iswindows:
     winutil = plugins['winutil'][0]
@@ -173,19 +173,19 @@ def repair_library(library_path):
 
 
 def windows_repair(library_path=None):
-    from binascii import hexlify, unhexlify
     import subprocess
     from calibre.utils.serialize import json_dumps, json_loads
+    from polyglot.binary import as_hex_unicode, from_hex_bytes
     if library_path:
-        library_path = hexlify(json_dumps(library_path))
+        library_path = as_hex_unicode(json_dumps(library_path))
         winutil.prepare_for_restart()
-        os.environ['CALIBRE_REPAIR_CORRUPTED_DB'] = library_path
+        os.environ['CALIBRE_REPAIR_CORRUPTED_DB'] = environ_item(library_path)
         subprocess.Popen([sys.executable])
     else:
         try:
             app = Application([])
             from calibre.gui2.dialogs.restore_library import repair_library_at
-            library_path = json_loads(unhexlify(os.environ.pop('CALIBRE_REPAIR_CORRUPTED_DB')))
+            library_path = json_loads(from_hex_bytes(os.environ.pop('CALIBRE_REPAIR_CORRUPTED_DB')))
             done = repair_library_at(library_path, wait_time=4)
         except Exception:
             done = False
@@ -357,7 +357,7 @@ def run_in_debug_mode():
     import tempfile, subprocess
     fd, logpath = tempfile.mkstemp('.txt')
     os.close(fd)
-    os.environ[b'CALIBRE_RESTARTING_FROM_GUI'] = b'1'
+    os.environ['CALIBRE_RESTARTING_FROM_GUI'] = environ_item('1')
     run_calibre_debug(
         '--gui-debug', logpath, stdout=lopen(logpath, 'w'),
         stderr=subprocess.STDOUT, stdin=lopen(os.devnull, 'r'))
@@ -405,7 +405,7 @@ def run_gui(opts, args, listener, app, gui_debug=None):
                 prints('Restarting with:', app)
                 subprocess.Popen('sleep 3s; open ' + shellquote(app), shell=True)
             else:
-                os.environ[b'CALIBRE_RESTARTING_FROM_GUI'] = b'1'
+                os.environ['CALIBRE_RESTARTING_FROM_GUI'] = environ_item('1')
                 if iswindows and hasattr(winutil, 'prepare_for_restart'):
                     winutil.prepare_for_restart()
                 args = ['-g'] if os.path.splitext(e)[0].endswith('-debug') else []
@@ -509,7 +509,7 @@ def create_listener():
 
 
 def main(args=sys.argv):
-    if os.environ.pop(b'CALIBRE_RESTARTING_FROM_GUI', None) == b'1':
+    if os.environ.pop('CALIBRE_RESTARTING_FROM_GUI', None) == environ_item('1'):
         time.sleep(2)  # give the parent process time to cleanup and close
     if iswindows and 'CALIBRE_REPAIR_CORRUPTED_DB' in os.environ:
         windows_repair()

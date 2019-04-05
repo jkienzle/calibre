@@ -6,8 +6,8 @@ __license__   = 'GPL v3'
 __copyright__ = '2010, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import itertools, time, traceback, locale
-from itertools import repeat, izip, imap
+import time, traceback, locale
+from itertools import repeat
 from datetime import timedelta
 from threading import Thread
 
@@ -20,7 +20,8 @@ from calibre.db.search import CONTAINS_MATCH, EQUALS_MATCH, REGEXP_MATCH, _match
 from calibre.ebooks.metadata import title_sort, author_to_author_sort
 from calibre.ebooks.metadata.opf2 import metadata_to_opf
 from calibre import prints, force_unicode
-from polyglot.builtins import unicode_type, string_or_bytes
+from polyglot.builtins import (iteritems, itervalues, map,
+        unicode_type, string_or_bytes, zip, cmp)
 
 
 class MetadataBackup(Thread):  # {{{
@@ -774,7 +775,7 @@ class ResultCache(SearchQueryParser):  # {{{
                     q = canonicalize_lang(query)
                     if q is None:
                         lm = lang_map()
-                        rm = {v.lower():k for k,v in lm.iteritems()}
+                        rm = {v.lower():k for k,v in iteritems(lm)}
                         q = rm.get(query, query)
                 else:
                     q = query
@@ -863,7 +864,7 @@ class ResultCache(SearchQueryParser):  # {{{
                 self.search_restriction_book_count = len(self._map)
             return list(self._map)
         matches = self.parse(q)
-        tmap = list(itertools.repeat(False, len(self._data)))
+        tmap = list(repeat(False, len(self._data)))
         for x in matches:
             tmap[x] = True
         rv = [x for x in self._map if tmap[x]]
@@ -917,15 +918,15 @@ class ResultCache(SearchQueryParser):  # {{{
             self.marked_ids_dict = dict.fromkeys(id_dict, u'true')
         else:
             # Ensure that all the items in the dict are text
-            self.marked_ids_dict = dict(izip(id_dict.iterkeys(), imap(unicode_type,
-                id_dict.itervalues())))
+            self.marked_ids_dict = dict(zip(iter(id_dict), map(unicode_type,
+                itervalues(id_dict))))
 
         # Set the values in the cache
         marked_col = self.FIELD_MAP['marked']
         for r in self.iterall():
             r[marked_col] = None
 
-        for id_, val in self.marked_ids_dict.iteritems():
+        for id_, val in iteritems(self.marked_ids_dict):
             try:
                 self._data[id_][marked_col] = val
             except:
@@ -1000,7 +1001,7 @@ class ResultCache(SearchQueryParser):  # {{{
             except IndexError:
                 return None
         try:
-            return map(self.row, ids)
+            return list(map(self.row, ids))
         except ValueError:
             pass
         return None
@@ -1039,7 +1040,7 @@ class ResultCache(SearchQueryParser):  # {{{
         db.initialize_template_cache()
 
         temp = db.conn.get('SELECT * FROM meta2')
-        self._data = list(itertools.repeat(None, temp[-1][0]+2)) if temp else []
+        self._data = list(repeat(None, temp[-1][0]+2)) if temp else []
         for r in temp:
             self._data[r[0]] = CacheRow(db, self.composites, r,
                                         self.series_col, self.series_sort_col)
@@ -1052,7 +1053,7 @@ class ResultCache(SearchQueryParser):  # {{{
                 item.extend((None, None))
 
         marked_col = self.FIELD_MAP['marked']
-        for id_,val in self.marked_ids_dict.iteritems():
+        for id_,val in iteritems(self.marked_ids_dict):
             try:
                 self._data[id_][marked_col] = val
             except:
@@ -1099,7 +1100,7 @@ class ResultCache(SearchQueryParser):  # {{{
         if only_ids is None:
             self._map.sort(key=keyg)
 
-            tmap = list(itertools.repeat(False, len(self._data)))
+            tmap = list(repeat(False, len(self._data)))
             for x in self._map_filtered:
                 tmap[x] = True
             self._map_filtered = [x for x in self._map if tmap[x]]
@@ -1112,12 +1113,30 @@ class SortKey(object):
     def __init__(self, orders, values):
         self.orders, self.values = orders, values
 
-    def __cmp__(self, other):
+    def compare_to_other(self, other):
         for i, ascending in enumerate(self.orders):
             ans = cmp(self.values[i], other.values[i])
             if ans != 0:
                 return ans * ascending
         return 0
+
+    def __eq__(self, other):
+        return self.compare_to_other(other) == 0
+
+    def __ne__(self, other):
+        return self.compare_to_other(other) != 0
+
+    def __lt__(self, other):
+        return self.compare_to_other(other) < 0
+
+    def __le__(self, other):
+        return self.compare_to_other(other) <= 0
+
+    def __gt__(self, other):
+        return self.compare_to_other(other) > 0
+
+    def __ge__(self, other):
+        return self.compare_to_other(other) >= 0
 
 
 class SortKeyGenerator(object):

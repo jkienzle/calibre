@@ -36,7 +36,7 @@ from calibre.gui2.preferences.coloring import EditRules
 from calibre.gui2.library.alternate_views import auto_height, CM_TO_INCH
 from calibre.gui2.widgets2 import Dialog
 from calibre.gui2.actions.show_quickview import get_quickview_action_plugin
-from polyglot.builtins import unicode_type
+from polyglot.builtins import iteritems, unicode_type
 
 
 class BusyCursor(object):
@@ -159,7 +159,7 @@ class IdLinksEditor(Dialog):
         la.setWordWrap(True)
         l.addWidget(la)
         items = []
-        for k, lx in msprefs['id_link_rules'].iteritems():
+        for k, lx in iteritems(msprefs['id_link_rules']):
             for n, t in lx:
                 items.append((k, n, t))
         items.sort(key=lambda x:sort_key(x[1]))
@@ -456,7 +456,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
                  if l != lang]
         if lang != 'en':
             items.append(('en', get_esc_lang('en')))
-        items.sort(cmp=lambda x, y: cmp(x[1].lower(), y[1].lower()))
+        items.sort(key=lambda x: x[1].lower())
         choices = [(y, x) for x, y in items]
         # Default language is the autodetected one
         choices = [(get_language(lang), lang)] + choices

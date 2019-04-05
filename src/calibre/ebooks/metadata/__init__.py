@@ -11,7 +11,7 @@ import os, sys, re
 
 from calibre import relpath, guess_type, remove_bracketed_text, prints, force_unicode
 from calibre.utils.config_base import tweaks
-from polyglot.builtins import codepoint_to_chr, unicode_type
+from polyglot.builtins import codepoint_to_chr, unicode_type, range
 from polyglot.urllib import quote, unquote, urlparse
 
 
@@ -135,7 +135,7 @@ def get_title_sort_pat(lang=None):
 
 
 _ignore_starts = u'\'"'+u''.join(codepoint_to_chr(x) for x in
-        range(0x2018, 0x201e)+[0x2032, 0x2033])
+        list(range(0x2018, 0x201e))+[0x2032, 0x2033])
 
 
 def title_sort(title, order=None, lang=None):
@@ -217,7 +217,7 @@ class Resource(object):
             path = href_or_path
             if not os.path.isabs(path):
                 path = os.path.abspath(os.path.join(basedir, path))
-            if isinstance(path, str):
+            if isinstance(path, bytes):
                 path = path.decode(sys.getfilesystemencoding())
             self.path = path
         else:

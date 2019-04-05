@@ -25,7 +25,7 @@ from calibre.utils.localization import localize_user_manual_link
 
 from calibre.utils.config import dynamic, prefs
 from calibre.gui2 import choose_dir, error_dialog
-from polyglot.builtins import unicode_type
+from polyglot.builtins import iteritems, unicode_type
 
 if iswindows:
     winutil = plugins['winutil'][0]
@@ -427,7 +427,7 @@ def get_manufacturers():
 
 def get_devices_of(manufacturer):
     ans = [d for d in get_devices() if d.manufacturer == manufacturer]
-    return sorted(ans, cmp=lambda x,y:cmp(x.name, y.name))
+    return sorted(ans, key=lambda x: x.name)
 
 
 class ManufacturerModel(QAbstractListModel):
@@ -492,7 +492,7 @@ class KindlePage(QWizardPage, KindleUI):
         opts = smtp_prefs().parse()
         accs = []
         has_default = False
-        for x, ac in opts.accounts.iteritems():
+        for x, ac in iteritems(opts.accounts):
             default = ac[2]
             if x.strip().endswith('@kindle.com'):
                 accs.append((x, default))
@@ -682,7 +682,7 @@ class LibraryPage(QWizardPage, LibraryUI):
                  if l != lang]
         if lang != 'en':
             items.append(('en', get_esc_lang('en')))
-        items.sort(cmp=lambda x, y: cmp(x[1], y[1]))
+        items.sort(key=lambda x: x[1])
         for item in items:
             self.language.addItem(item[1], (item[0]))
         self.language.blockSignals(False)
@@ -871,7 +871,7 @@ class Wizard(QWizard):
         self.resize(600, 520)
 
     def set_button_texts(self):
-        for but, text in self.BUTTON_TEXTS.iteritems():
+        for but, text in iteritems(self.BUTTON_TEXTS):
             self.setButtonText(getattr(self, but+'Button'), _(text))
 
     def retranslate(self):

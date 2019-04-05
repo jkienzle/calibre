@@ -2,7 +2,6 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
-from polyglot.builtins import map, unicode_type
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -13,9 +12,11 @@ from collections import OrderedDict
 from functools import partial
 
 from calibre import as_unicode
+from calibre.constants import ispy3
 from calibre.customize import (Plugin, numeric_version, platform,
         InvalidPlugin, PluginNotFound)
-from polyglot.builtins import string_or_bytes
+from polyglot.builtins import (itervalues, map, string_or_bytes,
+        unicode_type)
 
 # PEP 302 based plugin loading mechanism, works around the bug in zipimport in
 # python 2.x that prevents importing from zip files in locations whose paths
@@ -111,7 +112,7 @@ def load_translations(namespace, zfp):
         from io import BytesIO
         trans = _translations_cache[zfp] = GNUTranslations(BytesIO(mo))
 
-    namespace['_'] = trans.ugettext
+    namespace['_'] = getattr(trans, 'gettext' if ispy3 else 'ugettext')
     namespace['ngettext'] = trans.ungettext
 
 
@@ -202,7 +203,7 @@ class PluginLoader(object):
             else:
                 m = importlib.import_module(plugin_module)
             plugin_classes = []
-            for obj in m.__dict__.itervalues():
+            for obj in itervalues(m.__dict__):
                 if isinstance(obj, type) and issubclass(obj, Plugin) and \
                         obj.name != 'Trivial Plugin':
                     plugin_classes.append(obj)
@@ -281,7 +282,7 @@ class PluginLoader(object):
 
         # Legacy plugins
         if '__init__' not in names:
-            for name in list(names.iterkeys()):
+            for name in tuple(names):
                 if '.' not in name and name.endswith('plugin'):
                     names['__init__'] = names[name]
                     break

@@ -13,12 +13,10 @@ from operator import itemgetter
 from collections import OrderedDict
 from itertools import islice
 
-from itertools import izip
-from polyglot.builtins import map, unicode_type, range
-
 from calibre import detect_ncpus as cpu_count, as_unicode
 from calibre.constants import plugins, filesystem_encoding
 from calibre.utils.icu import primary_sort_key, primary_find, primary_collator
+from polyglot.builtins import iteritems, itervalues, map, unicode_type, range, zip, raw_input
 from polyglot.queue import Queue
 
 DEFAULT_LEVEL1 = '/'
@@ -270,7 +268,7 @@ class CScorer(object):
 
     def __call__(self, query):
         scores, positions = self.m.calculate_scores(query)
-        for score, pos in izip(scores, positions):
+        for score, pos in zip(scores, positions):
             yield score, pos
 
 
@@ -310,7 +308,7 @@ def test(return_tests=False):
         def test_non_bmp(self):
             raw = '_\U0001f431-'
             m = Matcher([raw], scorer=CScorer)
-            positions = next(m(raw).itervalues())
+            positions = next(itervalues(m(raw)))
             self.assertEqual(
                 positions, (0, 1, (2 if sys.maxunicode >= 0x10ffff else 3))
             )
@@ -337,13 +335,20 @@ else:
         return string[pos:pos + chs]
 
 
+def input_unicode(prompt):
+    ans = raw_input(prompt)
+    if isinstance(ans, bytes):
+        ans = ans.decode(sys.stdin.encoding)
+    return ans
+
+
 def main(basedir=None, query=None):
     from calibre import prints
     from calibre.utils.terminal import ColoredStream
     if basedir is None:
         try:
-            basedir = raw_input('Enter directory to scan [%s]: ' % os.getcwdu()
-                                ).decode(sys.stdin.encoding).strip() or os.getcwdu()
+            basedir = input_unicode('Enter directory to scan [%s]: ' % os.getcwdu()
+                                ).strip() or os.getcwdu()
         except (EOFError, KeyboardInterrupt):
             return
     m = FilesystemMatcher(basedir)
@@ -351,12 +356,12 @@ def main(basedir=None, query=None):
     while True:
         if query is None:
             try:
-                query = raw_input('Enter query: ').decode(sys.stdin.encoding)
+                query = input_unicode('Enter query: ')
             except (EOFError, KeyboardInterrupt):
                 break
             if not query:
                 break
-        for path, positions in islice(m(query).iteritems(), 0, 10):
+        for path, positions in islice(iteritems(m(query)), 0, 10):
             positions = list(positions)
             p = 0
             while positions:

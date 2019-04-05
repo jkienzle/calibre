@@ -77,7 +77,7 @@ class LibUSBScanner(object):
             dev = USBDevice(*dev)
             dev.busnum, dev.devnum = fingerprint[:2]
             ans.add(dev)
-        extra = set(self.libusb.cache.iterkeys()) - seen
+        extra = set(self.libusb.cache) - seen
         for x in extra:
             self.libusb.cache.pop(x, None)
         return ans

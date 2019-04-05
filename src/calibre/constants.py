@@ -168,7 +168,6 @@ class Plugins(collections.Mapping):
                 'icu',
                 'speedup',
                 'unicode_names',
-                'zlib2',
                 'html',
                 'freetype',
                 'imageops',
@@ -184,6 +183,7 @@ class Plugins(collections.Mapping):
         if not ispy3:
             plugins.extend([
                 'monotonic',
+                'zlib2',
             ])
         if iswindows:
             plugins.extend(['winutil', 'wpd', 'winfonts'])
@@ -203,12 +203,13 @@ class Plugins(collections.Mapping):
             del sys.modules[name]
         except KeyError:
             pass
+        plugin_err = u''
         try:
-            p, err = importlib.import_module(name), ''
+            p = importlib.import_module(name)
         except Exception as err:
             p = None
-            err = str(err)
-        self._plugins[name] = (p, err)
+            plugin_err = unicode_type(err)
+        self._plugins[name] = p, plugin_err
         sys.path.remove(sys.extensions_location)
 
     def __iter__(self):

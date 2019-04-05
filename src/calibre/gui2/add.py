@@ -10,7 +10,7 @@ import shutil, os, weakref, traceback, tempfile, time
 from threading import Thread
 from collections import OrderedDict
 from io import BytesIO
-from polyglot.builtins import map, unicode_type, string_or_bytes
+from polyglot.builtins import iteritems, map, unicode_type, string_or_bytes
 
 from PyQt5.Qt import QObject, Qt, pyqtSignal
 
@@ -89,6 +89,7 @@ class Adder(QObject):
         self.report = []
         self.items = []
         self.added_book_ids = set()
+        self.merged_formats_added_to = set()
         self.merged_books = set()
         self.added_duplicate_info = set()
         self.pd.show()
@@ -143,7 +144,7 @@ class Adder(QObject):
                         self.file_groups[len(self.file_groups)] = files
         else:
             def find_files(root):
-                if isinstance(root, type(u'')):
+                if isinstance(root, unicode_type):
                     root = root.encode(filesystem_encoding)
                 for dirpath, dirnames, filenames in os.walk(root):
                     try:
@@ -383,6 +384,7 @@ class Adder(QObject):
             ib_fmts = {fmt.upper() for fmt in self.db.formats(identical_book_id)}
             seen_fmts |= ib_fmts
             self.add_formats(identical_book_id, paths, mi, replace=replace)
+            self.merged_formats_added_to.add(identical_book_id)
         if gprefs['automerge'] == 'new record':
             incoming_fmts = {path.rpartition(os.extsep)[-1].upper() for path in paths}
             if incoming_fmts.intersection(seen_fmts):
@@ -435,7 +437,7 @@ class Adder(QObject):
     def add_formats(self, book_id, paths, mi, replace=True, is_an_add=False):
         fmap = {p.rpartition(os.path.extsep)[-1].lower():p for p in paths}
         fmt_map = {}
-        for fmt, path in fmap.iteritems():
+        for fmt, path in iteritems(fmap):
             # The onimport plugins have already been run by the read metadata
             # worker
             if self.ignore_opf and fmt.lower() == 'opf':
@@ -490,7 +492,7 @@ class Adder(QObject):
 
         if gprefs['manual_add_auto_convert'] and self.added_book_ids and self.parent() is not None:
             self.parent().iactions['Convert Books'].auto_convert_auto_add(
-                self.added_book_ids)
+                self.added_book_ids | self.merged_formats_added_to)
 
         try:
             if callable(self.callback):

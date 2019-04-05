@@ -4,6 +4,7 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+from polyglot.builtins import iteritems
 from polyglot.urllib import quote_plus
 
 AUTHOR_SEARCHES = {
@@ -14,7 +15,7 @@ AUTHOR_SEARCHES = {
     'google':
     'https://www.google.com/search?tbm=bks&q=inauthor:%22{author}%22',
     'amzn':
-    'https://www.amazon.com/gp/search/ref=sr_adv_b/?search-alias=stripbooks&unfiltered=1&field-author={author}&field-dateop=During&sort=relevanceexprank'
+    'https://www.amazon.com/gp/search/ref=sr_adv_b/?search-alias=stripbooks&unfiltered=1&field-author={author}&sort=relevanceexprank'
 }
 
 BOOK_SEARCHES = {
@@ -54,7 +55,7 @@ def qquote(val):
 
 
 def url_for(template, data):
-    return template.format(**{k: qquote(v) for k, v in data.iteritems()})
+    return template.format(**{k: qquote(v) for k, v in iteritems(data)})
 
 
 def url_for_author_search(key, **kw):

@@ -76,12 +76,12 @@ class Cell(object):
         self.css  = css
         self.text_blocks = []
         self.pwidth = -1.
-        if tag.has_key('width') and '%' in tag['width']:  # noqa
+        if tag.has_attr('width') and '%' in tag['width']:
             try:
                 self.pwidth = float(tag['width'].replace('%', ''))
             except ValueError:
                 pass
-        if css.has_key('width') and '%' in css['width']:  # noqa
+        if 'width' in css and '%' in css['width']:
             try:
                 self.pwidth = float(css['width'].replace('%', ''))
             except ValueError:
@@ -90,8 +90,8 @@ class Cell(object):
             self.pwidth = -1
         self.rowspan = self.colspan = 1
         try:
-            self.colspan = int(tag['colspan']) if tag.has_key('colspan') else 1  # noqa
-            self.rowspan = int(tag['rowspan']) if tag.has_key('rowspan') else 1  # noqa
+            self.colspan = int(tag['colspan']) if tag.has_attr('colspan') else 1
+            self.rowspan = int(tag['rowspan']) if tag.has_attr('rowspan') else 1
         except:
             pass
 
@@ -154,7 +154,7 @@ class Cell(object):
                 mwidth = width
         return parindent + mwidth + 2
 
-    def text_block_size(self, tb, maxwidth=sys.maxint, debug=False):
+    def text_block_size(self, tb, maxwidth=sys.maxsize, debug=False):
         ts = tb.textStyle.attrs
         default_font = get_font(ts['fontfacename'], self.pts_to_pixels(ts['fontsize']))
         parindent = self.pts_to_pixels(ts['parindent'])
@@ -200,7 +200,7 @@ class Cell(object):
         return right+3+max(parindent, 10), bottom
 
     def text_block_preferred_width(self, tb, debug=False):
-        return self.text_block_size(tb, sys.maxint, debug=debug)[0]
+        return self.text_block_size(tb, sys.maxsize, debug=debug)[0]
 
     def preferred_width(self, debug=False):
         return ceil(max([self.text_block_preferred_width(i, debug=debug) for i in self.text_blocks]))
@@ -220,7 +220,7 @@ class Row(object):
             ccss = conv.tag_css(cell, css)[0]
             self.cells.append(Cell(conv, cell, ccss))
         for a in row.findAll(id=True) + row.findAll(name=True):
-            name = a['name'] if a.has_key('name') else a['id'] if a.has_key('id') else None  # noqa
+            name = a['name'] if a.has_attr('name') else a['id'] if a.has_attr('id') else None
             if name is not None:
                 self.targets.append(name.replace('#', ''))
 
@@ -349,7 +349,7 @@ class Table(object):
             nc = self.rows[r].cell_iterator()
             try:
                 while True:
-                    cell = nc.next()
+                    cell = next(nc)
                     cellmatrix[r][rowpos[r]] = cell
                     rowpos[r] += cell.colspan
                     for k in range(1, cell.rowspan):

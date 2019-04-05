@@ -4,7 +4,8 @@ __copyright__ = '2008, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import sys, os, re, time, random, warnings
-from polyglot.builtins import builtins, codepoint_to_chr, unicode_type, range
+from polyglot.builtins import (builtins, codepoint_to_chr, iteritems,
+        itervalues, unicode_type, range)
 builtins.__dict__['dynamic_property'] = lambda func: func(None)
 from math import floor
 from functools import partial
@@ -111,57 +112,28 @@ def confirm_config_name(name):
     return name + '_again'
 
 
-_filename_sanitize = re.compile(r'[\xae\0\\|\?\*<":>\+/]')
-_filename_sanitize_unicode = frozenset([u'\\', u'|', u'?', u'*', u'<',
-    u'"', u':', u'>', u'+', u'/'] + list(map(codepoint_to_chr, range(32))))
+_filename_sanitize_unicode = frozenset((u'\\', u'|', u'?', u'*', u'<',
+    u'"', u':', u'>', u'+', u'/') + tuple(map(codepoint_to_chr, range(32))))
 
 
-def sanitize_file_name(name, substitute='_', as_unicode=False):
+def sanitize_file_name(name, substitute=u'_'):
     '''
     Sanitize the filename `name`. All invalid characters are replaced by `substitute`.
     The set of invalid characters is the union of the invalid characters in Windows,
-    OS X and Linux. Also removes leading and trailing whitespace.
-    **WARNING:** This function also replaces path separators, so only pass file names
-    and not full paths to it.
-    *NOTE:* This function always returns byte strings, not unicode objects. The byte strings
-    are encoded in the filesystem encoding of the platform, or UTF-8.
-    '''
-    if isinstance(name, unicode_type):
-        name = name.encode(filesystem_encoding, 'ignore')
-    one = _filename_sanitize.sub(substitute, name)
-    one = re.sub(r'\s', ' ', one).strip()
-    bname, ext = os.path.splitext(one)
-    one = re.sub(r'^\.+$', '_', bname)
-    if as_unicode:
-        one = one.decode(filesystem_encoding)
-    one = one.replace('..', substitute)
-    one += ext
-    # Windows doesn't like path components that end with a period
-    if one and one[-1] in ('.', ' '):
-        one = one[:-1]+'_'
-    # Names starting with a period are hidden on Unix
-    if one.startswith('.'):
-        one = '_' + one[1:]
-    return one
-
-
-def sanitize_file_name_unicode(name, substitute='_'):
-    '''
-    Sanitize the filename `name`. All invalid characters are replaced by `substitute`.
-    The set of invalid characters is the union of the invalid characters in Windows,
-    OS X and Linux. Also removes leading and trailing whitespace.
+    macOS and Linux. Also removes leading and trailing whitespace.
     **WARNING:** This function also replaces path separators, so only pass file names
     and not full paths to it.
     '''
     if isbytestring(name):
-        return sanitize_file_name(name, substitute=substitute, as_unicode=True)
-    chars = [substitute if c in _filename_sanitize_unicode else c for c in
-            name]
+        name = name.decode(filesystem_encoding, 'replace')
+    if isbytestring(substitute):
+        substitute = substitute.decode(filesystem_encoding, 'replace')
+    chars = (substitute if c in _filename_sanitize_unicode else c for c in name)
     one = u''.join(chars)
-    one = re.sub(r'\s', ' ', one).strip()
+    one = re.sub(r'\s', u' ', one).strip()
     bname, ext = os.path.splitext(one)
-    one = re.sub(r'^\.+$', '_', bname)
-    one = one.replace('..', substitute)
+    one = re.sub(r'^\.+$', u'_', bname)
+    one = one.replace(u'..', substitute)
     one += ext
     # Windows doesn't like path components that end with a period or space
     if one and one[-1] in ('.', ' '):
@@ -172,14 +144,7 @@ def sanitize_file_name_unicode(name, substitute='_'):
     return one
 
 
-def sanitize_file_name2(name, substitute='_'):
-    '''
-    Sanitize filenames removing invalid chars. Keeps unicode names as unicode
-    and bytestrings as bytestrings
-    '''
-    if isbytestring(name):
-        return sanitize_file_name(name, substitute=substitute)
-    return sanitize_file_name_unicode(name, substitute=substitute)
+sanitize_file_name2 = sanitize_file_name_unicode = sanitize_file_name
 
 
 def prints(*args, **kwargs):
@@ -192,6 +157,7 @@ def prints(*args, **kwargs):
     Returns the number of bytes written.
     '''
     file = kwargs.get('file', sys.stdout)
+    file = getattr(file, 'buffer', file)
     sep  = bytes(kwargs.get('sep', ' '))
     end  = bytes(kwargs.get('end', '\n'))
     enc = 'utf-8' if 'CALIBRE_WORKER' in os.environ else preferred_encoding
@@ -218,7 +184,7 @@ def prints(*args, **kwargs):
                     if not safe_encode:
                         raise
                     arg = repr(arg)
-        if not isinstance(arg, str):
+        if not isinstance(arg, bytes):
             try:
                 arg = str(arg)
             except ValueError:
@@ -238,7 +204,7 @@ def prints(*args, **kwargs):
             file.write(arg)
             count += len(arg)
         except:
-            import repr as reprlib
+            from polyglot import reprlib
             arg = reprlib.repr(arg)
             file.write(arg)
             count += len(arg)
@@ -518,13 +484,6 @@ relpath = os.path.relpath
 _spat = re.compile(r'^the\s+|^a\s+|^an\s+', re.IGNORECASE)
 
 
-def english_sort(x, y):
-    '''
-    Comapare two english phrases ignoring starting prepositions.
-    '''
-    return cmp(_spat.sub('', x), _spat.sub('', y))
-
-
 def walk(dir):
     ''' A nice interface to os.walk '''
     for record in os.walk(dir):
@@ -555,7 +514,9 @@ def strftime(fmt, t=None):
         fmt = fmt.replace(u'%e', u'%#d')
         ans = plugins['winutil'][0].strftime(fmt, t)
     else:
-        ans = time.strftime(fmt, t).decode(preferred_encoding, 'replace')
+        ans = time.strftime(fmt, t)
+        if isinstance(ans, bytes):
+            ans = ans.decode(preferred_encoding, 'replace')
     if early_year:
         ans = ans.replace(u'_early year hack##', unicode_type(orig_year))
     return ans
@@ -612,7 +573,7 @@ def entity_to_unicode(match, exceptions=[], encoding='cp1252',
         return check(html5_entities[ent])
     except KeyError:
         pass
-    from htmlentitydefs import name2codepoint
+    from polyglot.html_entities import name2codepoint
     try:
         return check(my_unichr(name2codepoint[ent]))
     except KeyError:
@@ -706,7 +667,7 @@ def remove_bracketed_text(src,
     counts = Counter()
     buf = []
     src = force_unicode(src)
-    rmap = dict([(v, k) for k, v in brackets.iteritems()])
+    rmap = dict([(v, k) for k, v in iteritems(brackets)])
     for char in src:
         if char in brackets:
             counts[char] += 1
@@ -714,7 +675,7 @@ def remove_bracketed_text(src,
             idx = rmap[char]
             if counts[idx] > 0:
                 counts[idx] -= 1
-        elif sum(counts.itervalues()) < 1:
+        elif sum(itervalues(counts)) < 1:
             buf.append(char)
     return u''.join(buf)
 

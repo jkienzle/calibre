@@ -5,9 +5,8 @@ __docformat__ = 'restructuredtext en'
 
 # Imports {{{
 import math, json
-from base64 import b64encode
 from functools import partial
-from polyglot.builtins import map, unicode_type, string_or_bytes
+from polyglot.builtins import iteritems, map, unicode_type, string_or_bytes
 
 from PyQt5.Qt import (
     QSize, QSizePolicy, QUrl, Qt, QPainter, QPalette, QBrush,
@@ -33,6 +32,7 @@ from calibre.gui2.viewer.footnote import Footnotes
 from calibre.gui2.viewer.fake_net import NetworkAccessManager
 from calibre.ebooks.oeb.display.webview import load_html
 from calibre.constants import isxp, iswindows, DEBUG, __version__
+from polyglot.binary import as_base64_unicode
 # }}}
 
 
@@ -144,7 +144,7 @@ class Document(QWebPage):  # {{{
         raw = prefix + opts.user_css
         raw = '::selection {background:#ffff00; color:#000;}\n'+raw
         data = 'data:text/css;charset=utf-8;base64,'
-        data += b64encode(raw.encode('utf-8'))
+        data += as_base64_unicode(raw)
         self.settings().setUserStyleSheetUrl(QUrl(data))
 
     def findText(self, q, flags):
@@ -259,7 +259,7 @@ class Document(QWebPage):  # {{{
         if not isinstance(self.anchor_positions, dict):
             # Some weird javascript error happened
             self.anchor_positions = {}
-        return {k:tuple(v) for k, v in self.anchor_positions.iteritems()}
+        return {k:tuple(v) for k, v in iteritems(self.anchor_positions)}
 
     def switch_to_paged_mode(self, onresize=False, last_loaded_path=None):
         if onresize and not self.loaded_javascript:

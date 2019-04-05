@@ -9,7 +9,6 @@ __docformat__ = 'restructuredtext en'
 
 import os, re
 from functools import partial
-from itertools import izip
 
 from PyQt5.Qt import (
     QStyledItemDelegate, Qt, QTreeView, pyqtSignal, QSize, QIcon, QApplication,
@@ -17,7 +16,7 @@ from PyQt5.Qt import (
     QLinearGradient, QPalette, QColor, QPen, QBrush, QFont
 )
 
-from calibre import sanitize_file_name_unicode
+from calibre import sanitize_file_name
 from calibre.constants import config_dir
 from calibre.ebooks.metadata import rating_to_stars
 from calibre.gui2.tag_browser.model import (TagTreeItem, TAG_SEARCH_STATES,
@@ -25,7 +24,7 @@ from calibre.gui2.tag_browser.model import (TagTreeItem, TAG_SEARCH_STATES,
 from calibre.gui2 import config, gprefs, choose_files, pixmap_to_data, rating_font, empty_index
 from calibre.utils.icu import sort_key
 from calibre.utils.serialize import json_loads
-from polyglot.builtins import unicode_type, range
+from polyglot.builtins import unicode_type, range, zip
 
 
 class TagDelegate(QStyledItemDelegate):  # {{{
@@ -229,7 +228,7 @@ class TagsView(QTreeView):  # {{{
                     expanded_categories.append(category.category_key)
             states = [c.tag.state for c in category.child_tags()]
             names = [(c.tag.name, c.tag.category) for c in category.child_tags()]
-            state_map[category.category_key] = dict(izip(names, states))
+            state_map[category.category_key] = dict(zip(names, states))
         return expanded_categories, state_map
 
     def reread_collapse_parameters(self):
@@ -376,7 +375,7 @@ class TagsView(QTreeView):  # {{{
                         d = os.path.join(config_dir, 'tb_icons')
                         if not os.path.exists(d):
                             os.makedirs(d)
-                        with open(os.path.join(d, 'icon_' + sanitize_file_name_unicode(key)+'.png'), 'wb') as f:
+                        with open(os.path.join(d, 'icon_' + sanitize_file_name(key)+'.png'), 'wb') as f:
                             f.write(pixmap_to_data(p, format='PNG'))
                             path = os.path.basename(f.name)
                         self._model.set_custom_category_icon(key, unicode_type(path))

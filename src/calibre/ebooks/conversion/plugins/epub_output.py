@@ -218,7 +218,7 @@ class EPUBOutput(OutputFormatPlugin):
         if self.oeb.toc.count() == 0:
             self.log.warn('This EPUB file has no Table of Contents. '
                     'Creating a default TOC')
-            first = iter(self.oeb.spine).next()
+            first = next(iter(self.oeb.spine))
             self.oeb.toc.add(_('Start'), first.href)
 
         from calibre.ebooks.oeb.base import OPF
@@ -311,13 +311,12 @@ class EPUBOutput(OutputFormatPlugin):
             pass
 
     def encrypt_fonts(self, uris, tdir, uuid):  # {{{
-        from binascii import unhexlify
+        from polyglot.binary import from_hex_bytes
 
         key = re.sub(r'[^a-fA-F0-9]', '', uuid)
         if len(key) < 16:
             raise ValueError('UUID identifier %r is invalid'%uuid)
-        key = unhexlify((key + key)[:32])
-        key = tuple(map(ord, key))
+        key = bytearray(from_hex_bytes((key + key)[:32]))
         paths = []
         with CurrentDir(tdir):
             paths = [os.path.join(*x.split('/')) for x in uris]
@@ -422,7 +421,7 @@ class EPUBOutput(OutputFormatPlugin):
                     if br.getparent() is None:
                         continue
                     try:
-                        prior = br.itersiblings(preceding=True).next()
+                        prior = next(br.itersiblings(preceding=True))
                         priortag = barename(prior.tag)
                         priortext = prior.tail
                     except:

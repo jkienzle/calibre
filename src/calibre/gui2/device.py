@@ -24,7 +24,7 @@ from calibre.gui2 import (config, error_dialog, Dispatcher, dynamic,
         warning_dialog, info_dialog, choose_dir, FunctionDispatcher,
         show_restart_warning, gprefs, question_dialog)
 from calibre.ebooks.metadata import authors_to_string
-from calibre import preferred_encoding, prints, force_unicode, as_unicode, sanitize_file_name2
+from calibre import preferred_encoding, prints, force_unicode, as_unicode, sanitize_file_name
 from calibre.utils.filenames import ascii_filename
 from calibre.devices.errors import (FreeSpaceError, WrongDestinationError,
         BlacklistedDevice)
@@ -355,7 +355,7 @@ class DeviceManager(Thread):  # {{{
                 # anything besides set a flag that the right thread will see.
                 self.connected_device.unmount_device()
 
-    def next(self):
+    def next_job(self):
         if not self.job_steps.empty():
             try:
                 return self.job_steps.get_nowait()
@@ -411,7 +411,7 @@ class DeviceManager(Thread):  # {{{
 
             do_sleep = True
             while True:
-                job = self.next()
+                job = self.next_job()
                 if job is not None:
                     do_sleep = False
                     self.current_job = job
@@ -627,7 +627,7 @@ class DeviceManager(Thread):  # {{{
     def _save_books(self, paths, target):
         '''Copy books from device to disk'''
         for path in paths:
-            name = sanitize_file_name2(os.path.basename(path))
+            name = sanitize_file_name(os.path.basename(path))
             dest = os.path.join(target, name)
             if os.path.abspath(dest) != os.path.abspath(path):
                 with lopen(dest, 'wb') as f:
@@ -1494,8 +1494,8 @@ class DeviceMixin(object):  # {{{
 
         bad, good, gf, names, remove_ids = [], [], [], [], []
         for f in _files:
-            mi = imetadata.next()
-            id = ids.next()
+            mi = next(imetadata)
+            id = next(ids)
             if f is None:
                 bad.append(mi.title)
             else:

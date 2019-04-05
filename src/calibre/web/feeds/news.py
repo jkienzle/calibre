@@ -9,15 +9,13 @@ __docformat__ = "restructuredtext en"
 
 import os, time, traceback, re, sys, io
 from collections import defaultdict
-from functools import partial
-from contextlib import nested, closing
+from contextlib import closing
 
 
 from calibre import (browser, __appname__, iswindows, force_unicode,
                     strftime, preferred_encoding, as_unicode, random_user_agent)
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, NavigableString, CData, Tag
 from calibre.ebooks.metadata.opf2 import OPFCreator
-from calibre import entity_to_unicode
 from calibre.web import Recipe
 from calibre.ebooks.metadata.toc import TOC
 from calibre.ebooks.metadata import MetaInformation
@@ -224,14 +222,14 @@ class BasicNewsRecipe(Recipe):
     #:
     #:    {
     #:     name      : 'tag name',   #e.g. 'div'
-    #:     attrs     : a dictionary, #e.g. {class: 'advertisment'}
+    #:     attrs     : a dictionary, #e.g. {'class': 'advertisment'}
     #:    }
     #:
     #: All keys are optional. For a full explanation of the search criteria, see
-    #: `Beautiful Soup <https://www.crummy.com/software/BeautifulSoup/bs3/documentation.html#Searching%20the%20Parse%20Tree>`_
+    #: `Beautiful Soup <https://www.crummy.com/software/BeautifulSoup/bs4/doc/#searching-the-tree>`_
     #: A common example::
     #:
-    #:   remove_tags = [dict(name='div', attrs={'class':'advert'})]
+    #:   remove_tags = [dict(name='div', class_='advert')]
     #:
     #: This will remove all `<div class="advert">` tags and all
     #: their children from the downloaded :term:`HTML`.
@@ -662,7 +660,7 @@ class BasicNewsRecipe(Recipe):
     def index_to_soup(self, url_or_raw, raw=False, as_tree=False, save_raw=None):
         '''
         Convenience method that takes an URL to the index page and returns
-        a `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs3/documentation.html>`_
+        a `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs4/doc>`_
         of it.
 
         `url_or_raw`: Either a URL or the downloaded index page as a string
@@ -701,8 +699,7 @@ class BasicNewsRecipe(Recipe):
             from html5_parser import parse
             return parse(_raw)
         else:
-            from html5_parser.soup import set_soup_module, parse
-            set_soup_module(sys.modules[BeautifulSoup.__module__])
+            return BeautifulSoup(_raw)
             return parse(_raw, return_root=False)
 
     def extract_readable_article(self, html, url):
@@ -763,7 +760,7 @@ class BasicNewsRecipe(Recipe):
         in index are not in weights, they are assumed to have a weight of 0.
         '''
         weights = defaultdict(lambda: 0, weights)
-        index.sort(cmp=lambda x, y: cmp(weights[x], weights[y]))
+        index.sort(key=lambda x: weights[x])
         return index
 
     def parse_index(self):
@@ -951,7 +948,7 @@ class BasicNewsRecipe(Recipe):
     def _postprocess_html(self, soup, first_fetch, job_info):
         if self.no_stylesheets:
             for link in soup.findAll('link'):
-                if (link.get('type') or 'text/css').lower() == 'text/css' and (link.get('rel') or 'stylesheet').lower() == 'stylesheet':
+                if (link.get('type') or 'text/css').lower() == 'text/css' and 'stylesheet' in (link.get('rel') or ('stylesheet',)):
                     link.extract()
             for style in soup.findAll('style'):
                 style.extract()
@@ -960,9 +957,10 @@ class BasicNewsRecipe(Recipe):
             head = soup.find('body')
         if not head:
             head = soup.find(True)
-        style = BeautifulSoup(u'<style type="text/css" title="override_css">%s</style>'%(
-            self.template_css +'\n\n'+(self.get_extra_css() or ''))).find('style')
-        head.insert(len(head.contents), style)
+        css = self.template_css + '\n\n' + (self.get_extra_css() or '')
+        style = soup.new_tag('style', type='text/css', title='override_css')
+        style.append(css)
+        head.append(style)
         if first_fetch and job_info:
             url, f, a, feed_len = job_info
             body = soup.find('body')
@@ -1099,14 +1097,14 @@ class BasicNewsRecipe(Recipe):
                     if bn:
                         img = os.path.join(imgdir, 'feed_image_%d%s'%(self.image_counter, os.path.splitext(bn)))
                         try:
-                            with nested(open(img, 'wb'), closing(self.browser.open(feed.image_url))) as (fi, r):
+                            with open(img, 'wb') as fi, closing(self.browser.open(feed.image_url)) as r:
                                 fi.write(r.read())
                             self.image_counter += 1
                             feed.image_url = img
                             self.image_map[feed.image_url] = img
                         except:
                             pass
-            if isinstance(feed.image_url, str):
+            if isinstance(feed.image_url, bytes):
                 feed.image_url = feed.image_url.decode(sys.getfilesystemencoding(), 'strict')
 
         templ = (templates.TouchscreenFeedTemplate if self.touchscreen else
@@ -1348,7 +1346,7 @@ class BasicNewsRecipe(Recipe):
             with open(mpath, 'wb') as mfile:
                 mfile.write(open(mu, 'rb').read())
         else:
-            with nested(open(mpath, 'wb'), closing(self.browser.open(mu))) as (mfile, r):
+            with open(mpath, 'wb') as mfile, closing(self.browser.open(mu)) as r:
                 mfile.write(r.read())
             self.report_progress(1, _('Masthead image downloaded'))
         self.prepare_masthead_image(mpath, outfile)
@@ -1566,7 +1564,7 @@ class BasicNewsRecipe(Recipe):
         opf.create_spine(entries)
         opf.set_toc(toc)
 
-        with nested(open(opf_path, 'wb'), open(ncx_path, 'wb')) as (opf_file, ncx_file):
+        with open(opf_path, 'wb') as opf_file, open(ncx_path, 'wb') as ncx_file:
             opf.render(opf_file, ncx_file)
 
     def article_downloaded(self, request, result):
@@ -1648,14 +1646,14 @@ class BasicNewsRecipe(Recipe):
     def tag_to_string(self, tag, use_alt=True, normalize_whitespace=True):
         '''
         Convenience method to take a
-        `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs3/documentation.html>`_
+        `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs4/doc/>`_
         `Tag` and extract the text from it recursively, including any CDATA sections
         and alt tag attributes. Return a possibly empty unicode string.
 
         `use_alt`: If `True` try to use the alt attribute for tags that don't
         have any textual content
 
-        `tag`: `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs3/documentation.html>`_
+        `tag`: `BeautifulSoup <https://www.crummy.com/software/BeautifulSoup/bs4/doc/>`_
         `Tag`
         '''
         if tag is None:
@@ -1686,11 +1684,7 @@ class BasicNewsRecipe(Recipe):
 
     @classmethod
     def soup(cls, raw):
-        entity_replace = [(re.compile(u'&(\\S+?);'), partial(entity_to_unicode,
-                                                           exceptions=[]))]
-        nmassage = list(BeautifulSoup.MARKUP_MASSAGE)
-        nmassage.extend(entity_replace)
-        return BeautifulSoup(raw, markupMassage=nmassage)
+        return BeautifulSoup(raw)
 
     @classmethod
     def adeify_images(cls, soup):
@@ -1708,8 +1702,8 @@ class BasicNewsRecipe(Recipe):
             oldParent = item.parent
             myIndex = oldParent.contents.index(item)
             item.extract()
-            divtag = Tag(soup,'div')
-            brtag  = Tag(soup,'br')
+            divtag = soup.new_tag('div')
+            brtag  = soup.new_tag('br')
             oldParent.insert(myIndex,divtag)
             divtag.append(item)
             divtag.append(brtag)

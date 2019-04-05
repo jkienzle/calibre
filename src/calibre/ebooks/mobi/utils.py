@@ -589,7 +589,7 @@ class CNCX(object):  # {{{
         offset = 0
         buf = BytesIO()
         RECORD_LIMIT = 0x10000 - 1024  # kindlegen appears to use 1024, PDB limit is 0x10000
-        for key in self.strings.iterkeys():
+        for key in self.strings:
             utf8 = utf8_text(key[:self.MAX_STRING_LENGTH])
             l = len(utf8)
             sz_bytes = encint(l)

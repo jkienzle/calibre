@@ -201,7 +201,7 @@ class KINDLE(USBMS):
         return bookmarked_books
 
     def generate_annotation_html(self, bookmark):
-        from calibre.ebooks.BeautifulSoup import BeautifulSoup, Tag
+        from calibre.ebooks.BeautifulSoup import BeautifulSoup
         # Returns <div class="user_annotations"> ... </div>
         last_read_location = bookmark.last_read_location
         timestamp = datetime.datetime.utcfromtimestamp(bookmark.timestamp)
@@ -209,28 +209,25 @@ class KINDLE(USBMS):
 
         ka_soup = BeautifulSoup()
         dtc = 0
-        divTag = Tag(ka_soup,'div')
+        divTag = ka_soup.new_tag('div')
         divTag['class'] = 'user_annotations'
 
         # Add the last-read location
-        spanTag = Tag(ka_soup, 'span')
-        spanTag['style'] = 'font-weight:bold'
         if bookmark.book_format == 'pdf':
-            spanTag.insert(0,BeautifulSoup(
-                _("%(time)s<br />Last page read: %(loc)d (%(pr)d%%)") % dict(
+            markup = _("%(time)s<br />Last page read: %(loc)d (%(pr)d%%)") % dict(
                     time=strftime(u'%x', timestamp.timetuple()),
                     loc=last_read_location,
-                    pr=percent_read)))
+                    pr=percent_read)
         else:
-            spanTag.insert(0,BeautifulSoup(
-                _("%(time)s<br />Last page read: Location %(loc)d (%(pr)d%%)") % dict(
+            markup = _("%(time)s<br />Last page read: Location %(loc)d (%(pr)d%%)") % dict(
                     time=strftime(u'%x', timestamp.timetuple()),
                     loc=last_read_location,
-                    pr=percent_read)))
+                    pr=percent_read)
+        spanTag = BeautifulSoup('<span style="font-weight:bold">' + markup + '</span>').find('span')
 
         divTag.insert(dtc, spanTag)
         dtc += 1
-        divTag.insert(dtc, Tag(ka_soup,'br'))
+        divTag.insert(dtc, ka_soup.new_tag('br'))
         dtc += 1
 
         if bookmark.user_notes:
@@ -261,15 +258,16 @@ class KINDLE(USBMS):
                                     typ=user_notes[location]['type']))
 
             for annotation in annotations:
-                divTag.insert(dtc, BeautifulSoup(annotation))
+                annot = BeautifulSoup('<span>' + annotations + '</span>').find('span')
+                divTag.insert(dtc, annot)
                 dtc += 1
 
         ka_soup.insert(0,divTag)
         return ka_soup
 
     def add_annotation_to_library(self, db, db_id, annotation):
-        from calibre.ebooks.BeautifulSoup import Tag
         from calibre.ebooks.metadata import MetaInformation
+        from calibre.ebooks.BeautifulSoup import prettify
 
         bm = annotation
         ignore_tags = {'Catalog', 'Clippings'}
@@ -288,13 +286,13 @@ class KINDLE(USBMS):
                 if set(mi.tags).intersection(ignore_tags):
                     return
                 if mi.comments:
-                    hrTag = Tag(user_notes_soup,'hr')
+                    hrTag = user_notes_soup.new_tag('hr')
                     hrTag['class'] = 'annotations_divider'
                     user_notes_soup.insert(0, hrTag)
 
-                mi.comments += unicode_type(user_notes_soup.prettify())
+                mi.comments += prettify(user_notes_soup)
             else:
-                mi.comments = unicode_type(user_notes_soup.prettify())
+                mi.comments = prettify(user_notes_soup)
             # Update library comments
             db.set_comment(db_id, mi.comments)
 

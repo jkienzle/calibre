@@ -478,7 +478,7 @@ def replace_months(datestr, clang):
     else:
         return datestr
 
-    for k in dictoen.iterkeys():
+    for k in dictoen:
         tmp = re.sub(k, dictoen[k], datestr)
         if tmp != datestr:
             break

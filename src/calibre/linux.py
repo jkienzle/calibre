@@ -9,10 +9,11 @@ from subprocess import check_call, check_output
 from functools import partial
 
 from calibre import __appname__, prints, guess_type
-from calibre.constants import islinux, isbsd
+from calibre.constants import islinux, isbsd, ispy3
 from calibre.customize.ui import all_input_formats
 from calibre.ptempfile import TemporaryDirectory
 from calibre import CurrentDir
+from polyglot.builtins import iteritems, unicode_type
 
 
 entry_points = {
@@ -70,7 +71,7 @@ class PreserveMIMEDefaults(object):
                 self.initial_values[x] = None
 
     def __exit__(self, *args):
-        for path, val in self.initial_values.iteritems():
+        for path, val in iteritems(self.initial_values):
             if val is None:
                 try:
                     os.remove(path)
@@ -210,7 +211,7 @@ class ZshCompleter(object):  # {{{
             h = opt.help or ''
             h = h.replace('"', "'").replace('[', '(').replace(
                 ']', ')').replace('\n', ' ').replace(':', '\\:').replace('`', "'")
-            h = h.replace('%default', type(u'')(opt.default))
+            h = h.replace('%default', unicode_type(opt.default))
             arg = ''
             if opt.takes_value():
                 arg = ':"%s":'%h
@@ -368,7 +369,7 @@ class ZshCompleter(object):  # {{{
             h = opt.help or ''
             h = h.replace('"', "'").replace('[', '(').replace(
                 ']', ')').replace('\n', ' ').replace(':', '\\:').replace('`', "'")
-            h = h.replace('%default', type(u'')(opt.default))
+            h = h.replace('%default', unicode_type(opt.default))
             help_txt = u'"[%s]"'%h
             opt_lines.append(ostrings + help_txt + ' \\')
         opt_lines = ('\n' + (' ' * 8)).join(opt_lines)
@@ -416,13 +417,13 @@ _ebook_edit() {
         f.write('\n_calibredb_cmds() {\n  local commands; commands=(\n')
         f.write('    {-h,--help}":Show help"\n')
         f.write('    "--version:Show version"\n')
-        for command, desc in descs.iteritems():
+        for command, desc in iteritems(descs):
             f.write('    "%s:%s"\n'%(
                 command, desc.replace(':', '\\:').replace('"', '\'')))
         f.write('  )\n  _describe -t commands "calibredb command" commands \n}\n')
 
         subcommands = []
-        for command, parser in parsers.iteritems():
+        for command, parser in iteritems(parsers):
             exts = []
             if command == 'catalog':
                 exts = [x.lower() for x in available_catalog_formats()]
@@ -477,10 +478,10 @@ _ebook_edit() {
                 self.do_calibredb(f)
                 self.do_ebook_edit(f)
                 f.write('case $service in\n')
-                for c, txt in self.commands.iteritems():
-                    if isinstance(txt, type(u'')):
+                for c, txt in iteritems(self.commands):
+                    if isinstance(txt, unicode_type):
                         txt = txt.encode('utf-8')
-                    if isinstance(c, type(u'')):
+                    if isinstance(c, unicode_type):
                         c = c.encode('utf-8')
                     f.write(b'%s)\n%s\n;;\n'%(c, txt))
                 f.write('esac\n')
@@ -651,7 +652,7 @@ class PostInstall:
         print('\n'+'_'*20, 'WARNING','_'*20)
         prints(*args, **kwargs)
         print('_'*50)
-        print ('\n')
+        print('\n')
         self.warnings.append((args, kwargs))
         sys.stdout.flush()
 
@@ -1101,8 +1102,8 @@ def write_appdata(key, entry, base, translators):
     description = E.description()
     for para in entry['description']:
         description.append(E.p(para))
-        for lang, t in translators.iteritems():
-            tp = t.ugettext(para)
+        for lang, t in iteritems(translators):
+            tp = getattr(t, 'gettext' if ispy3 else 'ugettext')(para)
             if tp != para:
                 description.append(E.p(tp))
                 description[-1].set('{http://www.w3.org/XML/1998/namespace}lang', lang)
@@ -1118,8 +1119,8 @@ def write_appdata(key, entry, base, translators):
         screenshots,
         type='desktop'
     )
-    for lang, t in translators.iteritems():
-        tp = t.ugettext(entry['summary'])
+    for lang, t in iteritems(translators):
+        tp = getattr(t, 'gettext' if ispy3 else 'ugettext')(entry['summary'])
         if tp != entry['summary']:
             root.append(E.summary(tp))
             root[-1].set('{http://www.w3.org/XML/1998/namespace}lang', lang)

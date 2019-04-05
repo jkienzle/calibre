@@ -15,7 +15,7 @@ from PyQt5.Qt import (QWidget, QDialog, QLabel, QGridLayout, QComboBox, QSize,
         QListView, QAbstractListModel, pyqtSignal, QSizePolicy, QSpacerItem,
         QApplication, QStandardItem, QStandardItemModel, QCheckBox, QMenu)
 
-from calibre import prepare_string_for_xml, sanitize_file_name_unicode, as_unicode
+from calibre import prepare_string_for_xml, sanitize_file_name, as_unicode
 from calibre.constants import config_dir
 from calibre.utils.icu import sort_key
 from calibre.gui2 import error_dialog, choose_files, pixmap_to_data, gprefs, choose_save_file
@@ -26,7 +26,7 @@ from calibre.library.coloring import (Rule, conditionable_columns,
     displayable_columns, rule_from_template, color_row_key)
 from calibre.utils.localization import lang_map
 from calibre.utils.icu import lower
-from polyglot.builtins import unicode_type
+from polyglot.builtins import iteritems, unicode_type
 
 all_columns_string = _('All columns')
 
@@ -172,7 +172,7 @@ class ConditionEditor(QWidget):  # {{{
     def current_val(self):
         ans = unicode_type(self.value_box.text()).strip()
         if self.current_col == 'languages':
-            rmap = {lower(v):k for k, v in lang_map().iteritems()}
+            rmap = {lower(v):k for k, v in iteritems(lang_map())}
             ans = rmap.get(lower(ans), ans)
         return ans
 
@@ -501,7 +501,7 @@ class RuleEditor(QDialog):  # {{{
             '''.format(c=c, bg1=bg1, bg2=bg2, st=_('Sample text')))
 
     def sanitize_icon_file_name(self, icon_path):
-        n = lower(sanitize_file_name_unicode(
+        n = lower(sanitize_file_name(
                              os.path.splitext(
                                    os.path.basename(icon_path))[0]+'.png'))
         return n.replace("'", '_')
@@ -1130,8 +1130,8 @@ if __name__ == '__main__':
         kind, col, r = d.rule
 
         print('Column to be colored:', col)
-        print ('Template:')
-        print (r.template)
+        print('Template:')
+        print(r.template)
     else:
         d = EditRules()
         d.resize(QSize(800, 600))

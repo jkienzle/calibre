@@ -37,7 +37,7 @@ from calibre.utils.filenames import ascii_filename as sanitize, shorten_componen
 from calibre.utils.mdns import (publish as publish_zeroconf, unpublish as
         unpublish_zeroconf, get_all_ips)
 from calibre.utils.socket_inheritance import set_socket_inherit
-from polyglot.builtins import unicode_type
+from polyglot.builtins import unicode_type, iteritems, itervalues
 from polyglot import queue
 
 
@@ -266,7 +266,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         'SET_CALIBRE_DEVICE_NAME': 2,
         'TOTAL_SPACE'            : 4,
     }
-    reverse_opcodes = dict([(v, k) for k,v in opcodes.iteritems()])
+    reverse_opcodes = {v: k for k, v in iteritems(opcodes)}
 
     MESSAGE_PASSWORD_ERROR = 1
     MESSAGE_UPDATE_NEEDED  = 2
@@ -397,7 +397,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                 try:
                     if isinstance(a, dict):
                         printable = {}
-                        for k,v in a.iteritems():
+                        for k,v in iteritems(a):
                             if isinstance(v, (bytes, unicode_type)) and len(v) > 50:
                                 printable[k] = 'too long'
                             else:
@@ -540,7 +540,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
     # codec to first convert it to a string dict
     def _json_encode(self, op, arg):
         res = {}
-        for k,v in arg.iteritems():
+        for k,v in iteritems(arg):
             if isinstance(v, (Book, Metadata)):
                 res[k] = self.json_codec.encode_book_metadata(v)
                 series = v.get('series', None)
@@ -758,7 +758,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
 
     def _uuid_in_cache(self, uuid, ext):
         try:
-            for b in self.device_book_cache.itervalues():
+            for b in itervalues(self.device_book_cache):
                 metadata = b['book']
                 if metadata.get('uuid', '') != uuid:
                     continue
@@ -835,7 +835,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
             prefix = os.path.join(cache_dir(),
                         'wireless_device_' + self.device_uuid + '_metadata_cache')
             with lopen(prefix + '.tmp', mode='wb') as fd:
-                for key,book in self.device_book_cache.iteritems():
+                for key,book in iteritems(self.device_book_cache):
                     if (now_ - book['last_used']).days > self.PURGE_CACHE_ENTRIES_DAYS:
                         purged += 1
                         continue
@@ -1321,7 +1321,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
                 self._debug('processed cache. count=', len(books_on_device))
                 count_of_cache_items_deleted = 0
                 if self.client_cache_uses_lpaths:
-                    for lpath in tuple(self.known_metadata.iterkeys()):
+                    for lpath in tuple(self.known_metadata):
                         if lpath not in lpaths_on_device:
                             try:
                                 uuid = self.known_metadata[lpath].get('uuid', None)
@@ -1392,7 +1392,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         coldict = {}
         if colattrs:
             collections = booklists[0].get_collections(colattrs)
-            for k,v in collections.iteritems():
+            for k,v in iteritems(collections):
                 lpaths = []
                 for book in v:
                     lpaths.append(book.lpath)
@@ -1471,7 +1471,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         metadata = iter(metadata)
 
         for i, infile in enumerate(files):
-            mdata, fname = metadata.next(), names.next()
+            mdata, fname = next(metadata), next(names)
             lpath = self._create_upload_path(mdata, fname, create_dirs=False)
             self._debug('lpath', lpath)
             if not hasattr(infile, 'read'):
@@ -1497,7 +1497,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
         for i, location in enumerate(locations):
             self.report_progress((i + 1) / float(len(locations)),
                                  _('Adding books to device metadata listing...'))
-            info = metadata.next()
+            info = next(metadata)
             lpath = location[0]
             length = location[1]
             lpath = self._strip_prefix(lpath)

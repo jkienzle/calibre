@@ -8,10 +8,10 @@ __copyright__ = '2012, Kovid Goyal <kovid at kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
 import re
-from itertools import izip, groupby
+from itertools import groupby
 from operator import itemgetter
 from collections import Counter, OrderedDict
-from polyglot.builtins import map
+from polyglot.builtins import iteritems, map, zip
 
 from calibre import as_unicode
 from calibre.ebooks.pdf.render.common import (Array, String, Stream,
@@ -106,7 +106,7 @@ class CMap(Stream):
             maps.append(current_map)
         mapping = []
         for m in maps:
-            meat = '\n'.join('%s %s'%(k, v) for k, v in m.iteritems())
+            meat = '\n'.join('%s %s'%(k, v) for k, v in iteritems(m))
             mapping.append('%d beginbfchar\n%s\nendbfchar'%(len(m), meat))
         try:
             name = name.encode('ascii').decode('ascii')
@@ -194,17 +194,17 @@ class Font(object):
 
     def write_widths(self, objects):
         glyphs = sorted(self.used_glyphs|{0})
-        widths = {g:self.metrics.pdf_scale(w) for g, w in izip(glyphs,
+        widths = {g:self.metrics.pdf_scale(w) for g, w in zip(glyphs,
                                         self.metrics.glyph_widths(glyphs))}
         counter = Counter()
-        for g, w in widths.iteritems():
+        for g, w in iteritems(widths):
             counter[w] += 1
         most_common = counter.most_common(1)[0][0]
         self.descendant_font['DW'] = most_common
-        widths = {g:w for g, w in widths.iteritems() if w != most_common}
+        widths = {g:w for g, w in iteritems(widths) if w != most_common}
 
         groups = Array()
-        for k, g in groupby(enumerate(widths.iterkeys()), lambda i_x:i_x[0]-i_x[1]):
+        for k, g in groupby(enumerate(widths), lambda i_x:i_x[0]-i_x[1]):
             group = list(map(itemgetter(1), g))
             gwidths = [widths[g] for g in group]
             if len(set(gwidths)) == 1 and len(group) > 1:
@@ -239,7 +239,7 @@ class FontManager(object):
         if name not in STANDARD_FONTS:
             raise ValueError('%s is not a standard font'%name)
         if name not in self.std_map:
-                self.std_map[name] = self.objects.add(Dictionary({
+            self.std_map[name] = self.objects.add(Dictionary({
                 'Type':Name('Font'),
                 'Subtype':Name('Type1'),
                 'BaseFont':Name(name)

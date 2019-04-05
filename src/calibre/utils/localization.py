@@ -6,10 +6,10 @@ __license__   = 'GPL v3'
 __copyright__ = '2009, Kovid Goyal <kovid@kovidgoyal.net>'
 __docformat__ = 'restructuredtext en'
 
-import os, locale, re, io
+import os, locale, re, io, sys
 from gettext import GNUTranslations, NullTranslations
 
-from polyglot.builtins import is_py3, unicode_type
+from polyglot.builtins import is_py3, iteritems, unicode_type
 
 _available_translations = None
 
@@ -189,7 +189,7 @@ def load_po(path):
     try:
         make(path, buf)
     except Exception:
-        print (('Failed to compile translations file: %s, ignoring') % path)
+        print(('Failed to compile translations file: %s, ignoring') % path)
         buf = None
     else:
         buf = io.BytesIO(buf.getvalue())
@@ -380,7 +380,8 @@ def get_language(lang):
         # The translator was not active when _extra_lang_codes was defined, so
         # re-translate
         return translate(_extra_lang_codes[lang])
-    return get_iso_language(getattr(_lang_trans, 'ugettext', translate), lang)
+    attr = 'gettext' if sys.version_info.major > 2 else 'ugettext'
+    return get_iso_language(getattr(_lang_trans, attr, translate), lang)
 
 
 def calibre_langcode_to_name(lc, localize=True):
@@ -429,7 +430,7 @@ def lang_map():
     translate = _
     global _lang_map
     if _lang_map is None:
-        _lang_map = {k:translate(v) for k, v in iso639['by_3t'].iteritems()}
+        _lang_map = {k:translate(v) for k, v in iteritems(iso639['by_3t'])}
     return _lang_map
 
 
@@ -453,7 +454,7 @@ def langnames_to_langcodes(names):
     translate = _
     ans = {}
     names = set(names)
-    for k, v in iso639['by_3t'].iteritems():
+    for k, v in iteritems(iso639['by_3t']):
         tv = translate(v)
         if tv in names:
             names.remove(tv)

@@ -50,7 +50,7 @@ class ConfigWidget(ConfigWidgetBase, Ui_Form):
         choices = [(x.upper(), x) for x in output_formats]
         r('output_format', prefs, choices=choices, setting=OutputFormatSetting)
 
-        restrictions = sorted(db.prefs['virtual_libraries'].iterkeys(), key=sort_key)
+        restrictions = sorted(db.prefs['virtual_libraries'], key=sort_key)
         choices = [('', '')] + [(x, x) for x in restrictions]
         # check that the virtual library still exists
         vls = db.prefs['virtual_lib_on_startup']

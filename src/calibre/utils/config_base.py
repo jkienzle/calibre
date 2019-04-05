@@ -12,8 +12,8 @@ from collections import defaultdict
 from copy import deepcopy
 
 from calibre.utils.lock import ExclusiveFile
-from calibre.constants import config_dir, CONFIG_DIR_MODE, ispy3
-from polyglot.builtins import unicode_type
+from calibre.constants import config_dir, CONFIG_DIR_MODE, ispy3, preferred_encoding
+from polyglot.builtins import unicode_type, iteritems, map
 
 plugin_dir = os.path.join(config_dir, 'plugins')
 
@@ -21,9 +21,9 @@ plugin_dir = os.path.join(config_dir, 'plugins')
 def to_json(obj):
     import datetime
     if isinstance(obj, bytearray):
-        import base64
+        from base64 import standard_b64encode
         return {'__class__': 'bytearray',
-                '__value__': base64.standard_b64encode(bytes(obj)).decode('ascii')}
+                '__value__': standard_b64encode(bytes(obj)).decode('ascii')}
     if isinstance(obj, datetime.datetime):
         from calibre.utils.date import isoformat
         return {'__class__': 'datetime.datetime',
@@ -42,8 +42,8 @@ def from_json(obj):
     custom = obj.get('__class__')
     if custom is not None:
         if custom == 'bytearray':
-            import base64
-            return bytearray(base64.standard_b64decode(obj['__value__']))
+            from base64 import standard_b64decode
+            return bytearray(standard_b64decode(obj['__value__'].encode('ascii')))
         if custom == 'datetime.datetime':
             from calibre.utils.iso8601 import parse_iso8601
             return parse_iso8601(obj['__value__'], assume_utc=True)
@@ -517,55 +517,98 @@ def create_global_prefs(conf_obj=None):
 prefs = ConfigProxy(create_global_prefs())
 if prefs['installation_uuid'] is None:
     import uuid
-    prefs['installation_uuid'] = str(uuid.uuid4())
+    prefs['installation_uuid'] = unicode_type(uuid.uuid4())
 
 # Read tweaks
 
 
-def read_raw_tweaks():
+def tweaks_file():
+    return os.path.join(config_dir, u'tweaks.json')
+
+
+def make_unicode(obj):
+    if isinstance(obj, bytes):
+        try:
+            return obj.decode('utf-8')
+        except UnicodeDecodeError:
+            return obj.decode(preferred_encoding, errors='replace')
+    if isinstance(obj, (list, tuple)):
+        return list(map(make_unicode, obj))
+    if isinstance(obj, dict):
+        return {make_unicode(k): make_unicode(v) for k, v in iteritems(obj)}
+    return obj
+
+
+def normalize_tweak(val):
+    if isinstance(val, (list, tuple)):
+        return tuple(map(normalize_tweak, val))
+    if isinstance(val, dict):
+        return {k: normalize_tweak(v) for k, v in iteritems(val)}
+    return val
+
+
+def write_custom_tweaks(tweaks_dict):
     make_config_dir()
-    default_tweaks = P('default_tweaks.py', data=True,
-            allow_user_override=False)
-    tweaks_file = os.path.join(config_dir, 'tweaks.py')
-    if not os.path.exists(tweaks_file):
-        with open(tweaks_file, 'wb') as f:
-            f.write(default_tweaks)
-    with open(tweaks_file, 'rb') as f:
-        return default_tweaks, f.read()
+    tweaks_dict = make_unicode(tweaks_dict)
+    changed_tweaks = {}
+    default_tweaks = exec_tweaks(default_tweaks_raw())
+    for key, cval in iteritems(tweaks_dict):
+        if key in default_tweaks and normalize_tweak(cval) == normalize_tweak(default_tweaks[key]):
+            continue
+        changed_tweaks[key] = cval
+    raw = json_dumps(changed_tweaks)
+    with open(tweaks_file(), 'wb') as f:
+        f.write(raw)
+
+
+def exec_tweaks(path):
+    if isinstance(path, bytes):
+        raw = path
+        fname = '<string>'
+    else:
+        with open(path, 'rb') as f:
+            raw = f.read()
+            fname = f.name
+    code = compile(raw, fname, 'exec')
+    l = {}
+    g = {'__file__': fname}
+    exec(code, g, l)
+    return l
+
+
+def read_custom_tweaks():
+    make_config_dir()
+    tf = tweaks_file()
+    if os.path.exists(tf):
+        with open(tf, 'rb') as f:
+            raw = f.read()
+        return json_loads(raw)
+    old_tweaks_file = tf.rpartition(u'.')[0] + u'.py'
+    ans = {}
+    if os.path.exists(old_tweaks_file):
+        ans = exec_tweaks(old_tweaks_file)
+        ans = make_unicode(ans)
+        write_custom_tweaks(ans)
+    return ans
+
+
+def default_tweaks_raw():
+    return P('default_tweaks.py', data=True, allow_user_override=False)
 
 
 def read_tweaks():
-    default_tweaks, tweaks = read_raw_tweaks()
-    l, g = {}, {}
-    try:
-        exec(tweaks, g, l)
-    except:
-        import traceback
-        print('Failed to load custom tweaks file')
-        traceback.print_exc()
-    dl, dg = {}, {}
-    exec(default_tweaks, dg, dl)
-    dl.update(l)
-    return dl
-
-
-def write_tweaks(raw):
-    make_config_dir()
-    tweaks_file = os.path.join(config_dir, 'tweaks.py')
-    with open(tweaks_file, 'wb') as f:
-        f.write(raw)
+    default_tweaks = exec_tweaks(default_tweaks_raw())
+    default_tweaks.update(read_custom_tweaks())
+    return default_tweaks
 
 
 tweaks = read_tweaks()
 
 
 def reset_tweaks_to_default():
-    default_tweaks = P('default_tweaks.py', data=True,
-            allow_user_override=False)
-    dl, dg = {}, {}
-    exec(default_tweaks, dg, dl)
+    default_tweaks = exec_tweaks(default_tweaks_raw())
     tweaks.clear()
-    tweaks.update(dl)
+    tweaks.update(default_tweaks)
 
 
 class Tweak(object):

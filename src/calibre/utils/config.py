@@ -10,7 +10,6 @@ Manage application-wide preferences.
 
 import optparse
 import os
-import plistlib
 from copy import deepcopy
 
 from calibre.constants import (
@@ -19,9 +18,10 @@ from calibre.constants import (
 from calibre.utils.config_base import (
     Config, ConfigInterface, ConfigProxy, Option, OptionSet, OptionValues,
     StringConfig, json_dumps, json_loads, make_config_dir, plugin_dir, prefs,
-    read_raw_tweaks, read_tweaks, tweaks, write_tweaks, from_json, to_json
+    tweaks, from_json, to_json
 )
 from calibre.utils.lock import ExclusiveFile
+from polyglot.builtins import unicode_type
 
 
 # optparse uses gettext.gettext instead of _ from builtins, so we
@@ -30,9 +30,8 @@ optparse._ = _
 
 if False:
     # Make pyflakes happy
-    Config, ConfigProxy, Option, OptionValues, StringConfig
-    OptionSet, ConfigInterface, read_tweaks, write_tweaks
-    read_raw_tweaks, tweaks, plugin_dir, prefs, from_json, to_json
+    Config, ConfigProxy, Option, OptionValues, StringConfig, OptionSet,
+    ConfigInterface, tweaks, plugin_dir, prefs, from_json, to_json
 
 
 def check_config_write_access():
@@ -194,7 +193,7 @@ class OptionParser(optparse.OptionParser):
                 upper.__dict__[dest] = lower.__dict__[dest]
 
     def add_option_group(self, *args, **kwargs):
-        if isinstance(args[0], type(u'')):
+        if isinstance(args[0], unicode_type):
             args = [optparse.OptionGroup(self, *args, **kwargs)] + list(args[1:])
         return optparse.OptionParser.add_option_group(self, *args, **kwargs)
 
@@ -335,10 +334,12 @@ class XMLConfig(dict):
             pass
 
     def raw_to_object(self, raw):
-        return plistlib.readPlistFromString(raw)
+        from polyglot.plistlib import loads
+        return loads(raw)
 
     def to_raw(self):
-        return plistlib.writePlistToString(self)
+        from polyglot.plistlib import dumps
+        return dumps(self)
 
     def decouple(self, prefix):
         self.file_path = os.path.join(os.path.dirname(self.file_path), prefix + os.path.basename(self.file_path))
@@ -362,26 +363,29 @@ class XMLConfig(dict):
         self.update(d)
 
     def __getitem__(self, key):
+        from polyglot.plistlib import Data
         try:
             ans = dict.__getitem__(self, key)
-            if isinstance(ans, plistlib.Data):
+            if isinstance(ans, Data):
                 ans = ans.data
             return ans
         except KeyError:
             return self.defaults.get(key, None)
 
     def get(self, key, default=None):
+        from polyglot.plistlib import Data
         try:
             ans = dict.__getitem__(self, key)
-            if isinstance(ans, plistlib.Data):
+            if isinstance(ans, Data):
                 ans = ans.data
             return ans
         except KeyError:
             return self.defaults.get(key, default)
 
     def __setitem__(self, key, val):
-        if isinstance(val, (bytes, str)):
-            val = plistlib.Data(val)
+        from polyglot.plistlib import Data
+        if isinstance(val, bytes):
+            val = Data(val)
         dict.__setitem__(self, key, val)
         self.commit()
 
