@@ -8,7 +8,7 @@ __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
 
 import time, textwrap, json
 from bisect import bisect_right
-from polyglot.builtins import map, unicode_type
+from polyglot.builtins import map, unicode_type, filter
 from threading import Thread
 from functools import partial
 
@@ -46,7 +46,10 @@ def get_data(name):
 
 def parse_html(raw):
     root = parse(raw, decoder=lambda x:x.decode('utf-8'), line_numbers=True, linenumber_attribute='data-lnum')
-    return serialize(root, 'text/html').encode('utf-8')
+    ans = serialize(root, 'text/html')
+    if not isinstance(ans, bytes):
+        ans = ans.encode('utf-8')
+    return ans
 
 
 class ParseItem(object):
@@ -286,6 +289,8 @@ class WebPage(QWebPage):
             self.js = compiled_coffeescript('ebooks.oeb.display.utils', dynamic=False)
             self.js += P('csscolorparser.js', data=True, allow_user_override=False)
             self.js += compiled_coffeescript('ebooks.oeb.polish.preview', dynamic=False)
+            if isinstance(self.js, bytes):
+                self.js = self.js.decode('utf-8')
         self._line_numbers = None
         mf = self.mainFrame()
         mf.addToJavaScriptWindowObject("py_bridge", self)
@@ -321,7 +326,7 @@ class WebPage(QWebPage):
                     ans = None
                 return ans
             val = self.mainFrame().evaluateJavaScript('window.calibre_preview_integration.line_numbers()')
-            self._line_numbers = sorted(uniq(filter(lambda x:x is not None, map(atoi, val))))
+            self._line_numbers = sorted(uniq(list(filter(lambda x:x is not None, map(atoi, val)))))
         return self._line_numbers
 
     def go_to_line(self, lnum):

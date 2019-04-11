@@ -5,7 +5,7 @@ __docformat__ = 'restructuredtext en'
 
 import sys, os, re, time, random, warnings
 from polyglot.builtins import (builtins, codepoint_to_chr, iteritems,
-        itervalues, unicode_type, range)
+        itervalues, unicode_type, range, filter)
 builtins.__dict__['dynamic_property'] = lambda func: func(None)
 from math import floor
 from functools import partial
@@ -158,9 +158,13 @@ def prints(*args, **kwargs):
     '''
     file = kwargs.get('file', sys.stdout)
     file = getattr(file, 'buffer', file)
-    sep  = bytes(kwargs.get('sep', ' '))
-    end  = bytes(kwargs.get('end', '\n'))
     enc = 'utf-8' if 'CALIBRE_WORKER' in os.environ else preferred_encoding
+    sep  = kwargs.get('sep', ' ')
+    if not isinstance(sep, bytes):
+        sep = sep.encode(enc)
+    end  = kwargs.get('end', '\n')
+    if not isinstance(end, bytes):
+        end = end.encode(enc)
     safe_encode = kwargs.get('safe_encode', False)
     count = 0
     for i, arg in enumerate(args):
@@ -372,9 +376,9 @@ USER_AGENT_MOBILE = 'Mozilla/5.0 (Windows; U; Windows CE 5.1; rv:1.8.1a3) Gecko/
 def random_user_agent(choose=None, allow_ie=True):
     from calibre.utils.random_ua import common_user_agents
     ua_list = common_user_agents()
-    ua_list = filter(lambda x: 'Mobile/' not in x, ua_list)
+    ua_list = list(filter(lambda x: 'Mobile/' not in x, ua_list))
     if not allow_ie:
-        ua_list = filter(lambda x: 'Trident/' not in x and 'Edge/' not in x, ua_list)
+        ua_list = list(filter(lambda x: 'Trident/' not in x and 'Edge/' not in x, ua_list))
     return random.choice(ua_list) if choose is None else ua_list[choose]
 
 
@@ -565,7 +569,7 @@ def entity_to_unicode(match, exceptions=[], encoding='cp1252',
         if encoding is None or num > 255:
             return check(my_unichr(num))
         try:
-            return check(chr(num).decode(encoding))
+            return check(bytes(bytearray((num,))).decode(encoding))
         except UnicodeDecodeError:
             return check(my_unichr(num))
     from calibre.ebooks.html_entities import html5_entities

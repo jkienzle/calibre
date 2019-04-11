@@ -24,7 +24,7 @@ from calibre.ebooks.metadata.toc import TOC
 from calibre.ebooks.mobi.utils import read_font_record
 from calibre.ebooks.oeb.parse_utils import parse_html
 from calibre.ebooks.oeb.base import XPath, XHTML, xml2text
-from polyglot.builtins import range, zip
+from polyglot.builtins import range, zip, unicode_type
 from polyglot.urllib import urldefrag
 
 Part = namedtuple('Part',
@@ -85,7 +85,7 @@ class Mobi8Reader(object):
 
     def __call__(self):
         self.mobi6_reader.check_for_drm()
-        self.aid_anchor_suffix = bytes(uuid4().hex)
+        self.aid_anchor_suffix = uuid4().hex.encode('utf-8')
         bh = self.mobi6_reader.book_header
         if self.mobi6_reader.kf8_type == 'joint':
             offset = self.mobi6_reader.kf8_boundary + 2
@@ -165,8 +165,9 @@ class Mobi8Reader(object):
                     fileno  = tag_map[3][0]
                 if 6 in list(tag_map.keys()):
                     fileno = tag_map[6]
-                self.guide.append(Item(ref_type.decode(self.header.codec),
-                    title, fileno))
+                if isinstance(ref_type, bytes):
+                    ref_type = ref_type.decode(self.header.codec)
+                self.guide.append(Item(ref_type, title, fileno))
 
     def build_parts(self):
         raw_ml = self.mobi6_reader.mobi_html
@@ -225,8 +226,7 @@ class Mobi8Reader(object):
             self.parts.append(skeleton)
             if divcnt < 1:
                 # Empty file
-                import uuid
-                aidtext = str(uuid.uuid4())
+                aidtext = unicode_type(uuid4())
                 filename = aidtext + '.html'
             self.partinfo.append(Part(skelnum, 'text', filename, skelpos,
                 baseptr, aidtext))
@@ -355,7 +355,9 @@ class Mobi8Reader(object):
                 continue  # thumbnailstandard record, ignore it
             linktgt, idtext = self.get_id_tag_by_pos_fid(*pos_fid)
             if idtext:
-                linktgt += b'#' + idtext
+                if isinstance(idtext, bytes):
+                    idtext = idtext.decode(self.header.codec)
+                linktgt += '#' + idtext
             g = Guide.Reference(linktgt, os.getcwdu())
             g.title, g.type = ref_title, ref_type
             if g.title == 'start' or g.type == 'text':

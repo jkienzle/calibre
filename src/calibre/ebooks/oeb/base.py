@@ -22,8 +22,8 @@ from calibre.ebooks.oeb.parse_utils import (barename, XHTML_NS, RECOVER_PARSER,
         namespace, XHTML, parse_html, NotHTML)
 from calibre.utils.cleantext import clean_xml_chars
 from calibre.utils.short_uuid import uuid4
-from polyglot.builtins import iteritems, unicode_type, string_or_bytes, range, itervalues
-from polyglot.urllib import unquote, urldefrag, urljoin, urlparse, urlunparse
+from polyglot.builtins import iteritems, unicode_type, string_or_bytes, range, itervalues, filter
+from polyglot.urllib import unquote as urlunquote, urldefrag, urljoin, urlparse, urlunparse
 from calibre.utils.icu import numeric_sort_key
 
 XML_NS       = 'http://www.w3.org/XML/1998/namespace'
@@ -453,23 +453,6 @@ def urlquote(href):
             char = "%%%02x" % ord(char)
         result.append(char)
     return ''.join(result)
-
-
-def urlunquote(href, error_handling='strict'):
-    # unquote must run on a bytestring and will return a bytestring
-    # If it runs on a unicode object, it returns a double encoded unicode
-    # string: unquote(u'%C3%A4') != unquote(b'%C3%A4').decode('utf-8')
-    # and the latter is correct
-    want_unicode = isinstance(href, unicode_type)
-    if want_unicode:
-        href = href.encode('utf-8')
-    href = unquote(href)
-    if want_unicode:
-        # The quoted characters could have been in some encoding other than
-        # UTF-8, this often happens with old/broken web servers. There is no
-        # way to know what that encoding should be in this context.
-        href = href.decode('utf-8', error_handling)
-    return href
 
 
 def urlnormalize(href):
@@ -1112,6 +1095,10 @@ class Manifest(object):
                 return unicode_type(data.cssText, 'utf-8', 'replace')
             return unicode_type(data)
 
+        @property
+        def bytes_representation(self):
+            return serialize(self.data, self.media_type, pretty_print=self.oeb.pretty_print)
+
         if ispy3:
             def __str__(self):
                 return self.unicode_representation
@@ -1120,13 +1107,16 @@ class Manifest(object):
                 return self.unicode_representation
 
             def __str__(self):
-                return serialize(self.data, self.media_type, pretty_print=self.oeb.pretty_print)
+                return self.bytes_representation
 
         def __eq__(self, other):
             return self is other
 
         def __ne__(self, other):
             return self is not other
+
+        def __hash__(self):
+            return id(self)
 
         @property
         def sort_key(self):
@@ -2008,7 +1998,7 @@ def rel_href(base_href, href):
         return href
     if '/' not in base_href:
         return href
-    base = filter(lambda x: x and x != '.', os.path.dirname(os.path.normpath(base_href)).replace(os.sep, '/').split('/'))
+    base = list(filter(lambda x: x and x != '.', os.path.dirname(os.path.normpath(base_href)).replace(os.sep, '/').split('/')))
     while True:
         try:
             idx = base.index('..')

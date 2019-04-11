@@ -6,7 +6,7 @@ from polyglot.builtins import map, unicode_type
 import sys, locale, codecs, os, importlib, collections
 
 __appname__   = u'calibre'
-numeric_version = (3, 40, 1)
+numeric_version = (3, 40, 3)
 __version__   = u'.'.join(map(unicode_type, numeric_version))
 __author__    = u"Kovid Goyal <kovid@kovidgoyal.net>"
 
@@ -198,7 +198,10 @@ class Plugins(collections.Mapping):
     def load_plugin(self, name):
         if name in self._plugins:
             return
-        sys.path.insert(0, sys.extensions_location)
+        plugins_loc = sys.extensions_location
+        if ispy3:
+            plugins_loc = os.path.join(plugins_loc, '3')
+        sys.path.insert(0, plugins_loc)
         try:
             del sys.modules[name]
         except KeyError:
@@ -210,7 +213,7 @@ class Plugins(collections.Mapping):
             p = None
             plugin_err = unicode_type(err)
         self._plugins[name] = p, plugin_err
-        sys.path.remove(sys.extensions_location)
+        sys.path.remove(plugins_loc)
 
     def __iter__(self):
         return iter(self.plugins)

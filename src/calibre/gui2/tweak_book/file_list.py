@@ -38,7 +38,7 @@ from calibre.gui2.tweak_book import (
 from calibre.gui2.tweak_book.editor import syntax_from_mime
 from calibre.gui2.tweak_book.templates import template_for
 from calibre.utils.icu import numeric_sort_key
-from polyglot.builtins import iteritems, itervalues, unicode_type, range
+from polyglot.builtins import iteritems, itervalues, unicode_type, range, filter
 from polyglot.binary import as_hex_unicode
 
 try:
@@ -1030,6 +1030,6 @@ class FileListWidget(QWidget):
         return self.file_list.current_name
 
     def __getattr__(self, name):
-        if name in self.forwarded_signals:
+        if name in object.__getattribute__(self, 'forwarded_signals'):
             return getattr(self.file_list, name)
         return QWidget.__getattr__(self, name)
