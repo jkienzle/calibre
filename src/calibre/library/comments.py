@@ -2,7 +2,7 @@
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
 # License: GPLv3 Copyright: 2010, Kovid Goyal <kovid at kovidgoyal.net>
 
-from __future__ import print_function, unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 import re
 
@@ -128,7 +128,7 @@ def comments_to_html(comments):
     for p in container.findAll('p'):
         p['class'] = 'description'
 
-    return container.decode_contents()
+    return container.decode_contents().replace('<br></br>', '<br>')
 
 
 def markdown(val):
@@ -163,7 +163,7 @@ def find_tests():
                         '<p class="description">lineone</p>\n<p class="description">linetwo</p>'),
 
                     ('a <b>b&c</b>\nf',
-                        '<p class="description">a <b>b&amp;c</b><br></br>f</p>'),
+                        '<p class="description">a <b>b&amp;c</b><br>f</p>'),
 
                     ('a <?xml asd> b\n\ncd',
                         '<p class="description">a  b</p><p class="description">cd</p>'),

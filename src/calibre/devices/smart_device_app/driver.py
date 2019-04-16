@@ -554,7 +554,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
             else:
                 res[k] = v
         from calibre.utils.config import to_json
-        return json.dumps([op, res], encoding='utf-8', default=to_json)
+        return json.dumps([op, res], default=to_json)
 
     # Network functions
 
@@ -569,7 +569,7 @@ class SMART_DEVICE_APP(DeviceConfig, DevicePlugin):
             raise
 
     def _read_string_from_net(self):
-        data = bytes(0)
+        data = b'\0'
         while True:
             dex = data.find(b'[')
             if dex >= 0:

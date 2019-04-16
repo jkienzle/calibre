@@ -37,12 +37,18 @@ class ET(object):
         return newres
 
 
+def get_defaults(spec):
+    num = len(spec.defaults or ())
+    if not num:
+        return {}
+    return dict(zip(spec.args[-num:], spec.defaults))
+
+
 def compare_argspecs(old, new, attr):
     # We dont compare the names of the non-keyword arguments as they are often
     # different and they dont affect the usage of the API.
-    num = len(old.defaults or ())
 
-    ok = len(old.args) == len(new.args) and old.defaults == new.defaults and (num == 0 or old.args[-num:] == new.args[-num:])
+    ok = len(old.args) == len(new.args) and get_defaults(old) == get_defaults(new)
     if not ok:
         raise AssertionError('The argspec for %s does not match. %r != %r' % (attr, old, new))
 
@@ -292,9 +298,15 @@ class LegacyTest(BaseTest):
     def test_legacy_conversion_options(self):  # {{{
         'Test conversion options API'
         ndb = self.init_legacy()
-        db = self.init_old()
+        db  = self.init_old()
         all_ids = ndb.new_api.all_book_ids()
-        op1 = {'xx':'yy'}
+        op1 = {'xx': 'yy'}
+
+        def decode(x):
+            if isinstance(x, bytes):
+                x = x.decode('utf-8')
+            return x
+
         for x in (
             ('has_conversion_options', all_ids),
             ('conversion_options', 1, 'PIPE'),
@@ -305,8 +317,10 @@ class LegacyTest(BaseTest):
             ('has_conversion_options', all_ids),
         ):
             meth, args = x[0], x[1:]
-            self.assertEqual((getattr(db, meth)(*args)), (getattr(ndb, meth)(*args)),
-                                 'The method: %s() returned different results for argument %s' % (meth, args))
+            self.assertEqual(
+                decode(getattr(db, meth)(*args)), decode(getattr(ndb, meth)(*args)),
+                'The method: %s() returned different results for argument %s' % (meth, args)
+            )
         db.close()
     # }}}
 
@@ -459,7 +473,7 @@ class LegacyTest(BaseTest):
                     try:
                         argspec = inspect.getargspec(obj)
                         nargspec = inspect.getargspec(nobj)
-                    except TypeError:
+                    except (TypeError, ValueError):
                         pass
                     else:
                         compare_argspecs(argspec, nargspec, attr)

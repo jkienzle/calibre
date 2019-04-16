@@ -12,6 +12,7 @@ from unittest import skipIf
 from glob import glob
 from threading import Event
 
+from calibre.constants import ispy3
 from calibre.srv.pre_activated import has_preactivated_support
 from calibre.srv.tests.base import BaseTest, TestServer
 from calibre.ptempfile import TemporaryDirectory
@@ -114,15 +115,18 @@ class LoopTest(BaseTest):
     def test_bonjour(self):
         'Test advertising via BonJour'
         from calibre.srv.bonjour import BonJour
-        from calibre.utils.Zeroconf import Zeroconf
-        b = BonJour()
+        if ispy3:
+            from zeroconf import Zeroconf
+        else:
+            from calibre.utils.Zeroconf import Zeroconf
+        b = BonJour(wait_for_stop=False)
         with TestServer(lambda data:(data.path[0] + data.read()), plugins=(b,), shutdown_timeout=5) as server:
             self.assertTrue(b.started.wait(5), 'BonJour not started')
             self.ae(b.advertised_port, server.address[1])
             service = b.services[0]
-            self.ae(service.type, b'_calibre._tcp.local.')
+            self.ae(service.type, '_calibre._tcp.local.')
             r = Zeroconf()
-            info = r.getServiceInfo(service.type, service.name)
+            info = r.get_service_info(service.type, service.name)
             self.assertIsNotNone(info)
             self.ae(info.text, b'\npath=/opds')
 
@@ -130,7 +134,7 @@ class LoopTest(BaseTest):
 
     def test_dual_stack(self):
         from calibre.srv.loop import IPPROTO_IPV6
-        with TestServer(lambda data:(data.path[0] + data.read()), listen_on='::') as server:
+        with TestServer(lambda data:(data.path[0] + data.read().decode('utf-8')), listen_on='::') as server:
             self.ae(server.address[0], '::')
             self.ae(server.loop.socket.getsockopt(IPPROTO_IPV6, socket.IPV6_V6ONLY), 0)
             conn = server.connect(interface='127.0.0.1')
@@ -203,8 +207,10 @@ class LoopTest(BaseTest):
             cert_file, key_file, ca_file = map(lambda x:os.path.join(tdir, x), 'cka')
             create_server_cert(address, ca_file, cert_file, key_file, key_size=1024)
             ctx = ssl.create_default_context(cafile=ca_file)
-            with TestServer(lambda data:(data.path[0] + data.read()), ssl_certfile=cert_file, ssl_keyfile=key_file, listen_on=address, port=0) as server:
-                conn = http_client.HTTPSConnection(address, server.address[1], strict=True, context=ctx)
+            with TestServer(
+                    lambda data:(data.path[0] + data.read().decode('utf-8')),
+                    ssl_certfile=cert_file, ssl_keyfile=key_file, listen_on=address, port=0) as server:
+                conn = http_client.HTTPSConnection(address, server.address[1], context=ctx)
                 conn.request('GET', '/test', 'body')
                 r = conn.getresponse()
                 self.ae(r.status, http_client.OK)

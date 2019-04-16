@@ -22,6 +22,7 @@ from calibre.utils.shared_file import share_open, raise_winerror
 from polyglot.builtins import iteritems, map, range
 from polyglot import reprlib
 from polyglot.http_cookie import SimpleCookie
+from polyglot.builtins import unicode_type
 from polyglot.urllib import parse_qs, quote as urlquote
 from polyglot.binary import as_hex_unicode as encode_name, from_hex_unicode as decode_name
 
@@ -284,13 +285,13 @@ def get_translator_for_lang(cache, bcp_47_code):
 
 def encode_path(*components):
     'Encode the path specified as a list of path components using URL encoding'
-    return '/' + '/'.join(urlquote(x.encode('utf-8'), '').decode('ascii') for x in components)
+    return '/' + '/'.join(urlquote(x.encode('utf-8'), '') for x in components)
 
 
 class Cookie(SimpleCookie):
 
     def _BaseCookie__set(self, key, real_value, coded_value):
-        if not isinstance(key, bytes):
+        if not ispy3 and not isinstance(key, bytes):
             key = key.encode('ascii')  # Python 2.x cannot handle unicode keys
         return SimpleCookie._BaseCookie__set(self, key, real_value, coded_value)
 
@@ -336,9 +337,12 @@ class RotatingStream(object):
         kwargs['safe_encode'] = True
         kwargs['file'] = self.stream
         self.current_pos += prints(*args, **kwargs)
-        if iswindows:
+        if iswindows or ispy3:
             # For some reason line buffering does not work on windows
+            # and in python 3 it only works with text mode streams
             end = kwargs.get('end', b'\n')
+            if isinstance(end, unicode_type):
+                end = end.encode('utf-8')
             if b'\n' in end:
                 self.flush()
         self.rollover()

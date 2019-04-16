@@ -8,7 +8,7 @@ import os
 import re
 import textwrap
 import unicodedata
-from polyglot.builtins import unicode_type, map, range
+from polyglot.builtins import unicode_type, map, range, as_unicode
 
 from PyQt5.Qt import (
     QColor, QColorDialog, QFont, QFontDatabase, QKeySequence, QPainter, QPalette,
@@ -131,7 +131,7 @@ class TextEdit(PlainTextEdit):
             )
 
         if md.hasFormat(CONTAINER_DND_MIMETYPE):
-            for line in bytes(md.data(CONTAINER_DND_MIMETYPE)).decode('utf-8').splitlines():
+            for line in as_unicode(bytes(md.data(CONTAINER_DND_MIMETYPE))).splitlines():
                 mt = current_container().mime_map.get(line, 'application/octet-stream')
                 if is_mt_ok(mt):
                     yield line, mt, True
@@ -696,8 +696,8 @@ class TextEdit(PlainTextEdit):
 
     def override_shortcut(self, ev):
         # Let the global cut/copy/paste/undo/redo shortcuts work, this avoids the nbsp
-        # problem as well, since they use the overridden copy() method
-        # instead of the one from Qt, and allows proper customization
+        # problem as well, since they use the overridden createMimeDataFromSelection() method
+        # instead of the one from Qt (which makes copy() work), and allows proper customization
         # of the shortcuts
         if ev in (QKeySequence.Copy, QKeySequence.Cut, QKeySequence.Paste, QKeySequence.Undo, QKeySequence.Redo):
             ev.ignore()
