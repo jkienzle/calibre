@@ -8,10 +8,7 @@ import sys
 
 is_py3 = sys.version_info.major >= 3
 native_string_type = str
-
-
-def iterkeys(d):
-    return iter(d)
+iterkeys = iter
 
 
 def as_bytes(x, encoding='utf-8'):
@@ -33,6 +30,19 @@ def as_unicode(x, encoding='utf-8', errors='strict'):
     if isinstance(x, bytes):
         return x.decode(encoding, errors)
     return unicode_type(x)
+
+
+def only_unicode_recursive(x, encoding='utf-8', errors='strict'):
+    # Convert any bytestrings in lists/tuples/dicts to unicode
+    if isinstance(x, bytes):
+        return x.decode(encoding, errors)
+    if isinstance(x, unicode_type):
+        return x
+    if isinstance(x, (list, tuple)):
+        return type(x)(only_unicode_recursive(i, encoding, errors) for i in x)
+    if isinstance(x, dict):
+        return {only_unicode_recursive(k, encoding, errors): only_unicode_recursive(v, encoding, errors) for k, v in iteritems(x)}
+    return x
 
 
 if is_py3:
