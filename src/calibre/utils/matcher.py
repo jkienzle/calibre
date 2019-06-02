@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=utf-8
-from __future__ import (unicode_literals, division, absolute_import, print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 __license__ = 'GPL v3'
 __copyright__ = '2014, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -294,12 +294,12 @@ def test(return_tests=False):
 
             start = memory()
             for i in range(10):
-                doit(str(i))
+                doit(unicode_type(i))
             gc.collect()
             used10 = memory() - start
             start = memory()
             for i in range(100):
-                doit(str(i))
+                doit(unicode_type(i))
             gc.collect()
             used100 = memory() - start
             if used100 > 0 and used10 > 0:

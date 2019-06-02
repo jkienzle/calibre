@@ -6,7 +6,7 @@ from polyglot.builtins import map, unicode_type, environ_item, hasenv, getenv
 import sys, locale, codecs, os, importlib, collections
 
 __appname__   = 'calibre'
-numeric_version = (3, 42, 0)
+numeric_version = (3, 44, 0)
 __version__   = '.'.join(map(unicode_type, numeric_version))
 git_version   = None
 __author__    = "Kovid Goyal <kovid@kovidgoyal.net>"
@@ -147,6 +147,12 @@ def cache_dir():
         ans = cache_dir.ans = _get_cache_dir()
     return ans
 
+
+plugins_loc = sys.extensions_location
+if ispy3:
+    plugins_loc = os.path.join(plugins_loc, '3')
+
+
 # plugins {{{
 
 
@@ -195,9 +201,6 @@ class Plugins(collections.Mapping):
     def load_plugin(self, name):
         if name in self._plugins:
             return
-        plugins_loc = sys.extensions_location
-        if ispy3:
-            plugins_loc = os.path.join(plugins_loc, '3')
         sys.path.insert(0, plugins_loc)
         try:
             del sys.modules[name]

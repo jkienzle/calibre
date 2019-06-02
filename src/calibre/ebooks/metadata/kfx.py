@@ -2,8 +2,7 @@
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2015, Kovid Goyal <kovid at kovidgoyal.net>, John Howell <jhowell@acm.org>'
 
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 # Based on work of John Howell reversing the KFX format
 # https://www.mobileread.com/forums/showpost.php?p=3176029&postcount=89
@@ -240,7 +239,7 @@ class PackedIon(PackedData):
 
     def unpack_unsigned_int(self, length):
         # unsigned big-endian (MSB first)
-        return struct.unpack_from(b'>Q', chr(0) * (8 - length) + self.extract(length))[0]
+        return struct.unpack_from(b'>Q', b'\0' * (8 - length) + self.extract(length))[0]
 
 
 def property_name(property_number):

@@ -1,7 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -113,7 +112,7 @@ def _html4_parse(data):
     for elem in data.iter(tag=etree.Comment):
         if elem.text:
             elem.text = elem.text.strip('-')
-    data = etree.tostring(data, encoding=unicode_type)
+    data = etree.tostring(data, encoding='unicode')
 
     # Setting huge_tree=True causes crashes in windows with large files
     parser = etree.XMLParser(no_network=True)
@@ -274,7 +273,7 @@ def parse_html(data, log=None, decoder=None, preprocessor=None,
     if not namespace(data.tag):
         log.warn('Forcing', filename, 'into XHTML namespace')
         data.attrib['xmlns'] = XHTML_NS
-        data = etree.tostring(data, encoding=unicode_type)
+        data = etree.tostring(data, encoding='unicode')
 
         try:
             data = etree.fromstring(data, parser=parser)

@@ -2,8 +2,7 @@
 # vim:fileencoding=utf-8
 # License: GPLv3 Copyright: 2015, Kovid Goyal <kovid at kovidgoyal.net>
 
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 import os, json, struct, hashlib, sys, errno, tempfile, time, shutil, uuid
 from collections import Counter
 
@@ -12,7 +11,7 @@ from calibre.constants import config_dir, iswindows
 from calibre.utils.config_base import prefs, StringConfig, create_global_prefs
 from calibre.utils.config import JSONConfig
 from calibre.utils.filenames import samefile
-from polyglot.builtins import iteritems, raw_input, error_message
+from polyglot.builtins import iteritems, raw_input, error_message, unicode_type
 from polyglot.binary import as_hex_unicode
 
 
@@ -307,7 +306,7 @@ class Importer(object):
         except Exception:
             lpath = None
         c = create_global_prefs(StringConfig(raw, 'calibre wide preferences'))
-        c.set('installation_uuid', str(uuid.uuid4()))
+        c.set('installation_uuid', unicode_type(uuid.uuid4()))
         c.set('library_path', lpath)
         raw = c.src
         if not isinstance(raw, bytes):

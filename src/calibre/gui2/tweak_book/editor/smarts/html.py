@@ -1,7 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=utf-8
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 __license__ = 'GPL v3'
 __copyright__ = '2014, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -734,12 +733,14 @@ class Smarts(NullSmarts):
 
             return 'complete_names', (names_type, doc_name, c.root), query
 
-    def find_text(self, pat, cursor):
+    def find_text(self, pat, cursor, reverse):
         from calibre.gui2.tweak_book.text_search import find_text_in_chunks
         chunks = []
 
         cstart = min(cursor.position(), cursor.anchor())
         cend = max(cursor.position(), cursor.anchor())
+        if reverse:
+            cend -= 1
         c = QTextCursor(cursor)
         c.setPosition(cstart)
         block = c.block()

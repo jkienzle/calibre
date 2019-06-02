@@ -1,7 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Kovid Goyal <kovid@kovidgoyal.net>'
@@ -13,7 +12,7 @@ Test a binary calibre build to ensure that all needed binary images/libraries ha
 
 import os, ctypes, sys, unittest, time
 
-from calibre.constants import plugins, iswindows, islinux, isosx, ispy3
+from calibre.constants import plugins, iswindows, islinux, isosx, ispy3, plugins_loc
 from polyglot.builtins import iteritems, map, unicode_type, getenv, native_string_type
 
 is_ci = os.environ.get('CI', '').lower() == 'true'
@@ -103,7 +102,7 @@ class BuildTest(unittest.TestCase):
             if name in exclusions:
                 if name in ('libusb', 'libmtp'):
                     # Just check that the DLL can be loaded
-                    ctypes.CDLL(os.path.join(sys.extensions_location, name + ('.dylib' if isosx else '.so')))
+                    ctypes.CDLL(os.path.join(plugins_loc, name + ('.dylib' if isosx else '.so')))
                 continue
             mod, err = plugins[name]
             self.assertFalse(err or not mod, 'Failed to load plugin: ' + name + ' with error:\n' + err)

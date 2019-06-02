@@ -1,7 +1,6 @@
 #!/usr/bin/env python2
 # vim:fileencoding=utf-8
-from __future__ import (unicode_literals, division, absolute_import,
-                        print_function)
+from __future__ import absolute_import, division, print_function, unicode_literals
 
 __license__ = 'GPL v3'
 __copyright__ = '2013, Kovid Goyal <kovid at kovidgoyal.net>'
@@ -19,7 +18,7 @@ from calibre.utils.date import utcnow
 from calibre.utils.localization import canonicalize_lang, lang_as_iso639_1
 from calibre.utils.zipfile import ZipFile
 from calibre.ebooks.pdf.render.common import PAPER_SIZES
-from polyglot.builtins import iteritems, map
+from polyglot.builtins import iteritems, map, unicode_type, native_string_type
 
 
 def xml2str(root, pretty_print=False, with_tail=False):
@@ -66,9 +65,9 @@ def create_skeleton(opts, namespaces=None):
 
     def margin(which):
         val = page_margin(opts, which)
-        return w(which), str(int(val * 20))
+        return w(which), unicode_type(int(val * 20))
     body.append(E.sectPr(
-        E.pgSz(**{w('w'):str(width), w('h'):str(height)}),
+        E.pgSz(**{w('w'):unicode_type(width), w('h'):unicode_type(height)}),
         E.pgMar(**dict(map(margin, 'left top right bottom'.split()))),
         E.cols(**{w('space'):'720'}),
         E.docGrid(**{w('linePitch'):"360"}),
@@ -244,7 +243,7 @@ class DOCX(object):
         namespaces = self.namespace.namespaces
         E = ElementMaker(namespace=namespaces['cp'], nsmap={x:namespaces[x] for x in 'cp dc dcterms xsi'.split()})
         cp = E.coreProperties(E.revision("1"), E.lastModifiedBy('calibre'))
-        ts = utcnow().isoformat(str('T')).rpartition('.')[0] + 'Z'
+        ts = utcnow().isoformat(native_string_type('T')).rpartition('.')[0] + 'Z'
         for x in 'created modified'.split():
             x = cp.makeelement('{%s}%s' % (namespaces['dcterms'], x), **{'{%s}type' % namespaces['xsi']:'dcterms:W3CDTF'})
             x.text = ts

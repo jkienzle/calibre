@@ -3,9 +3,9 @@
         "name": "nasm",
         "os": "macos",
         "unix": {
-            "filename": "nasm-2.12.02.tar.xz",
-            "hash": "sha1:a0e6e655d04009178d4b7c15d935a46a691a617c",
-            "urls": ["http://www.nasm.us/pub/nasm/releasebuilds/2.12.02/{filename}"]
+            "filename": "nasm-2.14.02.tar.xz",
+            "hash": "sha256:e24ade3e928f7253aa8c14aa44726d1edf3f98643f87c9d72ec1df44b26be8f5",
+            "urls": ["https://www.nasm.us/pub/nasm/releasebuilds/2.14.02/{filename}"]
         }
     },
 
@@ -13,9 +13,39 @@
         "name": "cmake",
         "os": "macos",
         "unix": {
-            "filename": "cmake-3.6.0.tar.gz",
-            "hash": "sha1:6b0d2d7d93c2e74f8890c4b8b824deb3b36d24b6",
-            "urls": ["https://cmake.org/files/v3.6/{filename}"]
+            "filename": "cmake-3.14.4.tar.gz",
+            "hash": "sha256:00b4dc9b0066079d10f16eed32ec592963a44e7967371d2f5077fd1670ff36d9",
+            "urls": ["https://github.com/Kitware/CMake/releases/download/v3.14.4/{filename}"]
+        }
+    },
+
+    {
+        "name": "autoconf",
+        "os": "macos",
+        "unix": {
+            "filename": "autoconf-2.69.tar.xz",
+            "hash": "sha256:64ebcec9f8ac5b2487125a86a7760d2591ac9e1d3dbd59489633f9de62a57684",
+            "urls": ["ftp://ftp.gnu.org/gnu/autoconf/{filename}"]
+        }
+    },
+
+    {
+        "name": "automake",
+        "os": "macos",
+        "unix": {
+            "filename": "automake-1.16.tar.xz",
+            "hash": "sha256:f98f2d97b11851cbe7c2d4b4eaef498ae9d17a3c2ef1401609b7b4ca66655b8a",
+            "urls": ["ftp://ftp.gnu.org/gnu/automake/{filename}"]
+        }
+    },
+
+    {
+        "name": "libtool",
+        "os": "macos",
+        "unix": {
+            "filename": "libtool-2.4.6.tar.xz",
+            "hash": "sha256:7c87a8c2c8c0fc9cd5019e402bed4292462d00a718a7cd5f11218153bf28b26f",
+            "urls": ["ftp://ftp.gnu.org/gnu/libtool/{filename}"]
         }
     },
 
@@ -23,9 +53,9 @@
         "name": "easylzma",
         "os": "windows",
         "windows": {
-            "filename": "easylzma-1753f61f673abdebc08fcf4a37eedd6da8a67ba1.tar.bz2",
-            "hash": "git:1753f61f673abdebc08fcf4a37eedd6da8a67ba1",
-            "urls": ["https://github.com/lloyd/easylzma.git"]
+            "filename": "easylzma-1753f61f673abdebc08fcf4a37eedd6da8a67ba1.tar.gz",
+            "hash": "sha256:7664240898fe09bce8b39cd428407dd24ac3b87200e6b40d4007c78f2c725254",
+            "urls": ["github:lloyd/easylzma"]
         }
     },
 
@@ -123,9 +153,9 @@
             "urls": ["https://www.python.org/ftp/python/2.7.16/{filename}"]
         },
         "windows": {
-            "filename":"python-1948b35e654e0b69ac93e31e3c3405172a6a1b91.tar.bz2",
-            "hash":"git:1948b35e654e0b69ac93e31e3c3405172a6a1b91",
-            "urls":["https://github.com/kovidgoyal/cpython.git"]
+            "filename":"python-1948b35e654e0b69ac93e31e3c3405172a6a1b91.tar.gz",
+            "hash":"sha1:1948b35e654e0b69ac93e31e3c3405172a6a1b91",
+            "urls":["github:kovidgoyal/cpython"]
         }
     },
 
@@ -134,9 +164,9 @@
         "os": "windows",
         "python": 2,
         "windows": {
-            "filename":"pywin32-dd5760063f88a300403c74f3e81f3437b8396d8f.tar.bz2",
-            "hash":"git:dd5760063f88a300403c74f3e81f3437b8396d8f",
-            "urls":["https://github.com/kovidgoyal/pywin32.git"]
+            "filename":"pywin32-dd5760063f88a300403c74f3e81f3437b8396d8f.tar.gz",
+            "hash":"sha1:dd5760063f88a300403c74f3e81f3437b8396d8f",
+            "urls":["github:kovidgoyal/pywin32"]
         }
     },
 
@@ -370,9 +400,9 @@
     {
         "name": "webkit",
         "unix": {
-            "filename":"qtwebkit-5.212.0-alpha2.tar.xz",
-            "hash": "sha256:f8f901de567e11fc5659402b6b827eac75505ff9c5072d8e919aa306003f8f8a",
-            "urls":["https://github.com/annulen/webkit/releases/download/qtwebkit-5.212.0-alpha2/{filename}"]
+            "filename":"qtwebkit-95401fe3908e0b4eebc9447e678298d768617bc7.tar.gz",
+            "hash":"sha256:4794e03c4c477d6e563fb999838fa982f2fb25e0478e4b1db49ef17b6a742609",
+            "urls":["github:kovidgoyal/webkit"]
         }
     },
 
