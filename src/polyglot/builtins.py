@@ -152,13 +152,27 @@ else:
 
     if hasattr(sys, 'getwindowsversion'):
         def getenv(x, default=None):
-            from win32api import GetEnvironmentVariableW
             if isinstance(x, bytes):
                 x = x.decode('mbcs', 'replace')
-            ans = GetEnvironmentVariableW(x)
-            if ans is None:
-                ans = default
-            return ans
+
+            if getenv.buf is None:
+                import ctypes
+                import ctypes.wintypes as w
+                getenv.cub = ctypes.create_unicode_buffer
+                getenv.buf = getenv.cub(1024)
+                getenv.gev = ctypes.windll.kernel32.GetEnvironmentVariableW
+                getenv.gev.restype = w.DWORD
+                getenv.gev.argtypes = [w.LPCWSTR, w.LPWSTR, w.DWORD]
+            res = getenv.gev(x, getenv.buf, len(getenv.buf))
+            if res == 0:
+                return default
+            if res > len(getenv.buf) - 4:
+                getenv.buf = getenv.cub(res + 8)
+                res = getenv.gev(x, getenv.buf, len(getenv.buf))
+                if res == 0:
+                    return default
+            return getenv.buf.value
+        getenv.buf = None
     else:
         def getenv(x, default=None):
             ans = os.getenv(x, default)
