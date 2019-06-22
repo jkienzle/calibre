@@ -153,8 +153,8 @@
             "urls": ["https://www.python.org/ftp/python/2.7.16/{filename}"]
         },
         "windows": {
-            "filename":"python-ca3c62c123b8c81a39dfaa785dfa77a0e40b3604ca4bdaceb65df10e32e29b82.tar.gz",
-            "hash":"sha256:ca3c62c123b8c81a39dfaa785dfa77a0e40b3604ca4bdaceb65df10e32e29b82",
+            "filename":"python-584870604fd8524e17bc2c067595b0210411319e.tar.gz",
+            "hash":"sha256:4f1833cac526f209de5b428d517cbd7a7923f13b89ba056e239dd8aa15894b7d",
             "urls":["github:kovidgoyal/cpython"]
         }
     },
@@ -478,15 +478,6 @@
         "hashes": {
             "unix": "sha256:3ff3bac12d75aa0f3fd993bb7077fe411f7b0e6a3993af6f8b039d48e3dc4317",
             "w": "sha256:dec39e37480cb8644d628a75bb13c124a799277ab8851864781d17739a4c573d"
-        }
-    },
-
-    {
-        "name": "webkit",
-        "unix": {
-            "filename":"qtwebkit-95401fe3908e0b4eebc9447e678298d768617bc7.tar.gz",
-            "hash":"sha256:4794e03c4c477d6e563fb999838fa982f2fb25e0478e4b1db49ef17b6a742609",
-            "urls":["github:kovidgoyal/webkit"]
         }
     },
 

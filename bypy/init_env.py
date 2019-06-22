@@ -31,8 +31,6 @@ dlls = [
     'Sensors',
     'Sql',
     'Svg',
-    'WebKit',
-    'WebKitWidgets',
     'WebEngineCore',
     'WebEngine',
     'WebEngineWidgets',
@@ -49,7 +47,7 @@ if islinux:
 elif ismacos:
     dlls += ['MacExtras', 'DBus']
 elif iswindows:
-    dlls += ['WinExtras', 'Angle']
+    dlls += ['WinExtras']
 
 QT_DLLS = frozenset(
     'Qt5' + x for x in dlls
@@ -68,7 +66,7 @@ QT_PLUGINS = [
     # 'audio', 'printsupport', 'bearer', 'position',
 ]
 
-if not ismacos:
+if not ismacos and not iswindows:
     QT_PLUGINS.append('platforminputcontexts')
 
 if islinux:
@@ -88,8 +86,6 @@ PYQT_MODULES = (
     'QtPrintSupport',
     'QtSensors',
     'QtSvg',
-    'QtWebKit',
-    'QtWebKitWidgets',
     'QtWidgets',
     'QtWebEngine',
     'QtWebEngineCore',
@@ -97,6 +93,9 @@ PYQT_MODULES = (
     # 'QtWebChannel',
 )
 del dlls
+
+if iswindows:
+    PYQT_MODULES += ('QtWinExtras',)
 
 
 def read_cal_file(name):
@@ -151,9 +150,10 @@ def initialize_constants():
     return calibre_constants
 
 
-def run(*args):
+def run(*args, **extra_env):
     env = os.environ.copy()
     env.update(worker_env)
+    env.update(extra_env)
     env['SW'] = PREFIX
     env['LD_LIBRARY_PATH'] = LIBDIR
     env['SIP_BIN'] = os.path.join(PREFIX, 'bin', 'sip')
@@ -165,7 +165,8 @@ def build_c_extensions(ext_dir):
     bdir = os.path.join(build_dir(), 'calibre-extension-objects')
     if run(
         PYTHON, 'setup.py', 'build',
-        '--output-dir', ext_dir, '--build-dir', bdir
+        '--output-dir', ext_dir, '--build-dir', bdir,
+        COMPILER_CWD=bdir
     ) != 0:
         print('Building of calibre C extensions failed', file=sys.stderr)
         os.chdir(CALIBRE_DIR)
@@ -176,7 +177,8 @@ def build_c_extensions(ext_dir):
 def run_tests(path_to_calibre_debug, cwd_on_failure):
     if run(path_to_calibre_debug, '--test-build') != 0:
         os.chdir(cwd_on_failure)
-        print('running calibre build tests failed', file=sys.stderr)
+        print(
+            'running calibre build tests failed with:', path_to_calibre_debug, file=sys.stderr)
         run_shell()
         raise SystemExit('running calibre build tests failed')
 
