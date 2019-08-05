@@ -243,35 +243,35 @@ static PyObject *
 PDFDoc_create_outline(PDFDoc *self, PyObject *args) {
     PyObject *p;
     PDFOutlineItem *ans;
-    PdfString *title;
     int pagenum;
 
     if (!PyArg_ParseTuple(args, "Ui", &p, &pagenum)) return NULL;
-    title = podofo_convert_pystring(p);
-    if (title == NULL) return NULL;
 
     ans = PyObject_New(PDFOutlineItem, &PDFOutlineItemType);
     if (ans == NULL) goto error;
 
     try {
+        const PdfString title = podofo_convert_pystring(p);
         PdfOutlines *outlines = self->doc->GetOutlines();
         if (outlines == NULL) {PyErr_NoMemory(); goto error;}
-        ans->item = outlines->CreateRoot(*title);
+        ans->item = outlines->CreateRoot(title);
         if (ans->item == NULL) {PyErr_NoMemory(); goto error;}
         ans->doc = self->doc;
         PdfDestination dest(self->doc->GetPage(pagenum));
         ans->item->SetDestination(dest);
     } catch(const PdfError & err) {
         podofo_set_exception(err); goto error;
+    } catch(const std::exception & err) {
+        PyErr_Format(PyExc_ValueError, "An error occurred while trying to create the outline: %s", err.what());
+        goto error;
     } catch (...) {
         PyErr_SetString(PyExc_ValueError, "An unknown error occurred while trying to create the outline");
         goto error;
     }
 
-    delete title;
     return (PyObject*)ans;
 error:
-    Py_XDECREF(ans); delete title;
+    Py_XDECREF(ans);
     return NULL;
 
 } // }}}
@@ -394,7 +394,6 @@ PDFDoc_version_getter(PDFDoc *self, void *closure) {
 static PyObject *
 PDFDoc_getter(PDFDoc *self, int field)
 {
-    PyObject *ans;
     PdfString s;
     PdfInfo *info = self->doc->GetInfo();
     if (info == NULL) {
@@ -419,13 +418,7 @@ PDFDoc_getter(PDFDoc *self, int field)
             return NULL;
     }
 
-    ans = podofo_convert_pdfstring(s);
-    if (ans == NULL) {PyErr_NoMemory(); return NULL;}
-    PyObject *uans = PyUnicode_FromEncodedObject(ans, "utf-8", "replace");
-    Py_DECREF(ans);
-    if (uans == NULL) {return NULL;}
-    Py_INCREF(uans);
-    return uans;
+    return podofo_convert_pdfstring(s);
 }
 
 static int
@@ -434,33 +427,25 @@ PDFDoc_setter(PDFDoc *self, PyObject *val, int field) {
         PyErr_SetString(PyExc_ValueError, "Must use unicode objects to set metadata");
         return -1;
     }
-    PdfInfo *info = new PdfInfo(*self->doc->GetInfo());
-    if (info == NULL) {
-        PyErr_SetString(PyExc_Exception, "You must first load a PDF Document");
-        return -1;
-    }
-    PdfString *s = NULL;
-
-    if (self->doc->GetEncrypted()) s = podofo_convert_pystring_single_byte(val);
-    else s = podofo_convert_pystring(val);
-    if (s == NULL) return -1;
-
+    PdfInfo *info = self->doc->GetInfo();
+    if (!info) { PyErr_SetString(Error, "You must first load a PDF Document"); return -1; }
+    const PdfString s = podofo_convert_pystring(val);
 
     switch (field) {
         case 0:
-            info->SetTitle(*s); break;
+            info->SetTitle(s); break;
         case 1:
-            info->SetAuthor(*s); break;
+            info->SetAuthor(s); break;
         case 2:
-            info->SetSubject(*s); break;
+            info->SetSubject(s); break;
         case 3:
-            info->SetKeywords(*s); break;
+            info->SetKeywords(s); break;
         case 4:
-            info->SetCreator(*s); break;
+            info->SetCreator(s); break;
         case 5:
-            info->SetProducer(*s); break;
+            info->SetProducer(s); break;
         default:
-            PyErr_SetString(PyExc_Exception, "Bad field");
+            PyErr_SetString(Error, "Bad field");
             return -1;
     }
 
