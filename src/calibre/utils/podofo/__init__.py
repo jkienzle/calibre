@@ -179,7 +179,7 @@ def test_podofo():
     buf = BytesIO()
     p.save_to_fileobj(buf)
     raw = buf.getvalue()
-    with tempfile.NamedTemporaryFile(delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as f:
         f.write(raw)
     try:
         p = podofo.PDFDoc()
