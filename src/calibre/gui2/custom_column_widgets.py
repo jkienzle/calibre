@@ -731,7 +731,8 @@ def populate_metadata_page(layout, db, book_id, bulk=False, two_column=False, pa
     count = len(cols)
     layout_rows_for_comments = 9
     if two_column:
-        turnover_point = ((count-comments_not_in_tweak+1) + int(comments_in_tweak*(layout_rows_for_comments-1))/2)
+        turnover_point = int(((count - comments_not_in_tweak + 1) +
+                                int(comments_in_tweak*(layout_rows_for_comments-1)))/2)
     else:
         # Avoid problems with multi-line widgets
         turnover_point = count + 1000
@@ -827,7 +828,7 @@ class BulkBase(Base):
         return self._cached_gui_val_
 
     def get_initial_value(self, book_ids):
-        values = set([])
+        values = set()
         for book_id in book_ids:
             val = self.db.get_custom(book_id, num=self.col_id, index_is_id=True)
             if isinstance(val, list):
