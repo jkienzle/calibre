@@ -10,8 +10,7 @@ reading. It is cross platform, running on Linux, Windows and macOS.
 
 For more information, see the [calibre About page](https://calibre-ebook.com/about)
 
-[![Build Status](https://api.travis-ci.org/kovidgoyal/calibre.svg?branch=master)](https://travis-ci.org/kovidgoyal/calibre)
-[![Build status](https://ci.appveyor.com/api/projects/status/github/kovidgoyal/calibre?svg=true&branch=master)](https://ci.appveyor.com/project/kovidgoyal/calibre)  
+[![Build Status](https://dev.azure.com/divok/calibre/_apis/build/status/kovidgoyal.calibre?branchName=master)](https://dev.azure.com/divok/calibre/_build/latest?definitionId=1&branchName=master)
 
 ## Screenshots  
 
