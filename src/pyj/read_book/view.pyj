@@ -29,7 +29,11 @@ from read_book.timers import Timers
 from read_book.toc import get_current_toc_nodes, update_visible_toc_nodes
 from read_book.touch import set_left_margin_handler, set_right_margin_handler
 from session import get_device_uuid, get_interface_data
-from utils import html_escape, is_ios, parse_url_params, username_key, safe_set_inner_html
+from utils import (
+    color_to_rgba, html_escape, is_ios, parse_url_params, safe_set_inner_html,
+    username_key
+)
+from viewer.constants import READER_BACKGROUND_URL
 
 add_extra_css(def():
     sel = '.book-side-margin'
@@ -435,6 +439,24 @@ class View:
                 s = m.style
                 s.color = ans.foreground
                 s.backgroundColor = ans.background
+            sd = get_session_data()
+            self.iframe.style.backgroundColor = ans.background or 'white'
+            bg_image = sd.get('background_image')
+            if bg_image:
+                self.iframe.style.backgroundImage = f'url({READER_BACKGROUND_URL})' if runtime.is_standalone_viewer else f'url({bg_image})'
+            else:
+                self.iframe.style.backgroundImage = 'none'
+            if sd.get('background_image_style') is 'scaled':
+                self.iframe.style.backgroundSize = '100% 100%'
+                self.iframe.style.backgroundRepeat = 'no-repeat'
+                self.iframe.style.backgroundAttachment = 'scroll'
+                self.iframe.style.backgroundPosition = 'center'
+            else:
+                self.iframe.style.backgroundSize = 'auto'
+                self.iframe.style.backgroundRepeat = 'repeat'
+                self.iframe.style.backgroundAttachment = 'scroll'
+                self.iframe.style.backgroundPosition = '0 0'
+
             m.parentNode.style.backgroundColor = ans.background  # this is needed on iOS where the bottom margin has its own margin, so we dont want the body background color to bleed through
             self.content_popup_overlay.apply_color_scheme(ans.background, ans.foreground)
         return ans
@@ -522,12 +544,19 @@ class View:
 
     def iframe_settings(self, name):
         sd = get_session_data()
+        bg_image_fade = 'transparent'
+        cs = self.get_color_scheme(True)
+        fade = int(sd.get('background_image_fade'))
+        if self.iframe.style.backgroundImage is not 'none' and fade > 0:
+            rgba = color_to_rgba(cs.background)
+            bg_image_fade = f'rgba({rgba[0]}, {rgba[1]}, {rgba[2]}, {fade/100})'
         return {
             'margin_left': 0 if name is self.book.manifest.title_page_name else sd.get('margin_left'),
             'margin_right': 0 if name is self.book.manifest.title_page_name else sd.get('margin_right'),
             'read_mode': sd.get('read_mode'),
             'columns_per_screen': sd.get('columns_per_screen'),
-            'color_scheme': self.get_color_scheme(True),
+            'color_scheme': cs,
+            'bg_image_fade': bg_image_fade,
             'base_font_size': sd.get('base_font_size'),
             'user_stylesheet': sd.get('user_stylesheet'),
             'keyboard_shortcuts': sd.get('keyboard_shortcuts'),
