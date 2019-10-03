@@ -8,13 +8,16 @@ import json
 import os
 import re
 import subprocess
+import sys
 from io import BytesIO
 
 from calibre import force_unicode
 from calibre.constants import FAKE_HOST, FAKE_PROTOCOL, __appname__, __version__
 from calibre.ptempfile import TemporaryDirectory
 from calibre.utils.filenames import atomic_rename
-from polyglot.builtins import exec_path, itervalues, unicode_type, zip, as_bytes
+from polyglot.builtins import (
+    as_bytes, as_unicode, exec_path, itervalues, unicode_type, zip
+)
 
 COMPILER_PATH = 'rapydscript/compiler.js.xz'
 special_title = '__webengine_messages_pending__'
@@ -151,7 +154,7 @@ document.title = 'compiler initialized';
             self.runJavaScript(src, QWebEngineScript.ApplicationWorld, self.compilation_done)
             while self.working:
                 self.spin_loop()
-            if self.compiler_result is null:
+            if self.compiler_result is null or self.compiler_result is None:
                 raise CompileFailure('Failed to compile rapydscript code with error: ' + '\n'.join(self.errors))
             write_cache = self.compiler_result[1]
             with open(cache_path, 'wb') as f:
@@ -198,17 +201,52 @@ def module_cache_dir():
     return _cache_dir
 
 
+def ok_to_import_webengine():
+    from PyQt5.Qt import QApplication
+    if QApplication.instance() is None:
+        return True
+    if 'PyQt5.QtWebEngineWidgets' in sys.modules:
+        return True
+    return False
+
+
+OUTPUT_SENTINEL = b'-----RS webengine compiler output starts here------'
+
+
+def forked_compile():
+    c = compiler()
+    stdin = getattr(sys.stdin, 'buffer', sys.stdin)
+    data = stdin.read().decode('utf-8')
+    options = json.loads(sys.argv[-1])
+    result = c(data, options)
+    stdout = getattr(sys.stdout, 'buffer', sys.stdout)
+    stdout.write(OUTPUT_SENTINEL)
+    stdout.write(as_bytes(result))
+    stdout.close()
+
+
 def compile_pyj(data, filename='<stdin>', beautify=True, private_scope=True, libdir=None, omit_baselib=False, js_version=5):
     if isinstance(data, bytes):
         data = data.decode('utf-8')
-    c = compiler()
-    result = c(data, {
+    options = {
         'beautify':beautify,
         'private_scope':private_scope,
         'keep_baselib': not omit_baselib,
         'filename': filename,
         'js_version': js_version,
-    })
+    }
+    if not ok_to_import_webengine():
+        from calibre.debug import run_calibre_debug
+        p = run_calibre_debug('-c', 'from calibre.utils.rapydscript import *; forked_compile()',
+                json.dumps(options), stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        stdout = p.communicate(as_bytes(data))[0]
+        if p.wait() != 0:
+            raise SystemExit(p.returncode)
+        idx = stdout.find(OUTPUT_SENTINEL)
+        result = as_unicode(stdout[idx+len(OUTPUT_SENTINEL):])
+    else:
+        c = compiler()
+        result = c(data, options)
     return result
 
 

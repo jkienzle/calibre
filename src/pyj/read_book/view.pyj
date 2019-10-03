@@ -314,6 +314,10 @@ class View:
             if self.currently_showing.selected_text:
                 self.search_overlay.set_text(self.currently_showing.selected_text)
                 self.search_overlay.find_next()
+        elif data.name is 'next_section':
+            self.on_next_section({'forward': True})
+        elif data.name is 'previous_section':
+            self.on_next_section({'forward': False})
 
     def on_selection_change(self, data):
         self.currently_showing.selected_text = data.text
@@ -325,13 +329,20 @@ class View:
 
     def on_find_in_spine(self, data):
         if data.searched_in_spine:
-            warning_dialog(_('Not found'), _('The text: <i>{}</i> was not found in this book').format(html_escape(data.text)))
+            warning_dialog(
+                _('Not found'), _('The text: <i>{}</i> was not found in this book').format(html_escape(data.text)),
+                on_close=def():
+                    self.search_overlay.show()
+            )
             return
         spine = self.book.manifest.spine
         idx = spine.indexOf(self.currently_showing.name)
         if idx < 0:
             error_dialog(_('Missing file'), _(
-                'Could not search as the spine item {} is missing from the book').format(self.currently_showing.name))
+                'Could not search as the spine item {} is missing from the book').format(self.currently_showing.name),
+                on_close=def():
+                    self.search_overlay.show()
+            )
             return
         names = v'[]'
         item_groups = [range(idx-1, -1, -1), range(spine.length-1, idx, -1)] if data.backwards else [range(idx + 1, spine.length), range(idx)]
@@ -442,7 +453,7 @@ class View:
             self.iframe.style.backgroundColor = ans.background or 'white'
             bg_image = sd.get('background_image')
             if bg_image:
-                self.iframe.style.backgroundImage = f'url({READER_BACKGROUND_URL})' if runtime.is_standalone_viewer else f'url({bg_image})'
+                self.iframe.style.backgroundImage = f'url({READER_BACKGROUND_URL}?{Date().getTime()})' if runtime.is_standalone_viewer else f'url({bg_image})'
             else:
                 self.iframe.style.backgroundImage = 'none'
             if sd.get('background_image_style') is 'scaled':
@@ -611,7 +622,9 @@ class View:
             idx = spine.indexOf(name)
             if idx is -1:
                 error_dialog(_('Destination does not exist'), _(
-                    'The file {} does not exist in this book').format(name))
+                    'The file {} does not exist in this book').format(name), on_close=def():
+                        ui_operations.focus_iframe()
+                )
                 return False
             self.show_name(name, initial_position={'type':'anchor', 'anchor':frag, 'replace_history':False})
         return True
@@ -690,8 +703,8 @@ class View:
             # type anything into text boxes.
             # See https://bugs.chromium.org/p/chromium/issues/detail?id=404315
             return
-        ui_operations.update_url_state(data.replace_history)
         username = self.update_cfi_data(data)
+        ui_operations.update_url_state(data.replace_history)
         if username:
             key = self.book.key
             lrd = {'device':get_device_uuid(), 'cfi':data.cfi, 'pos_frac':data.progress_frac}
