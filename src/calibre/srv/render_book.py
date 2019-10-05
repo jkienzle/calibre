@@ -93,10 +93,36 @@ def transform_declaration(decl):
     return changed
 
 
+def replace_epub_type_selector(m):
+    which = m.group(2)
+    roleval = EPUB_TYPE_MAP.get(which)
+    if roleval is None:
+        return m.group()
+    return 'role{}"{}"'.format(m.group(1), roleval)
+
+
+def epub_type_pat():
+    ans = getattr(epub_type_pat, 'ans', None)
+    if ans is None:
+        ans = epub_type_pat.ans = re.compile(r'epub\|type([$*~]?=)"(\S+)"')
+    return ans
+
+
+def transform_selector(rule):
+    selector = rule.selectorText
+    if 'epub|type' in selector:
+        ns, num = epub_type_pat().subn(replace_epub_type_selector, selector)
+        if num > 0 and ns != selector:
+            rule.selectorText = ns
+            return True
+
+
 def transform_sheet(sheet):
     changed = False
     for rule in sheet.cssRules.rulesOfType(CSSRule.STYLE_RULE):
         if transform_declaration(rule.style):
+            changed = True
+        if transform_selector(rule):
             changed = True
     return changed
 
@@ -436,6 +462,7 @@ def split_name(name):
 
 boolean_attributes = frozenset('allowfullscreen,async,autofocus,autoplay,checked,compact,controls,declare,default,defaultchecked,defaultmuted,defaultselected,defer,disabled,enabled,formnovalidate,hidden,indeterminate,inert,ismap,itemscope,loop,multiple,muted,nohref,noresize,noshade,novalidate,nowrap,open,pauseonexit,readonly,required,reversed,scoped,seamless,selected,sortable,truespeed,typemustmatch,visible'.split(','))  # noqa
 
+# see https://idpf.github.io/epub-guides/epub-aria-authoring/
 EPUB_TYPE_MAP = {k:'doc-' + k for k in (
     'abstract acknowledgements afterword appendix biblioentry bibliography biblioref chapter colophon conclusion cover credit'
     ' credits dedication epigraph epilogue errata footnote footnotes forward glossary glossref index introduction link noteref notice'
@@ -444,6 +471,7 @@ for k in 'figure term definition directory list list-item table row cell'.split(
     EPUB_TYPE_MAP[k] = k
 
 EPUB_TYPE_MAP['help'] = 'doc-tip'
+EPUB_TYPE_MAP['page-list'] = 'doc-pagelist'
 
 
 def map_epub_type(epub_type, attribs, elem):
