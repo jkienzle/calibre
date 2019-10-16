@@ -44,11 +44,8 @@ def load_resources(book, root_name, previous_resources, proceed):
         ui_operations.get_file(book, name, got_one)
 
     def got_one(data, name, mimetype):
-        if False and name is book.manifest.title_page_name:
-            # Enable to have cover image not preserve aspect ratio
-            data = data.replace('width: auto; height: auto', 'width: 100vw; height: 100vh')
         ans[name] = v'[data, mimetype]'
-        if jstype(data) is 'string':
+        if jstype(data) is 'string' and book.manifest.files[name]?.is_virtualized:
             find_virtualized_resources(data)
         return setTimeout(do_one, 0)
 
@@ -228,7 +225,7 @@ def process_stack(stack, tag_map, ns_map, load_required, onload, resource_urls):
         for v'var i = node.length - 1; i >= 1; i--':  # noqa: unused-local
             stack.push(v'[node[i], elem]')
 
-def unserialize_html(serialized_data, proceed, postprocess_dom):
+def unserialize_html(serialized_data, proceed, postprocess_dom, root_name):
     nonlocal hide_tooltips
     tag_map = serialized_data.tag_map
     tree = serialized_data.tree
@@ -239,6 +236,18 @@ def unserialize_html(serialized_data, proceed, postprocess_dom):
     head, body = tree[1], tree[2]  # noqa: unused-local
     clear(document.head, document.body)
     remove_all_attributes(document.head, document.body)
+    # hide browser scrollbars while loading since they will anyway be hidden
+    # after loading and this prevents extra layouts
+    document.head.appendChild(
+        E.style(type='text/css', 'html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important }')
+    )
+    if runtime.is_standalone_viewer and root_name:
+        if root_name.indexOf('/') > -1:
+            base = window.location.pathname.rpartition('/')[0]
+            base = f'{window.location.protocol}//{window.location.hostname}{base}/' + root_name
+            document.head.appendChild(E.base(href=base))
+
+
     # Default stylesheet
     if not runtime.is_standalone_viewer:
         # for the standalone viewer the default font family is set

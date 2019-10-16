@@ -6,7 +6,7 @@ import traceback
 from gettext import gettext as _
 
 from iframe_comm import IframeClient
-from read_book.cfi import at_current, scroll_to as scroll_to_cfi
+from read_book.cfi import scroll_to as scroll_to_cfi
 from read_book.extract import get_elements
 from read_book.flow_mode import (
     anchor_funcs as flow_anchor_funcs, flow_onwheel, flow_to_scroll_fraction,
@@ -20,7 +20,7 @@ from read_book.globals import (
 )
 from read_book.mathjax import apply_mathjax
 from read_book.paged_mode import (
-    anchor_funcs as paged_anchor_funcs, calc_columns_per_screen,
+    anchor_funcs as paged_anchor_funcs, calc_columns_per_screen, current_cfi,
     handle_gesture as paged_handle_gesture, handle_shortcut as paged_handle_shortcut,
     jump_to_cfi as paged_jump_to_cfi, layout as paged_layout,
     onwheel as paged_onwheel, progress_frac, reset_paged_mode_globals,
@@ -45,6 +45,10 @@ CALIBRE_VERSION = '__CALIBRE_VERSION__'
 ERS_SUPPORTED_FEATURES = {'dom-manipulation', 'layout-changes', 'touch-events', 'mouse-events', 'keyboard-events', 'spine-scripting'}
 
 
+def layout_style():
+    return 'scrolling' if current_layout_mode() is 'flow' else 'paginated'
+
+
 class EPUBReadingSystem:
 
     @property
@@ -57,7 +61,7 @@ class EPUBReadingSystem:
 
     @property
     def layoutStyle(self):
-        return 'scrolling' if current_layout_mode() is 'flow' else 'paginated'
+        return layout_style()
 
     def hasFeature(self, feature, version):
         return feature in ERS_SUPPORTED_FEATURES
@@ -85,6 +89,7 @@ class IframeBoss:
             'initialize':self.initialize,
             'display': self.display,
             'scroll_to_anchor': self.on_scroll_to_anchor,
+            'scroll_to_frac': self.on_scroll_to_frac,
             'next_screen': self.on_next_screen,
             'change_font_size': self.change_font_size,
             'change_color_scheme': self.change_color_scheme,
@@ -105,6 +110,7 @@ class IframeBoss:
         scroll_viewport.update_window_size(data.width, data.height)
         window.onerror = self.onerror
         window.addEventListener('scroll', debounce(self.onscroll, 1000))
+        window.addEventListener('scroll', self.no_latency_onscroll)
         window.addEventListener('resize', debounce(self.onresize, 500))
         window.addEventListener('wheel', self.onwheel, {'passive': False})
         window.addEventListener('keydown', self.onkeydown, {'passive': False})
@@ -169,7 +175,10 @@ class IframeBoss:
             window.URL.revokeObjectURL(self.blob_url_map[name])
         document.body.style.removeProperty('font-family')
         root_data, self.mathjax, self.blob_url_map = finalize_resources(self.book, data.name, data.resource_data)
-        self.resource_urls = unserialize_html(root_data, self.content_loaded)
+        self.resource_urls = unserialize_html(root_data, self.content_loaded, None, data.name)
+
+    def on_scroll_to_frac(self, data):
+        self.to_scroll_fraction(data.frac)
 
     def handle_gesture(self, gesture):
         if gesture.type is 'show-chrome':
@@ -195,9 +204,9 @@ class IframeBoss:
     def on_next_screen(self, data):
         backwards = data.backwards
         if current_layout_mode() is 'flow':
-            flow_scroll_by_page(backwards)
+            flow_scroll_by_page(-1 if backwards else 1)
         else:
-            paged_scroll_by_page(backwards, True)
+            paged_scroll_by_page(backwards, data.all_pages_on_screen)
 
     def change_font_size(self, data):
         if data.base_font_size? and data.base_font_size != opts.base_font_size:
@@ -246,17 +255,23 @@ class IframeBoss:
         document.documentElement.style.overflow = 'hidden'
         if self.is_titlepage and not opts.cover_preserve_aspect_ratio:
             document.body.classList.add('cover-fill')
+        document.body.classList.add(f'calibre-viewer-{layout_style()}')
         self.last_window_width, self.last_window_height = scroll_viewport.width(), scroll_viewport.height()
         apply_settings()
         self.fix_fullscreen_svg_images()
-        self.do_layout()
+        self.do_layout(self.is_titlepage)
         if self.mathjax:
             return apply_mathjax(self.mathjax, self.book.manifest.link_uid, self.content_loaded_stage2)
+        # window.setTimeout(self.content_loaded_stage2, 1000)
         self.content_loaded_stage2()
 
     def content_loaded_stage2(self):
         self.connect_links()
         self.content_ready = True
+        # this is the loading styles used to suppress scrollbars during load
+        # added in unserialize_html
+        document.head.removeChild(document.head.firstChild)
+
         csi = current_spine_item()
         if csi.initial_position:
             ipos = csi.initial_position
@@ -280,13 +295,13 @@ class IframeBoss:
                 if si:
                     self.length_before += files[si]?.length or 0
         self.onscroll()
-        self.send_message('content_loaded', progress_frac=self.get_progress_frac())
+        self.send_message('content_loaded', progress_frac=self.calculate_progress_frac(), file_progress_frac=progress_frac())
         self.last_cfi = None
         window.setTimeout(self.update_cfi, 0)
         window.setTimeout(self.update_toc_position, 0)
 
-
-    def calculate_progress_frac(self, current_name, spine_index):
+    def calculate_progress_frac(self):
+        current_name = current_spine_item().name
         files = self.book.manifest.files
         file_length = files[current_name]?.length or 0
         if self.length_before is None:
@@ -295,16 +310,8 @@ class IframeBoss:
         ans = (self.length_before + (file_length * frac)) / self.book.manifest.spine_length
         return ans
 
-    def get_progress_frac(self):
-        spine = self.book.manifest.spine
-        current_name = current_spine_item().name
-        index = spine.indexOf(current_name)
-        if index < 0:
-            return 0
-        return self.calculate_progress_frac(current_name, index)
-
     def get_current_cfi(self, data):
-        cfi = at_current()
+        cfi = current_cfi()
         selected_text = window.getSelection().toString()
         if cfi:
             spine = self.book.manifest.spine
@@ -313,28 +320,32 @@ class IframeBoss:
             if index > -1:
                 cfi = 'epubcfi(/{}{})'.format(2*(index+1), cfi)
                 self.send_message(
-                    'report_cfi', cfi=cfi, progress_frac=self.calculate_progress_frac(current_name, index),
+                    'report_cfi', cfi=cfi, progress_frac=self.calculate_progress_frac(),
                     file_progress_frac=progress_frac(), request_id=data.request_id, selected_text=selected_text)
                 return
         self.send_message(
             'report_cfi', cfi=None, progress_frac=0, file_progress_frac=0, selected_text=selected_text, request_id=data.request_id)
 
     def update_cfi(self):
-        cfi = at_current()
+        cfi = current_cfi()
         if cfi:
             spine = self.book.manifest.spine
             current_name = current_spine_item().name
             index = spine.indexOf(current_name)
             if index > -1:
                 cfi = 'epubcfi(/{}{})'.format(2*(index+1), cfi)
+                pf = self.calculate_progress_frac()
+                fpf = progress_frac()
                 if cfi is not self.last_cfi:
                     self.last_cfi = cfi
                     selected_text = window.getSelection().toString()
                     self.send_message(
                         'update_cfi', cfi=cfi, replace_history=self.replace_history_on_next_cfi_update,
-                        progress_frac=self.calculate_progress_frac(current_name, index),
-                        file_progress_frac=progress_frac(), selected_text=selected_text)
+                        progress_frac=pf, file_progress_frac=fpf, selected_text=selected_text)
                     self.replace_history_on_next_cfi_update = True
+                else:
+                    self.send_message(
+                        'update_progress_frac', progress_frac=pf, file_progress_frac=fpf)
 
     def update_toc_position(self):
         visible_anchors = update_visible_toc_anchors(self.book.manifest.toc_anchor_map, self.anchor_funcs)
@@ -344,6 +355,12 @@ class IframeBoss:
         if self.content_ready:
             self.update_cfi()
             self.update_toc_position()
+
+    def no_latency_onscroll(self):
+        pf = self.calculate_progress_frac()
+        fpf = progress_frac()
+        self.send_message(
+            'update_progress_frac', progress_frac=pf, file_progress_frac=fpf)
 
     def onresize(self):
         self.send_message('request_size')

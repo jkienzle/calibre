@@ -17,17 +17,20 @@ from css_parser import replaceUrls
 from css_parser.css import CSSRule
 
 from calibre import force_unicode, prepare_string_for_xml
+from calibre.customize.ui import plugin_for_input_format
 from calibre.ebooks import parse_css_length
 from calibre.ebooks.css_transform_rules import StyleDeclaration
 from calibre.ebooks.oeb.base import (
-    EPUB_NS, OEB_DOCS, OEB_STYLES, OPF, XHTML, XHTML_NS, XLINK, XPath, rewrite_links,
+    EPUB_NS, OEB_DOCS, OEB_STYLES, OPF, XHTML, XHTML_NS, XLINK, XPath as _XPath, rewrite_links,
     urlunquote
 )
 from calibre.ebooks.oeb.iterator.book import extract_book
 from calibre.ebooks.oeb.polish.container import Container as ContainerBase
-from calibre.ebooks.oeb.polish.cover import find_cover_image, set_epub_cover
-from calibre.ebooks.oeb.polish.css import transform_css
-from calibre.ebooks.oeb.polish.toc import get_landmarks, get_toc
+from calibre.ebooks.oeb.polish.cover import (
+    find_cover_image, has_epub_cover, set_epub_cover
+)
+from calibre.ebooks.oeb.polish.css import transform_inline_styles
+from calibre.ebooks.oeb.polish.toc import from_xpaths, get_landmarks, get_toc
 from calibre.ebooks.oeb.polish.utils import extract, guess_type
 from calibre.srv.metadata import encode_datetime
 from calibre.utils.date import EPOCH
@@ -45,6 +48,16 @@ from polyglot.urllib import quote, urlparse
 RENDER_VERSION = 1
 
 BLANK_JPEG = b'\xff\xd8\xff\xdb\x00C\x00\x03\x02\x02\x02\x02\x02\x03\x02\x02\x02\x03\x03\x03\x03\x04\x06\x04\x04\x04\x04\x04\x08\x06\x06\x05\x06\t\x08\n\n\t\x08\t\t\n\x0c\x0f\x0c\n\x0b\x0e\x0b\t\t\r\x11\r\x0e\x0f\x10\x10\x11\x10\n\x0c\x12\x13\x12\x10\x13\x0f\x10\x10\x10\xff\xc9\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xcc\x00\x06\x00\x10\x10\x05\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xd2\xcf \xff\xd9'  # noqa
+
+
+def XPath(expr):
+    ans = XPath.cache.get(expr)
+    if ans is None:
+        ans = XPath.cache[expr] = _XPath(expr)
+    return ans
+
+
+XPath.cache = {}
 
 
 def encode_url(name, frag=''):
@@ -72,11 +85,47 @@ def convert_fontsize(length, unit, base_font_size=16.0, dpi=96.0):
     return length * length_factors.get(unit, 1) * pt_to_rem
 
 
+def create_link_replacer(container, link_uid, changed):
+    resource_template = link_uid + '|{}|'
+
+    def link_replacer(base, url):
+        if url.startswith('#'):
+            frag = urlunquote(url[1:])
+            if not frag:
+                return url
+            changed.add(base)
+            return resource_template.format(encode_url(base, frag))
+        purl = urlparse(url)
+        if purl.netloc or purl.query:
+            return url
+        if purl.scheme and purl.scheme != 'file':
+            return url
+        if not purl.path or purl.path.startswith('/'):
+            return url
+        url, frag = purl.path, purl.fragment
+        name = container.href_to_name(url, base)
+        if name:
+            if container.has_name_and_is_not_empty(name):
+                frag = urlunquote(frag)
+                url = resource_template.format(encode_url(name, frag))
+            else:
+                if isinstance(name, unicode_type):
+                    name = name.encode('utf-8')
+                url = 'missing:' + force_unicode(quote(name), 'utf-8')
+            changed.add(base)
+        return url
+
+    return link_replacer
+
+
+page_break_properties = ('page-break-before', 'page-break-after', 'page-break-inside')
+
+
 def transform_declaration(decl):
     decl = StyleDeclaration(decl)
     changed = False
     for prop, parent_prop in tuple(decl):
-        if prop.name in {'page-break-before', 'page-break-after', 'page-break-inside'}:
+        if prop.name in page_break_properties:
             changed = True
             name = prop.name.partition('-')[2]
             for prefix in ('', '-webkit-column-'):
@@ -172,7 +221,7 @@ def get_length(root):
         if elem.tail:
             num += len(strip_space.sub('', elem.tail))
         if tname in 'img svg':
-            num += 2000
+            num += 1000
         return num
 
     for body in root.iterdescendants(XHTML('body')):
@@ -201,8 +250,12 @@ class Container(ContainerBase):
 
     tweak_mode = True
 
-    def __init__(self, path_to_ebook, tdir, log=None, book_hash=None, save_bookmark_data=False, book_metadata=None):
+    def __init__(
+        self, path_to_ebook, tdir, log=None, book_hash=None, save_bookmark_data=False,
+        book_metadata=None, allow_no_cover=True, virtualize_resources=True
+    ):
         log = log or default_log
+        self.allow_no_cover = allow_no_cover
         book_fmt, opfpath, input_fmt = extract_book(path_to_ebook, tdir, log=log)
         ContainerBase.__init__(self, tdir, opfpath, log)
         self.book_metadata = book_metadata
@@ -220,7 +273,10 @@ class Container(ContainerBase):
             name == self.opf_name or mt == guess_type('a.ncx') or name.startswith('META-INF/') or
             name == 'mimetype' or not self.has_name_and_is_not_empty(name)}
         raster_cover_name, titlepage_name = self.create_cover_page(input_fmt.lower())
+
         toc = get_toc(self).to_dict(count())
+        if not toc or not toc.get('children'):
+            toc = from_xpaths(self, ['//h:h1', '//h:h2', '//h:h3']).to_dict(count())
         spine = [name for name, is_linear in self.spine_names]
         spineq = frozenset(spine)
         landmarks = [l for l in get_landmarks(self) if l['dest'] in spineq]
@@ -245,9 +301,8 @@ class Container(ContainerBase):
         # Mark the spine as dirty since we have to ensure it is normalized
         for name in data['spine']:
             self.parsed(name), self.dirty(name)
-        self.transform_css()
         self.virtualized_names = set()
-        self.virtualize_resources()
+        self.transform_all(virtualize_resources)
 
         def manifest_data(name):
             mt = (self.mime_map.get(name) or 'application/octet-stream').lower()
@@ -315,16 +370,23 @@ class Container(ContainerBase):
                     cdata = getattr(image_callback, 'cover_data', None) or generic_cover()
                     data.write(cdata)
 
+            if self.allow_no_cover and not has_epub_cover(self):
+                return None, None
             raster_cover_name, titlepage_name = set_epub_cover(
                     self, cover_path, (lambda *a: None), options={'template':templ},
                     image_callback=image_callback)
         else:
             raster_cover_name = find_cover_image(self, strict=True)
             if raster_cover_name is None:
+                if self.allow_no_cover:
+                    return None, None
                 item = self.generate_item(name='cover.jpeg', id_prefix='cover')
                 raster_cover_name = self.href_to_name(item.get('href'), self.opf_name)
                 with self.open(raster_cover_name, 'wb') as dest:
                     dest.write(generic_cover())
+            input_plugin = plugin_for_input_format(input_fmt)
+            if getattr(input_plugin, 'is_image_collection', False):
+                return raster_cover_name, None
             item = self.generate_item(name='titlepage.html', id_prefix='titlepage')
             titlepage_name = self.href_to_name(item.get('href'), self.opf_name)
             raw = templ % prepare_string_for_xml(self.name_to_href(raster_cover_name, titlepage_name), True)
@@ -336,65 +398,97 @@ class Container(ContainerBase):
             self.dirty(self.opf_name)
         return raster_cover_name, titlepage_name
 
-    def transform_css(self):
-        transform_css(self, transform_sheet=transform_sheet, transform_style=transform_declaration)
-        # Firefox flakes out sometimes when dynamically creating <style> tags,
-        # so convert them to external stylesheets to ensure they never fail
+    def transform_html(self, name, virtualize_resources):
         style_xpath = XPath('//h:style')
+        link_xpath = XPath('//h:a[@href]')
+        img_xpath = XPath('//h:img[@src]')
+        res_link_xpath = XPath('//h:link[@href]')
+        head = ensure_head(self.parsed(name))
+        changed = False
+        root = self.parsed(name)
+        for style in style_xpath(root):
+            # Firefox flakes out sometimes when dynamically creating <style> tags,
+            # so convert them to external stylesheets to ensure they never fail
+            if style.text and (style.get('type') or 'text/css').lower() == 'text/css':
+                in_head = has_ancestor(style, head)
+                if not in_head:
+                    extract(style)
+                    head.append(style)
+                css = style.text
+                style.clear()
+                style.tag = XHTML('link')
+                style.set('type', 'text/css')
+                style.set('rel', 'stylesheet')
+                sname = self.add_file(name + '.css', css.encode('utf-8'), modify_name_if_needed=True)
+                style.set('href', self.name_to_href(sname, name))
+                changed = True
+
+        # Used for viewing images
+        for img in img_xpath(root):
+            img_name = self.href_to_name(img.get('src'), name)
+            if img_name:
+                img.set('data-calibre-src', img_name)
+                changed = True
+
+        # Disable non stylsheet link tags. This link will not be loaded by the
+        # browser anyway and will causes the resource load check to hang
+        for link in res_link_xpath(root):
+            ltype = (link.get('type') or 'text/css').lower()
+            rel = (link.get('rel') or 'stylesheet').lower()
+            if ltype != 'text/css' or rel != 'stylesheet':
+                link.attrib.clear()
+                changed = True
+
+        # Transform <style> and style=""
+        if transform_inline_styles(self, name, transform_sheet=transform_sheet, transform_style=transform_declaration):
+            changed = True
+
+        if not virtualize_resources:
+            link_uid = self.book_render_data['link_uid']
+            link_replacer = create_link_replacer(self, link_uid, set())
+            ltm = self.book_render_data['link_to_map']
+            for a in link_xpath(root):
+                href = link_replacer(name, a.get('href'))
+                if href and href.startswith(link_uid):
+                    a.set('href', 'javascript:void(0)')
+                    parts = decode_url(href.split('|')[1])
+                    lname, lfrag = parts[0], parts[1]
+                    ltm.setdefault(lname, {}).setdefault(lfrag or '', set()).add(name)
+                    a.set('data-' + link_uid, json.dumps({'name':lname, 'frag':lfrag}, ensure_ascii=False))
+                    changed = True
+
+        if changed:
+            self.dirty(name)
+
+    def transform_css(self, name):
+        sheet = self.parsed(name)
+        if transform_sheet(sheet):
+            self.dirty(name)
+
+    def transform_all(self, virtualize_resources):
         for name, mt in tuple(iteritems(self.mime_map)):
             mt = mt.lower()
             if mt in OEB_DOCS:
-                head = ensure_head(self.parsed(name))
-                for style in style_xpath(self.parsed(name)):
-                    if style.text and (style.get('type') or 'text/css').lower() == 'text/css':
-                        in_head = has_ancestor(style, head)
-                        if not in_head:
-                            extract(style)
-                            head.append(style)
-                        css = style.text
-                        style.clear()
-                        style.tag = XHTML('link')
-                        style.set('type', 'text/css')
-                        style.set('rel', 'stylesheet')
-                        sname = self.add_file(name + '.css', css.encode('utf-8'), modify_name_if_needed=True)
-                        style.set('href', self.name_to_href(sname, name))
+                self.transform_html(name, virtualize_resources)
+        for name, mt in tuple(iteritems(self.mime_map)):
+            mt = mt.lower()
+            if mt in OEB_STYLES:
+                self.transform_css(name)
+        if virtualize_resources:
+            self.virtualize_resources()
+
+        ltm = self.book_render_data['link_to_map']
+        for name, amap in iteritems(ltm):
+            for k, v in tuple(iteritems(amap)):
+                amap[k] = tuple(v)  # needed for JSON serialization
 
     def virtualize_resources(self):
 
         changed = set()
         link_uid = self.book_render_data['link_uid']
-        resource_template = link_uid + '|{}|'
         xlink_xpath = XPath('//*[@xl:href]')
         link_xpath = XPath('//h:a[@href]')
-        img_xpath = XPath('//h:img[@src]')
-        res_link_xpath = XPath('//h:link[@href]')
-
-        def link_replacer(base, url):
-            if url.startswith('#'):
-                frag = urlunquote(url[1:])
-                if not frag:
-                    return url
-                changed.add(base)
-                return resource_template.format(encode_url(base, frag))
-            purl = urlparse(url)
-            if purl.netloc or purl.query:
-                return url
-            if purl.scheme and purl.scheme != 'file':
-                return url
-            if not purl.path or purl.path.startswith('/'):
-                return url
-            url, frag = purl.path, purl.fragment
-            name = self.href_to_name(url, base)
-            if name:
-                if self.has_name_and_is_not_empty(name):
-                    frag = urlunquote(frag)
-                    url = resource_template.format(encode_url(name, frag))
-                else:
-                    if isinstance(name, unicode_type):
-                        name = name.encode('utf-8')
-                    url = 'missing:' + force_unicode(quote(name), 'utf-8')
-                changed.add(base)
-            return url
+        link_replacer = create_link_replacer(self, link_uid, changed)
 
         ltm = self.book_render_data['link_to_map']
 
@@ -406,19 +500,6 @@ class Container(ContainerBase):
             elif mt in OEB_DOCS:
                 self.virtualized_names.add(name)
                 root = self.parsed(name)
-                for img in img_xpath(root):
-                    img_name = self.href_to_name(img.get('src'), name)
-                    if img_name:
-                        img.set('data-calibre-src', img_name)
-                        changed.add(name)
-                for link in res_link_xpath(root):
-                    ltype = (link.get('type') or 'text/css').lower()
-                    rel = (link.get('rel') or 'stylesheet').lower()
-                    if ltype != 'text/css' or rel != 'stylesheet':
-                        # This link will not be loaded by the browser anyway
-                        # and will causes the resource load check to hang
-                        link.attrib.clear()
-                        changed.add(name)
                 rewrite_links(root, partial(link_replacer, name))
                 for a in link_xpath(root):
                     href = a.get('href')
@@ -431,17 +512,17 @@ class Container(ContainerBase):
                     else:
                         a.set('target', '_blank')
                         a.set('rel', 'noopener noreferrer')
-                    changed.add(name)
             elif mt == 'image/svg+xml':
                 self.virtualized_names.add(name)
-                changed.add(name)
                 xlink = XLINK('href')
+                altered = False
                 for elem in xlink_xpath(self.parsed(name)):
-                    elem.set(xlink, link_replacer(name, elem.get(xlink)))
-
-        for name, amap in iteritems(ltm):
-            for k, v in tuple(iteritems(amap)):
-                amap[k] = tuple(v)  # needed for JSON serialization
+                    href = elem.get(xlink)
+                    if not href.startswith('#'):
+                        elem.set(xlink, link_replacer(name, href))
+                        altered = True
+                if altered:
+                    changed.add(name)
 
         tuple(map(self.dirty, changed))
 
@@ -499,6 +580,7 @@ def map_epub_type(epub_type, attribs, elem):
 
 
 known_tags = ('img', 'script', 'link', 'image', 'style')
+discarded_tags = ('meta', 'base')
 
 
 def serialize_elem(elem, nsmap):
@@ -506,8 +588,10 @@ def serialize_elem(elem, nsmap):
     nl = name.lower()
     if ns == EPUB_NS:
         ns, name = None, 'epub-' + name
-    if nl == 'meta':
-        return  # Filter out <meta> tags as they have unknown side-effects
+    if nl in discarded_tags:
+        # Filter out <meta> tags as they have unknown side-effects
+        # Filter out <base> tags as the viewer uses <base> for URL resolution
+        return
     if nl in known_tags:
         name = nl
     ans = {'n':name}
@@ -590,13 +674,26 @@ def html_as_dict(root):
     stack = [(root, tree)]
     while stack:
         elem, node = stack.pop()
-        for child in elem.iterchildren('*'):
-            cnode = serialize_elem(child, nsmap)
-            if cnode is not None:
-                tags.append(cnode)
-                child_tree_node = [len(tags)-1]
-                node.append(child_tree_node)
-                stack.append((child, child_tree_node))
+        prev_child_node = None
+        for child in elem.iterchildren():
+            tag = getattr(child, 'tag', None)
+            if tag is None or callable(tag):
+                tail = getattr(child, 'tail', None)
+                if tail:
+                    if prev_child_node is None:
+                        parent_node = node[-1]
+                        parent_node = tags[parent_node]
+                        parent_node['x'] = parent_node.get('x', '') + tail
+                    else:
+                        prev_child_node['l'] = prev_child_node.get('l', '') + tail
+            else:
+                cnode = serialize_elem(child, nsmap)
+                if cnode is not None:
+                    tags.append(cnode)
+                    child_tree_node = [len(tags)-1]
+                    node.append(child_tree_node)
+                    stack.append((child, child_tree_node))
+                    prev_child_node = cnode
     ns_map = [ns for ns, nsnum in sorted(iteritems(nsmap), key=lambda x: x[1])]
     return {'ns_map':ns_map, 'tag_map':tags, 'tree':tree}
 
@@ -646,14 +743,17 @@ def get_stored_annotations(container):
                 yield {'type': 'last-read', 'pos': epubcfi, 'pos_type': 'epubcfi', 'timestamp': EPOCH}
 
 
-def render(pathtoebook, output_dir, book_hash=None, serialize_metadata=False, extract_annotations=False):
+def render(pathtoebook, output_dir, book_hash=None, serialize_metadata=False, extract_annotations=False, virtualize_resources=True):
     mi = None
     if serialize_metadata:
         from calibre.ebooks.metadata.meta import get_metadata
         from calibre.customize.ui import quick_metadata
         with lopen(pathtoebook, 'rb') as f, quick_metadata:
             mi = get_metadata(f, os.path.splitext(pathtoebook)[1][1:].lower())
-    container = Container(pathtoebook, output_dir, book_hash=book_hash, save_bookmark_data=extract_annotations, book_metadata=mi)
+    container = Container(
+        pathtoebook, output_dir, book_hash=book_hash, save_bookmark_data=extract_annotations,
+        book_metadata=mi, virtualize_resources=virtualize_resources
+    )
     if serialize_metadata:
         from calibre.utils.serialize import json_dumps
         from calibre.ebooks.metadata.book.serialize import metadata_as_dict

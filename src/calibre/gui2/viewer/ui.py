@@ -12,13 +12,15 @@ from hashlib import sha256
 from threading import Thread
 
 from PyQt5.Qt import (
-    QDockWidget, QEvent, QModelIndex, QPixmap, Qt, QUrl, QVBoxLayout, QWidget,
-    pyqtSignal
+    QApplication, QDockWidget, QEvent, QMimeData, QModelIndex, QPixmap, QScrollBar,
+    Qt, QUrl, QVBoxLayout, QWidget, pyqtSignal
 )
 
 from calibre import prints
+from calibre.constants import DEBUG
 from calibre.customize.ui import available_input_formats
 from calibre.gui2 import choose_files, error_dialog
+from calibre.gui2.dialogs.drm_error import DRMErrorMessage
 from calibre.gui2.image_popup import ImagePopup
 from calibre.gui2.main_window import MainWindow
 from calibre.gui2.viewer.annotations import (
@@ -27,13 +29,16 @@ from calibre.gui2.viewer.annotations import (
 from calibre.gui2.viewer.bookmarks import BookmarkManager
 from calibre.gui2.viewer.convert_book import prepare_book, update_book
 from calibre.gui2.viewer.lookup import Lookup
+from calibre.gui2.viewer.overlay import LoadingOverlay
 from calibre.gui2.viewer.toc import TOC, TOCSearch, TOCView
 from calibre.gui2.viewer.web_view import (
     WebView, get_path_for_name, get_session_pref, set_book_path, viewer_config_dir,
     vprefs
 )
 from calibre.utils.date import utcnow
+from calibre.utils.img import image_from_path
 from calibre.utils.ipc.simple_worker import WorkerError
+from calibre.utils.monotonic import monotonic
 from calibre.utils.serialize import json_loads
 from polyglot.builtins import as_bytes, itervalues
 
@@ -58,14 +63,25 @@ def path_key(path):
     return sha256(as_bytes(path)).hexdigest()
 
 
+class ScrollBar(QScrollBar):
+
+    def paintEvent(self, ev):
+        if self.isEnabled():
+            return QScrollBar.paintEvent(self, ev)
+
+
 class EbookViewer(MainWindow):
 
     msg_from_anotherinstance = pyqtSignal(object)
+    book_preparation_started = pyqtSignal()
     book_prepared = pyqtSignal(object, object)
     MAIN_WINDOW_STATE_VERSION = 1
 
     def __init__(self, open_at=None, continue_reading=None):
         MainWindow.__init__(self, None)
+        connect_lambda(self.book_preparation_started, self, lambda self: self.loading_overlay(_(
+            'Preparing book for first read, please wait')), type=Qt.QueuedConnection)
+        self.maximized_at_last_fullscreen = False
         self.pending_open_at = open_at
         self.base_window_title = _('E-book viewer')
         self.setWindowTitle(self.base_window_title)
@@ -107,8 +123,9 @@ class EbookViewer(MainWindow):
         connect_lambda(
             w.create_requested, self,
             lambda self: self.web_view.get_current_cfi(self.bookmarks_widget.create_new_bookmark))
-        self.bookmarks_widget.edited.connect(self.bookmarks_edited)
-        self.bookmarks_widget.activated.connect(self.bookmark_activated)
+        w.edited.connect(self.bookmarks_edited)
+        w.activated.connect(self.bookmark_activated)
+        w.toggle_requested.connect(self.toggle_bookmarks)
         self.bookmarks_dock.setWidget(w)
 
         self.web_view = WebView(self)
@@ -124,7 +141,12 @@ class EbookViewer(MainWindow):
         self.web_view.ask_for_open.connect(self.ask_for_open, type=Qt.QueuedConnection)
         self.web_view.selection_changed.connect(self.lookup_widget.selected_text_changed, type=Qt.QueuedConnection)
         self.web_view.view_image.connect(self.view_image, type=Qt.QueuedConnection)
+        self.web_view.copy_image.connect(self.copy_image, type=Qt.QueuedConnection)
+        self.web_view.show_loading_message.connect(self.show_loading_message)
+        self.web_view.show_error.connect(self.show_error)
+        self.web_view.print_book.connect(self.print_book, type=Qt.QueuedConnection)
         self.setCentralWidget(self.web_view)
+        self.loading_overlay = LoadingOverlay(self)
         self.restore_state()
         if continue_reading:
             self.continue_reading()
@@ -132,6 +154,10 @@ class EbookViewer(MainWindow):
     def toggle_inspector(self):
         visible = self.inspector_dock.toggleViewAction().isChecked()
         self.inspector_dock.setVisible(not visible)
+
+    def resizeEvent(self, ev):
+        self.loading_overlay.resize(self.size())
+        return MainWindow.resizeEvent(self, ev)
 
     # IPC {{{
     def handle_commandline_arg(self, arg):
@@ -153,9 +179,13 @@ class EbookViewer(MainWindow):
     # Fullscreen {{{
     def set_full_screen(self, on):
         if on:
+            self.maximized_at_last_fullscreen = self.isMaximized()
             self.showFullScreen()
         else:
-            self.showNormal()
+            if self.maximized_at_last_fullscreen:
+                self.showMaximized()
+            else:
+                self.showNormal()
 
     def changeEvent(self, ev):
         if ev.type() == QEvent.WindowStateChange:
@@ -175,7 +205,12 @@ class EbookViewer(MainWindow):
         self.toc_dock.setVisible(not self.toc_dock.isVisible())
 
     def toggle_bookmarks(self):
-        self.bookmarks_dock.setVisible(not self.bookmarks_dock.isVisible())
+        is_visible = self.bookmarks_dock.isVisible()
+        self.bookmarks_dock.setVisible(not is_visible)
+        if is_visible:
+            self.web_view.setFocus(Qt.OtherFocusReason)
+        else:
+            self.bookmarks_widget.bookmarks_list.setFocus(Qt.OtherFocusReason)
 
     def toggle_lookup(self):
         self.lookup_dock.setVisible(not self.lookup_dock.isVisible())
@@ -208,9 +243,39 @@ class EbookViewer(MainWindow):
         else:
             error_dialog(self, _('Image not found'), _(
                     "Failed to find the image {}").format(name), show=True)
+
+    def copy_image(self, name):
+        path = get_path_for_name(name)
+        if not path:
+            return error_dialog(self, _('Image not found'), _(
+                "Failed to find the image {}").format(name), show=True)
+        try:
+            img = image_from_path(path)
+        except Exception:
+            return error_dialog(self, _('Invalid image'), _(
+                "Failed to load the image {}").format(name), show=True)
+        url = QUrl.fromLocalFile(path)
+        md = QMimeData()
+        md.setImageData(img)
+        md.setUrls([url])
+        QApplication.instance().clipboard().setMimeData(md)
     # }}}
 
     # Load book {{{
+
+    def show_loading_message(self, msg):
+        if msg:
+            self.loading_overlay(msg)
+        else:
+            self.loading_overlay.hide()
+
+    def show_error(self, title, msg, details):
+        self.loading_overlay.hide()
+        error_dialog(self, title, msg, det_msg=details or None, show=True)
+
+    def print_book(self):
+        from .printing import print_book
+        print_book(set_book_path.pathtoebook, book_title=self.current_book_data['metadata']['title'], parent=self)
 
     def ask_for_open(self, path=None):
         if path is None:
@@ -230,10 +295,11 @@ class EbookViewer(MainWindow):
             self.load_ebook(entry['pathtoebook'])
 
     def load_ebook(self, pathtoebook, open_at=None, reload_book=False):
+        self.web_view.show_home_page_on_ready = False
         if open_at:
             self.pending_open_at = open_at
         self.setWindowTitle(_('Loading book') + '… — {}'.format(self.base_window_title))
-        self.web_view.show_preparing_message()
+        self.loading_overlay(_('Loading book, please wait'))
         self.save_annotations()
         self.current_book_data = {}
         t = Thread(name='LoadBook', target=self._load_ebook_worker, args=(pathtoebook, open_at, reload_book))
@@ -245,23 +311,36 @@ class EbookViewer(MainWindow):
             self.load_ebook(self.current_book_data['pathtoebook'], reload_book=True)
 
     def _load_ebook_worker(self, pathtoebook, open_at, reload_book):
+        if DEBUG:
+            start_time = monotonic()
         try:
-            ans = prepare_book(pathtoebook, force=reload_book)
+            ans = prepare_book(pathtoebook, force=reload_book, prepare_notify=self.prepare_notify)
         except WorkerError as e:
             self.book_prepared.emit(False, {'exception': e, 'tb': e.orig_tb, 'pathtoebook': pathtoebook})
         except Exception as e:
             import traceback
             self.book_prepared.emit(False, {'exception': e, 'tb': traceback.format_exc(), 'pathtoebook': pathtoebook})
         else:
+            if DEBUG:
+                print('Book prepared in {:.2f} seconds'.format(monotonic() - start_time))
             self.book_prepared.emit(True, {'base': ans, 'pathtoebook': pathtoebook, 'open_at': open_at})
+
+    def prepare_notify(self):
+        self.book_preparation_started.emit()
 
     def load_finished(self, ok, data):
         open_at, self.pending_open_at = self.pending_open_at, None
         if not ok:
             self.setWindowTitle(self.base_window_title)
-            error_dialog(self, _('Loading book failed'), _(
-                'Failed to open the book at {0}. Click "Show details" for more info.').format(data['pathtoebook']),
-                det_msg=data['tb'], show=True)
+            tb = data['tb']
+            last_line = tuple(tb.strip().splitlines())[-1]
+            if last_line.startswith('calibre.ebooks.DRMError'):
+                DRMErrorMessage(self).exec_()
+            else:
+                error_dialog(self, _('Loading book failed'), _(
+                    'Failed to open the book at {0}. Click "Show details" for more info.').format(data['pathtoebook']),
+                    det_msg=data['tb'], show=True)
+            self.loading_overlay.hide()
             self.web_view.show_home_page()
             return
         set_book_path(data['base'], data['pathtoebook'])
