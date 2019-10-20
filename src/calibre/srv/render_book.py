@@ -8,7 +8,7 @@ import json
 import os
 import re
 import sys
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from datetime import datetime
 from functools import partial
 from itertools import count
@@ -142,36 +142,10 @@ def transform_declaration(decl):
     return changed
 
 
-def replace_epub_type_selector(m):
-    which = m.group(2)
-    roleval = EPUB_TYPE_MAP.get(which)
-    if roleval is None:
-        return m.group()
-    return 'role{}"{}"'.format(m.group(1), roleval)
-
-
-def epub_type_pat():
-    ans = getattr(epub_type_pat, 'ans', None)
-    if ans is None:
-        ans = epub_type_pat.ans = re.compile(r'epub\|type([$*~]?=)"(\S+)"')
-    return ans
-
-
-def transform_selector(rule):
-    selector = rule.selectorText
-    if 'epub|type' in selector:
-        ns, num = epub_type_pat().subn(replace_epub_type_selector, selector)
-        if num > 0 and ns != selector:
-            rule.selectorText = ns
-            return True
-
-
 def transform_sheet(sheet):
     changed = False
     for rule in sheet.cssRules.rulesOfType(CSSRule.STYLE_RULE):
         if transform_declaration(rule.style):
-            changed = True
-        if transform_selector(rule):
             changed = True
     return changed
 
@@ -251,14 +225,15 @@ class Container(ContainerBase):
     tweak_mode = True
 
     def __init__(
-        self, path_to_ebook, tdir, log=None, book_hash=None, save_bookmark_data=False,
+        self, book_fmt, opfpath, input_fmt, tdir, log=None, book_hash=None, save_bookmark_data=False,
         book_metadata=None, allow_no_cover=True, virtualize_resources=True
     ):
         log = log or default_log
         self.allow_no_cover = allow_no_cover
-        book_fmt, opfpath, input_fmt = extract_book(path_to_ebook, tdir, log=log)
         ContainerBase.__init__(self, tdir, opfpath, log)
         self.book_metadata = book_metadata
+        input_plugin = plugin_for_input_format(input_fmt)
+        self.is_comic = bool(getattr(input_plugin, 'is_image_collection', False))
         if save_bookmark_data:
             bm_file = 'META-INF/calibre_bookmarks.txt'
             self.bookmark_data = None
@@ -288,7 +263,7 @@ class Container(ContainerBase):
             'spine':spine,
             'link_uid': uuid4(),
             'book_hash': book_hash,
-            'is_comic': input_fmt.lower() in {'cbc', 'cbz', 'cbr', 'cb7'},
+            'is_comic': self.is_comic,
             'raster_cover_name': raster_cover_name,
             'title_page_name': titlepage_name,
             'has_maths': False,
@@ -384,8 +359,7 @@ class Container(ContainerBase):
                 raster_cover_name = self.href_to_name(item.get('href'), self.opf_name)
                 with self.open(raster_cover_name, 'wb') as dest:
                     dest.write(generic_cover())
-            input_plugin = plugin_for_input_format(input_fmt)
-            if getattr(input_plugin, 'is_image_collection', False):
+            if self.is_comic:
                 return raster_cover_name, None
             item = self.generate_item(name='titlepage.html', id_prefix='titlepage')
             titlepage_name = self.href_to_name(item.get('href'), self.opf_name)
@@ -403,9 +377,9 @@ class Container(ContainerBase):
         link_xpath = XPath('//h:a[@href]')
         img_xpath = XPath('//h:img[@src]')
         res_link_xpath = XPath('//h:link[@href]')
-        head = ensure_head(self.parsed(name))
-        changed = False
         root = self.parsed(name)
+        head = ensure_head(root)
+        changed = False
         for style in style_xpath(root):
             # Firefox flakes out sometimes when dynamically creating <style> tags,
             # so convert them to external stylesheets to ensure they never fail
@@ -543,41 +517,6 @@ def split_name(name):
 
 boolean_attributes = frozenset('allowfullscreen,async,autofocus,autoplay,checked,compact,controls,declare,default,defaultchecked,defaultmuted,defaultselected,defer,disabled,enabled,formnovalidate,hidden,indeterminate,inert,ismap,itemscope,loop,multiple,muted,nohref,noresize,noshade,novalidate,nowrap,open,pauseonexit,readonly,required,reversed,scoped,seamless,selected,sortable,truespeed,typemustmatch,visible'.split(','))  # noqa
 
-# see https://idpf.github.io/epub-guides/epub-aria-authoring/
-EPUB_TYPE_MAP = {k:'doc-' + k for k in (
-    'abstract acknowledgements afterword appendix biblioentry bibliography biblioref chapter colophon conclusion cover credit'
-    ' credits dedication epigraph epilogue errata footnote footnotes forward glossary glossref index introduction link noteref notice'
-    ' pagebreak pagelist part preface prologue pullquote qna locator subtitle title toc').split(' ')}
-for k in 'figure term definition directory list list-item table row cell'.split(' '):
-    EPUB_TYPE_MAP[k] = k
-
-EPUB_TYPE_MAP['help'] = 'doc-tip'
-EPUB_TYPE_MAP['page-list'] = 'doc-pagelist'
-
-
-def map_epub_type(epub_type, attribs, elem):
-    val = EPUB_TYPE_MAP.get(epub_type.lower())
-    if val:
-        role = None
-        in_attribs = None
-        for i, x in enumerate(attribs):
-            if x[0] == 'role':
-                role = x[1]
-                in_attribs = i
-                break
-        else:
-            role = elem.get('role')
-        roles = OrderedDict([(k, True) for k in role.split()]) if role else OrderedDict()
-        if val not in roles:
-            roles[val] = True
-        role = ' '.join(roles)
-        if in_attribs is None:
-            attribs.append(['role', role])
-        else:
-            attribs[in_attribs] = ['role', role]
-        return True
-    return False
-
 
 known_tags = ('img', 'script', 'link', 'image', 'style')
 discarded_tags = ('meta', 'base')
@@ -610,9 +549,6 @@ def serialize_elem(elem, nsmap):
         if not attr_ns and al in boolean_attributes:
             if val and val.lower() in (al, ''):
                 attribs.append([al, al])
-            continue
-        if attr_ns == EPUB_NS and al == 'type':
-            map_epub_type(val, attribs, elem)
             continue
         attrib = [aname, val]
         if attr_ns:
@@ -750,8 +686,10 @@ def render(pathtoebook, output_dir, book_hash=None, serialize_metadata=False, ex
         from calibre.customize.ui import quick_metadata
         with lopen(pathtoebook, 'rb') as f, quick_metadata:
             mi = get_metadata(f, os.path.splitext(pathtoebook)[1][1:].lower())
+    book_fmt, opfpath, input_fmt = extract_book(pathtoebook, output_dir, log=default_log)
     container = Container(
-        pathtoebook, output_dir, book_hash=book_hash, save_bookmark_data=extract_annotations,
+        book_fmt, opfpath, input_fmt, output_dir, book_hash=book_hash,
+        save_bookmark_data=extract_annotations,
         book_metadata=mi, virtualize_resources=virtualize_resources
     )
     if serialize_metadata:
@@ -769,6 +707,13 @@ def render(pathtoebook, output_dir, book_hash=None, serialize_metadata=False, ex
         if annotations:
             with lopen(os.path.join(output_dir, 'calibre-book-annotations.json'), 'wb') as f:
                 f.write(annotations)
+
+
+def render_for_viewer(path, out_dir, book_hash):
+    return render(
+        path, out_dir, book_hash=book_hash, serialize_metadata=True,
+        extract_annotations=True, virtualize_resources=False
+    )
 
 
 if __name__ == '__main__':
