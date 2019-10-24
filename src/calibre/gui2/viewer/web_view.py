@@ -215,7 +215,7 @@ def create_profile():
         ans.setHttpUserAgent(ua)
         if is_running_from_develop:
             from calibre.utils.rapydscript import compile_viewer
-            print('Compiling viewer code...')
+            prints('Compiling viewer code...')
             compile_viewer()
         js = P('viewer.js', data=True, allow_user_override=False)
         translations_json = get_translations_data() or b'null'
@@ -318,7 +318,10 @@ class WebPage(QWebEnginePage):
         prefix = {QWebEnginePage.InfoMessageLevel: 'INFO', QWebEnginePage.WarningMessageLevel: 'WARNING'}.get(
                 level, 'ERROR')
         prints('%s: %s:%s: %s' % (prefix, source_id, linenumber, msg), file=sys.stderr)
-        sys.stderr.flush()
+        try:
+            sys.stderr.flush()
+        except EnvironmentError:
+            pass
 
     def acceptNavigationRequest(self, url, req_type, is_main_frame):
         if req_type == self.NavigationTypeReload:
