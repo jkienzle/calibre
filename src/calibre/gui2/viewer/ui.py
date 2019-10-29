@@ -6,6 +6,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import json
 import os
+import re
 import sys
 from collections import defaultdict, namedtuple
 from hashlib import sha256
@@ -45,6 +46,15 @@ from polyglot.builtins import as_bytes, itervalues
 annotations_dir = os.path.join(viewer_config_dir, 'annots')
 
 
+def is_float(x):
+    try:
+        float(x)
+        return True
+    except Exception:
+        pass
+    return False
+
+
 def dock_defs():
     Dock = namedtuple('Dock', 'name title initial_area allowed_areas')
     ans = {}
@@ -77,8 +87,9 @@ class EbookViewer(MainWindow):
     book_prepared = pyqtSignal(object, object)
     MAIN_WINDOW_STATE_VERSION = 1
 
-    def __init__(self, open_at=None, continue_reading=None):
+    def __init__(self, open_at=None, continue_reading=None, force_reload=False):
         MainWindow.__init__(self, None)
+        self.force_reload = force_reload
         connect_lambda(self.book_preparation_started, self, lambda self: self.loading_overlay(_(
             'Preparing book for first read, please wait')), type=Qt.QueuedConnection)
         self.maximized_at_last_fullscreen = False
@@ -302,7 +313,7 @@ class EbookViewer(MainWindow):
         self.loading_overlay(_('Loading book, please wait'))
         self.save_annotations()
         self.current_book_data = {}
-        t = Thread(name='LoadBook', target=self._load_ebook_worker, args=(pathtoebook, open_at, reload_book))
+        t = Thread(name='LoadBook', target=self._load_ebook_worker, args=(pathtoebook, open_at, reload_book or self.force_reload))
         t.daemon = True
         t.start()
 
@@ -332,14 +343,15 @@ class EbookViewer(MainWindow):
         open_at, self.pending_open_at = self.pending_open_at, None
         if not ok:
             self.setWindowTitle(self.base_window_title)
-            tb = data['tb']
+            tb = data['tb'].strip()
+            tb = re.split(r'^calibre\.gui2\.viewer\.convert_book\.ConversionFailure:\s*', tb, maxsplit=1, flags=re.M)[-1]
             last_line = tuple(tb.strip().splitlines())[-1]
             if last_line.startswith('calibre.ebooks.DRMError'):
                 DRMErrorMessage(self).exec_()
             else:
                 error_dialog(self, _('Loading book failed'), _(
                     'Failed to open the book at {0}. Click "Show details" for more info.').format(data['pathtoebook']),
-                    det_msg=data['tb'], show=True)
+                    det_msg=tb, show=True)
             self.loading_overlay.hide()
             self.web_view.show_home_page()
             return
@@ -350,13 +362,15 @@ class EbookViewer(MainWindow):
         self.load_book_data()
         self.update_window_title()
         initial_cfi = self.initial_cfi_for_current_book()
-        initial_toc_node = None
+        initial_toc_node = initial_bookpos = None
         if open_at:
             if open_at.startswith('toc:'):
                 initial_toc_node = self.toc_model.node_id_for_text(open_at[len('toc:'):])
             elif open_at.startswith('epubcfi(/'):
                 initial_cfi = open_at
-        self.web_view.start_book_load(initial_cfi=initial_cfi, initial_toc_node=initial_toc_node)
+            elif is_float(open_at):
+                initial_bookpos = float(open_at)
+        self.web_view.start_book_load(initial_cfi=initial_cfi, initial_toc_node=initial_toc_node, initial_bookpos=initial_bookpos)
 
     def load_book_data(self):
         self.load_book_annotations()

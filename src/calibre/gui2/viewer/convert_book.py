@@ -14,9 +14,11 @@ from hashlib import sha1
 
 from calibre import walk
 from calibre.constants import cache_dir, iswindows
+from calibre.ptempfile import TemporaryFile
 from calibre.srv.render_book import RENDER_VERSION
-from calibre.utils.ipc.simple_worker import fork_job
+from calibre.utils.ipc.simple_worker import start_pipe_worker
 from calibre.utils.lock import ExclusiveFile
+from calibre.utils.serialize import msgpack_dumps
 from calibre.utils.short_uuid import uuid4
 from polyglot.builtins import as_bytes, as_unicode, iteritems
 
@@ -118,12 +120,28 @@ def prepare_convert(temp_path, key, st):
     }
 
 
+class ConversionFailure(ValueError):
+
+    def __init__(self, book_path, worker_output):
+        self.book_path = book_path
+        self.worker_output = worker_output
+        ValueError.__init__(
+                self, 'Failed to convert book: {} with error:\n{}'.format(book_path, worker_output))
+
+
 def do_convert(path, temp_path, key, instance):
     tdir = os.path.join(temp_path, instance['path'])
-    fork_job('calibre.srv.render_book', 'render_for_viewer', args=(
-        path, tdir, {'size': instance['file_size'], 'mtime': instance['file_mtime'], 'hash': key},
-        ), timeout=3000, no_output=True
-    )
+    with TemporaryFile('log.txt') as logpath:
+        with open(logpath, 'w+b') as logf:
+            p = start_pipe_worker('from calibre.srv.render_book import viewer_main; viewer_main()', stdout=logf, stderr=logf)
+            p.stdin.write(msgpack_dumps((
+                path, tdir, {'size': instance['file_size'], 'mtime': instance['file_mtime'], 'hash': key},
+                )))
+            p.stdin.close()
+        if p.wait() != 0:
+            with lopen(logpath, 'rb') as logf:
+                worker_output = logf.read().decode('utf-8', 'replace')
+            raise ConversionFailure(path, worker_output)
     size = 0
     for f in walk(tdir):
         size += os.path.getsize(f)
