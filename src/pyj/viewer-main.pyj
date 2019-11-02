@@ -269,6 +269,12 @@ def background_image_changed(img_id):
         img.src = READER_BACKGROUND_URL + '?' + Date().getTime()
 
 
+@from_python
+def trigger_shortcut(which):
+    if view:
+        view.on_handle_shortcut({'name': which})
+
+
 def onerror(msg, script_url, line_number, column_number, error_object):
     if not error_object:
         # cross domain error
@@ -346,6 +352,8 @@ if window is window.top:
         to_python.export_shortcut_map(smap)
     ui_operations.print_book = def():
         to_python.print_book()
+    ui_operations.clear_history = def():
+        to_python.clear_history()
 
     document.body.appendChild(E.div(id='view'))
     window.onerror = onerror
