@@ -14,7 +14,7 @@ from threading import Thread
 
 from PyQt5.Qt import (
     QApplication, QDockWidget, QEvent, QMimeData, QModelIndex, QPixmap, QScrollBar,
-    Qt, QUrl, QVBoxLayout, QWidget, pyqtSignal
+    Qt, QToolBar, QUrl, QVBoxLayout, QWidget, pyqtSignal
 )
 
 from calibre import prints
@@ -32,7 +32,7 @@ from calibre.gui2.viewer.convert_book import prepare_book, update_book
 from calibre.gui2.viewer.lookup import Lookup
 from calibre.gui2.viewer.overlay import LoadingOverlay
 from calibre.gui2.viewer.toc import TOC, TOCSearch, TOCView
-from calibre.gui2.viewer.toolbars import VerticalToolBar
+from calibre.gui2.viewer.toolbars import ActionsToolBar
 from calibre.gui2.viewer.web_view import (
     WebView, get_path_for_name, get_session_pref, set_book_path, viewer_config_dir,
     vprefs
@@ -42,7 +42,7 @@ from calibre.utils.img import image_from_path
 from calibre.utils.ipc.simple_worker import WorkerError
 from calibre.utils.monotonic import monotonic
 from calibre.utils.serialize import json_loads
-from polyglot.builtins import as_bytes, itervalues
+from polyglot.builtins import as_bytes, iteritems, itervalues
 
 annotations_dir = os.path.join(viewer_config_dir, 'annots')
 
@@ -99,10 +99,9 @@ class EbookViewer(MainWindow):
         self.setWindowTitle(self.base_window_title)
         self.in_full_screen_mode = None
         self.image_popup = ImagePopup(self)
-        self.vertical_toolbar = vt = VerticalToolBar(self)
-        vt.open_book_at_path.connect(self.ask_for_open)
-        self.addToolBar(Qt.LeftToolBarArea, vt)
-        # vt.setVisible(False)
+        self.actions_toolbar = at = ActionsToolBar(self)
+        at.open_book_at_path.connect(self.ask_for_open)
+        self.addToolBar(Qt.LeftToolBarArea, at)
         try:
             os.makedirs(annotations_dir)
         except EnvironmentError:
@@ -161,12 +160,21 @@ class EbookViewer(MainWindow):
         self.web_view.show_loading_message.connect(self.show_loading_message)
         self.web_view.show_error.connect(self.show_error)
         self.web_view.print_book.connect(self.print_book, type=Qt.QueuedConnection)
-        self.vertical_toolbar.initialize(self.web_view)
+        self.web_view.reset_interface.connect(self.reset_interface, type=Qt.QueuedConnection)
+        self.web_view.shortcuts_changed.connect(self.shortcuts_changed)
+        self.actions_toolbar.initialize(self.web_view)
         self.setCentralWidget(self.web_view)
         self.loading_overlay = LoadingOverlay(self)
         self.restore_state()
+        self.actions_toolbar.update_visibility()
         if continue_reading:
             self.continue_reading()
+
+    def shortcuts_changed(self, smap):
+        rmap = defaultdict(list)
+        for k, v in iteritems(smap):
+            rmap[v].append(k)
+        self.actions_toolbar.set_tooltips(rmap)
 
     def toggle_inspector(self):
         visible = self.inspector_dock.toggleViewAction().isChecked()
@@ -197,8 +205,10 @@ class EbookViewer(MainWindow):
     def set_full_screen(self, on):
         if on:
             self.maximized_at_last_fullscreen = self.isMaximized()
+            self.actions_toolbar.setVisible(False)
             self.showFullScreen()
         else:
+            self.actions_toolbar.update_visibility()
             if self.maximized_at_last_fullscreen:
                 self.showMaximized()
             else:
@@ -293,6 +303,19 @@ class EbookViewer(MainWindow):
     def print_book(self):
         from .printing import print_book
         print_book(set_book_path.pathtoebook, book_title=self.current_book_data['metadata']['title'], parent=self)
+
+    def reset_interface(self):
+        for dock in self.findChildren(QDockWidget):
+            dock.setFloating(False)
+            area = self.dock_defs[dock.objectName().partition('-')[0]].initial_area
+            self.removeDockWidget(dock)
+            self.addDockWidget(area, dock)
+            dock.setVisible(False)
+
+        for toolbar in self.findChildren(QToolBar):
+            toolbar.setVisible(False)
+            self.removeToolBar(toolbar)
+            self.addToolBar(Qt.LeftToolBarArea, toolbar)
 
     def ask_for_open(self, path=None):
         if path is None:

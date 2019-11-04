@@ -406,12 +406,18 @@ def create_margin_files(container):
 # Link handling  {{{
 def add_anchors_markup(root, uuid, anchors):
     body = last_tag(root)
-    div = body.makeelement(XHTML('div'), id=uuid, style='display:block; page-break-before: always; break-before: always')
+    div = body.makeelement(
+        XHTML('div'), id=uuid,
+        style='display:block !important; page-break-before: always !important; break-before: always !important; white-space: pre-wrap !important'
+    )
+    div.text = '\n\n'
     body.append(div)
 
     def a(anchor):
         a = div.makeelement(
-            XHTML('a'), href='#' + anchor, style='white-space: pre; min-width: 10px; min-height: 10px; border: solid 1px')
+            XHTML('a'), href='#' + anchor,
+            style='min-width: 10px !important; min-height: 10px !important; border: solid 1px !important;'
+        )
         a.text = a.tail = ' '
         div.append(a)
     tuple(map(a, anchors))
@@ -447,11 +453,9 @@ def make_anchors_unique(container, log):
             url += '#'
         if url.startswith('#'):
             href, frag = base, url[1:]
+            name = base
         else:
             href, frag = url.partition('#')[::2]
-        if base is None:
-            name = href
-        else:
             name = container.href_to_name(href, base)
         if not name:
             return url.rstrip('#')
@@ -503,7 +507,7 @@ class AnchorLocation(object):
         self.pagenum, self.left, self.top, self.zoom = pagenum, left, top, zoom
 
     def __repr__(self):
-        return 'AnchorLocation(pagenum={}, left={}, top={}, zoom={})'.format(self.as_tuple)
+        return 'AnchorLocation(pagenum={}, left={}, top={}, zoom={})'.format(*self.as_tuple)
 
     @property
     def as_tuple(self):

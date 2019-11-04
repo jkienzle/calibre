@@ -211,6 +211,8 @@ def create_profile():
     if ans is None:
         ans = QWebEngineProfile(QApplication.instance())
         osname = 'windows' if iswindows else ('macos' if isosx else 'linux')
+        # DO NOT change the user agent as it is used to workaround
+        # Qt bugs see workaround_qt_bug() in ajax.pyj
         ua = 'calibre-viewer {} {}'.format(__version__, osname)
         ans.setHttpUserAgent(ua)
         if is_running_from_develop:
@@ -255,6 +257,7 @@ class ViewerBridge(Bridge):
     export_shortcut_map = from_js(object)
     print_book = from_js()
     clear_history = from_js()
+    reset_interface = from_js()
 
     create_view = to_js()
     start_book_load = to_js()
@@ -400,8 +403,10 @@ class WebView(RestartingWebEngineView):
     show_loading_message = pyqtSignal(object)
     show_error = pyqtSignal(object, object, object)
     print_book = pyqtSignal()
+    reset_interface = pyqtSignal()
     shortcuts_changed = pyqtSignal(object)
     paged_mode_changed = pyqtSignal()
+    standalone_misc_settings_changed = pyqtSignal(object)
 
     def __init__(self, parent=None):
         self._host_widget = None
@@ -435,6 +440,7 @@ class WebView(RestartingWebEngineView):
         self.bridge.show_error.connect(self.show_error)
         self.bridge.print_book.connect(self.print_book)
         self.bridge.clear_history.connect(self.clear_history)
+        self.bridge.reset_interface.connect(self.reset_interface)
         self.bridge.export_shortcut_map.connect(self.set_shortcut_map)
         self.shortcut_map = {}
         self.bridge.report_cfi.connect(self.call_callback)
@@ -532,6 +538,7 @@ class WebView(RestartingWebEngineView):
             vprefs['session_data'] = {}
             apply_font_settings(self._page)
             self.paged_mode_changed.emit()
+            self.standalone_misc_settings_changed.emit()
         elif key != '*':
             sd = vprefs['session_data']
             sd[key] = val
@@ -540,6 +547,8 @@ class WebView(RestartingWebEngineView):
                 apply_font_settings(self._page)
             elif key == 'read_mode':
                 self.paged_mode_changed.emit()
+            elif key == 'standalone_misc_settings':
+                self.standalone_misc_settings_changed.emit(val)
 
     def set_local_storage(self, key, val):
         if key == '*' and val is None:

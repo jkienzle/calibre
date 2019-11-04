@@ -5,7 +5,6 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os
-from collections import defaultdict
 from functools import partial
 
 from PyQt5.Qt import QAction, QIcon, QKeySequence, QMenu, Qt, QToolBar, pyqtSignal
@@ -17,24 +16,38 @@ from calibre.gui2.viewer.web_view import get_session_pref, set_book_path
 from polyglot.builtins import iteritems
 
 
-class VerticalToolBar(QToolBar):
+class ToolBar(QToolBar):
+
+    def __init__(self, parent=None):
+        QToolBar.__init__(self, parent)
+        self.shortcut_actions = {}
+        self.setToolButtonStyle(Qt.ToolButtonIconOnly)
+        self.setVisible(False)
+        self.setAllowedAreas(Qt.AllToolBarAreas)
+
+    def create_shortcut_action(self, icon, text, sc):
+        a = QAction(QIcon(I(icon)), text, self)
+        self.addAction(a)
+        connect_lambda(a.triggered, self, lambda self: self.action_triggered.emit(sc))
+        self.shortcut_actions[sc] = a
+        return a
+
+
+class ActionsToolBar(ToolBar):
 
     action_triggered = pyqtSignal(object)
     open_book_at_path = pyqtSignal(object)
 
     def __init__(self, parent=None):
-        QToolBar.__init__(self, parent)
-        self.setObjectName('vertical_toolbar')
-        self.setAllowedAreas(Qt.LeftToolBarArea | Qt.RightToolBarArea)
-        self.setToolButtonStyle(Qt.ToolButtonIconOnly)
-        self.setOrientation(Qt.Vertical)
+        ToolBar.__init__(self, parent)
+        self.setObjectName('actions_toolbar')
 
     def initialize(self, web_view):
+        shortcut_action = self.create_shortcut_action
         self.action_triggered.connect(web_view.trigger_shortcut)
         page = web_view.page()
-        web_view.shortcuts_changed.connect(self.set_tooltips)
         web_view.paged_mode_changed.connect(self.update_mode_action)
-        self.shortcut_actions = {}
+        web_view.standalone_misc_settings_changed.connect(self.update_visibility)
 
         self.back_action = page.action(QWebEnginePage.Back)
         self.back_action.setIcon(QIcon(I('back.png')))
@@ -45,13 +58,6 @@ class VerticalToolBar(QToolBar):
         self.forward_action.setText(_('Forward'))
         self.addAction(self.forward_action)
         self.addSeparator()
-
-        def shortcut_action(icon, text, sc):
-            a = QAction(QIcon(I(icon)), text, self)
-            self.addAction(a)
-            connect_lambda(a.triggered, self, lambda self: self.action_triggered.emit(sc))
-            self.shortcut_actions[sc] = a
-            return a
 
         self.open_action = a = QAction(QIcon(I('document_open.png')), _('Open e-book'), self)
         self.open_menu = m = QMenu(self)
@@ -90,15 +96,12 @@ class VerticalToolBar(QToolBar):
         a = self.mode_action
         if mode == 'paged':
             a.setChecked(False)
-            a.setToolTip(_('Switch to flow mode — where the text is not broken into pages'))
+            a.setToolTip(_('Switch to flow mode -- where the text is not broken into pages'))
         else:
             a.setChecked(True)
-            a.setToolTip(_('Switch to paged mode — where the text is broken into pages'))
+            a.setToolTip(_('Switch to paged mode -- where the text is broken into pages'))
 
-    def set_tooltips(self, smap):
-        rmap = defaultdict(list)
-        for k, v in iteritems(smap):
-            rmap[v].append(k)
+    def set_tooltips(self, rmap):
         for sc, a in iteritems(self.shortcut_actions):
             if a.isCheckable():
                 continue
@@ -128,3 +131,6 @@ class VerticalToolBar(QToolBar):
                     elided_text(entry['title'], pos='right', width=250),
                     elided_text(os.path.basename(path), width=250))).triggered.connect(partial(
                     self.open_book_at_path.emit, path))
+
+    def update_visibility(self):
+        self.setVisible(bool(get_session_pref('show_actions_toolbar', default=False)))
