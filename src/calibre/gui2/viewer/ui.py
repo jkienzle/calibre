@@ -28,7 +28,9 @@ from calibre.gui2.viewer.annotations import (
     merge_annotations, parse_annotations, save_annots_to_epub, serialize_annotations
 )
 from calibre.gui2.viewer.bookmarks import BookmarkManager
-from calibre.gui2.viewer.convert_book import prepare_book, update_book
+from calibre.gui2.viewer.convert_book import (
+    clean_running_workers, prepare_book, update_book
+)
 from calibre.gui2.viewer.lookup import Lookup
 from calibre.gui2.viewer.overlay import LoadingOverlay
 from calibre.gui2.viewer.toc import TOC, TOCSearch, TOCView
@@ -363,7 +365,7 @@ class EbookViewer(MainWindow):
         else:
             if DEBUG:
                 print('Book prepared in {:.2f} seconds'.format(monotonic() - start_time))
-            self.book_prepared.emit(True, {'base': ans, 'pathtoebook': pathtoebook, 'open_at': open_at})
+            self.book_prepared.emit(True, {'base': ans, 'pathtoebook': pathtoebook, 'open_at': open_at, 'reloaded': reload_book})
 
     def prepare_notify(self):
         self.book_preparation_started.emit()
@@ -384,7 +386,13 @@ class EbookViewer(MainWindow):
             self.loading_overlay.hide()
             self.web_view.show_home_page()
             return
-        set_book_path(data['base'], data['pathtoebook'])
+        try:
+            set_book_path(data['base'], data['pathtoebook'])
+        except Exception:
+            if data['reloaded']:
+                raise
+            self.load_ebook(data['pathtoebook'], open_at=data['open_at'], reload_book=True)
+            return
         self.current_book_data = data
         self.current_book_data['annotations_map'] = defaultdict(list)
         self.current_book_data['annotations_path_key'] = path_key(data['pathtoebook']) + '.json'
@@ -489,5 +497,6 @@ class EbookViewer(MainWindow):
         except Exception:
             import traceback
             traceback.print_exc()
+        clean_running_workers()
         return MainWindow.closeEvent(self, ev)
     # }}}
