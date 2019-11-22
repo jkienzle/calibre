@@ -787,6 +787,7 @@ def get_stored_annotations(container, bookmark_data):
 
 
 def render(pathtoebook, output_dir, book_hash=None, serialize_metadata=False, extract_annotations=False, virtualize_resources=True, max_workers=1):
+    pathtoebook = os.path.abspath(pathtoebook)
     with RenderManager(max_workers) as render_manager:
         mi = None
         if serialize_metadata:
