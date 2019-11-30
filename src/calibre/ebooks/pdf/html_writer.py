@@ -13,7 +13,7 @@ import signal
 import sys
 from collections import namedtuple
 from io import BytesIO
-from itertools import repeat
+from itertools import count, repeat
 from operator import attrgetter, itemgetter
 
 from html5_parser import parse
@@ -422,14 +422,21 @@ def add_anchors_markup(root, uuid, anchors):
     )
     div.text = '\n\n'
     body.append(div)
+    c = count()
 
     def a(anchor):
+        num = next(c)
         a = div.makeelement(
             XHTML('a'), href='#' + anchor,
             style='min-width: 10px !important; min-height: 10px !important; border: solid 1px !important;'
         )
         a.text = a.tail = ' '
+        if num % 8 == 0:
+            # prevent too many anchors on a line as it causes chromium to
+            # rescale the viewport
+            a.tail = '\n'
         div.append(a)
+    a.count = 0
     tuple(map(a, anchors))
     a(uuid)
 
@@ -528,7 +535,8 @@ def get_anchor_locations(pdf_doc, first_page_num, toc_uuid):
     ans = {}
     anchors = pdf_doc.extract_anchors()
     toc_pagenum = anchors.pop(toc_uuid)[0]
-    pdf_doc.delete_pages(toc_pagenum, pdf_doc.page_count() - toc_pagenum + 1)
+    if toc_pagenum > 1:
+        pdf_doc.delete_pages(toc_pagenum, pdf_doc.page_count() - toc_pagenum + 1)
     for anchor, loc in iteritems(anchors):
         loc = list(loc)
         loc[0] += first_page_num - 1
