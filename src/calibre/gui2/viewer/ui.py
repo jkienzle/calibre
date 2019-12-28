@@ -210,7 +210,8 @@ class EbookViewer(MainWindow):
     def set_full_screen(self, on):
         if on:
             self.maximized_at_last_fullscreen = self.isMaximized()
-            self.actions_toolbar.setVisible(False)
+            if not self.actions_toolbar.visible_in_fullscreen:
+                self.actions_toolbar.setVisible(False)
             self.showFullScreen()
         else:
             self.actions_toolbar.update_visibility()
@@ -508,7 +509,7 @@ class EbookViewer(MainWindow):
         state = vprefs['main_window_state']
         geom = vprefs['main_window_geometry']
         if geom and get_session_pref('remember_window_geometry', default=False):
-            self.restoreGeometry(geom)
+            QApplication.instance().safe_restore_geometry(self, geom)
         if state:
             self.restoreState(state, self.MAIN_WINDOW_STATE_VERSION)
             self.inspector_dock.setVisible(False)

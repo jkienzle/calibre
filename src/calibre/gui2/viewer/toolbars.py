@@ -13,6 +13,7 @@ from PyQt5.Qt import (
 )
 from PyQt5.QtWebEngineWidgets import QWebEnginePage
 
+from calibre.constants import isosx
 from calibre.gui2 import elided_text
 from calibre.gui2.viewer.shortcuts import index_to_key_sequence
 from calibre.gui2.viewer.web_view import get_session_pref, set_book_path, vprefs
@@ -48,6 +49,8 @@ def all_actions():
             'fullscreen': Action('page.png', _('Toggle full screen'), 'toggle_full_screen'),
             'next': Action('next.png', _('Next page'), 'next'),
             'previous': Action('previous.png', _('Previous page'), 'previous'),
+            'next_section': Action('arrow-down.png', _('Next section'), 'next_section'),
+            'previous_section': Action('arrow-up.png', _('Previous section'), 'previous_section'),
             'toc': Action('toc.png', _('Table of Contents'), 'toggle_toc'),
             'bookmarks': Action('bookmarks.png', _('Bookmarks'), 'toggle_bookmarks'),
             'inspector': Action('debug.png', _('Inspector'), 'toggle_inspector'),
@@ -147,6 +150,8 @@ class ActionsToolBar(ToolBar):
 
         self.next_action = shortcut_action('next')
         self.previous_action = shortcut_action('previous')
+        self.next_section_action = shortcut_action('next_section')
+        self.previous_section_action = shortcut_action('previous_section')
 
         self.toc_action = a = shortcut_action('toc')
         a.setCheckable(True)
@@ -232,6 +237,10 @@ class ActionsToolBar(ToolBar):
     def update_visibility(self):
         self.setVisible(bool(get_session_pref('show_actions_toolbar', default=False)))
 
+    @property
+    def visible_in_fullscreen(self):
+        return bool(get_session_pref('show_actions_toolbar_in_fullscreen', default=False))
+
     def customize(self):
         d = ConfigureToolBar(parent=self.parent())
         if d.exec_() == d.Accepted:
@@ -247,7 +256,7 @@ class ActionsList(QListWidget):
         self.viewport().setAcceptDrops(True)
         self.setDropIndicatorShown(True)
         self.setDragDropMode(self.InternalMove)
-        self.setDefaultDropAction(Qt.MoveAction)
+        self.setDefaultDropAction(Qt.CopyAction if isosx else Qt.MoveAction)
         self.setMinimumHeight(400)
         self.is_source = is_source
         if is_source:

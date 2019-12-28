@@ -87,8 +87,8 @@ def show_controls_help():
         div = div.nextSibling
         safe_set_inner_html(div, _('Use the <b>PageUp/PageDn</b> or <b>Arrow keys</b> to turn pages'))
         div = div.nextSibling
-        safe_set_inner_html(div, _('Press the <b>Esc</b> key or <b>{} click</b> or <b>tap on the top third</b> of the text area to show the viewer controls').format(
-            'control' if 'macos' in window.navigator.userAgent else _('right')
+        safe_set_inner_html(div, _('Press the <b>Esc</b> key or <b>{}</b> or <b>tap on the top third</b> of the text area to show the viewer controls').format(
+            _('control+click') if 'macos' in window.navigator.userAgent else _('right click')
         ))
         div = div.nextSibling
         safe_set_inner_html(div, _('Press any key to continue…'))
@@ -405,7 +405,10 @@ class View:
             self.overlay.show_metadata()
         elif data.name is 'goto_location':
             self.overlay.show_ask_for_location()
-
+        elif data.name is 'shrink_selection_by_word':
+            self.iframe_wrapper.send_message('modify_selection', direction='backward', granularity='word')
+        elif data.name is 'extend_selection_by_word':
+            self.iframe_wrapper.send_message('modify_selection', direction='forward', granularity='word')
 
     def on_selection_change(self, data):
         self.currently_showing.selected_text = data.text
