@@ -33,6 +33,7 @@ from calibre.gui2.webengine import (
 from calibre.srv.code import get_translations_data
 from calibre.utils.config import JSONConfig
 from calibre.utils.serialize import json_loads
+from calibre.utils.shared_file import share_open
 from polyglot.builtins import as_bytes, iteritems
 
 try:
@@ -75,7 +76,7 @@ def get_data(name):
     if path is None:
         return None, None
     try:
-        with lopen(path, 'rb') as f:
+        with share_open(path, 'rb') as f:
             return f.read(), guess_type(name)
     except EnvironmentError as err:
         prints('Failed to read from book file: {} with error: {}'.format(name, as_unicode(err)))
@@ -234,6 +235,8 @@ def create_profile():
 
 class ViewerBridge(Bridge):
 
+    view_created = from_js(object)
+    content_file_changed = from_js(object)
     set_session_data = from_js(object, object)
     set_local_storage = from_js(object, object)
     reload_book = from_js()
@@ -430,12 +433,13 @@ class WebView(RestartingWebEngineView):
     shortcuts_changed = pyqtSignal(object)
     paged_mode_changed = pyqtSignal()
     standalone_misc_settings_changed = pyqtSignal(object)
+    view_created = pyqtSignal(object)
 
     def __init__(self, parent=None):
         self._host_widget = None
         self.callback_id_counter = count()
         self.callback_map = {}
-        self.current_cfi = None
+        self.current_cfi = self.current_content_file = None
         RestartingWebEngineView.__init__(self, parent)
         self.dead_renderer_error_shown = False
         self.render_process_failed.connect(self.render_process_died)
@@ -445,6 +449,8 @@ class WebView(RestartingWebEngineView):
         self._size_hint = QSize(int(w/3), int(w/2))
         self._page = WebPage(self)
         self.bridge.bridge_ready.connect(self.on_bridge_ready)
+        self.bridge.view_created.connect(self.on_view_created)
+        self.bridge.content_file_changed.connect(self.on_content_file_created)
         self.bridge.set_session_data.connect(self.set_session_data)
         self.bridge.set_local_storage.connect(self.set_local_storage)
         self.bridge.reload_book.connect(self.reload_book)
@@ -549,6 +555,12 @@ class WebView(RestartingWebEngineView):
             vprefs['session_data'], vprefs['local_storage'], field_metadata.all_metadata(), ui_data)
         for func, args in iteritems(self.pending_bridge_ready_actions):
             getattr(self.bridge, func)(*args)
+
+    def on_view_created(self, data):
+        self.view_created.emit(data)
+
+    def on_content_file_created(self, data):
+        self.current_content_file = data
 
     def start_book_load(self, initial_position=None):
         key = (set_book_path.path,)
