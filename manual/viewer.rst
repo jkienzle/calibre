@@ -125,15 +125,15 @@ Dictionary lookup
 -------------------
 
 You can look up the meaning of words in the current book by opening the
-:guilabel:`Lookup/search panel` via the viewer controls. Then simply double
-click on any word and its definition will be displayed in the lookup panel.
+:guilabel:`Lookup/search word panel` via the viewer controls. Then simply double
+click on any word and its definition will be displayed in the Lookup panel.
 
 
 Copying text and images
 -------------------------
 
 You can select text and images by dragging the content with your mouse and then
-right clicking and selecting "Copy" to copy to the clipboard.  The copied
+right clicking and selecting :guilabel:`Copy` to copy to the clipboard.  The copied
 material can be pasted into another application as plain text and images.
 
 
