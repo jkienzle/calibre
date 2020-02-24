@@ -293,6 +293,19 @@ def show_search_result(sr):
     if view:
         view.show_search_result(sr)
 
+@from_python
+def prepare_for_close():
+    if view:
+        view.prepare_for_close()
+    else:
+        ui_operations.close_prep_finished(None)
+
+
+@from_python
+def viewer_font_size_changed():
+    if view:
+        view.viewer_font_size_changed()
+
 
 def onerror(msg, script_url, line_number, column_number, error_object):
     if not error_object:
@@ -403,14 +416,16 @@ if window is window.top:
         to_python.autoscroll_state_changed(active)
     ui_operations.search_result_not_found = def(sr):
         to_python.search_result_not_found(sr)
+    ui_operations.scrollbar_context_menu = def(x, y, frac):
+        to_python.scrollbar_context_menu(x, y, frac)
+    ui_operations.close_prep_finished = def(cfi):
+        to_python.close_prep_finished(cfi)
 
     document.body.appendChild(E.div(id='view'))
     window.onerror = onerror
     create_modal_container()
     document.head.appendChild(E.style(get_widget_css()))
-    # See https://github.com/kovidgoyal/calibre/pull/1101
-    # for why we need touch-action: none
-    set_css(document.body, background_color=get_color('window-background'), color=get_color('window-foreground'), touch_action='none')
+    set_css(document.body, background_color=get_color('window-background'), color=get_color('window-foreground'))
     setTimeout(def():
             window.onpopstate = on_pop_state
         , 0)  # We do this after event loop ticks over to avoid catching popstate events that some browsers send on page load
