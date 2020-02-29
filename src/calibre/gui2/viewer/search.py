@@ -53,16 +53,21 @@ class BusySpinner(QWidget):  # {{{
 
 quote_map= {'"':'"“”', "'": "'‘’"}
 qpat = regex.compile(r'''(['"])''')
+spat = regex.compile(r'(\s+)')
 
 
 def text_to_regex(text):
     ans = []
-    for part in qpat.split(text):
-        r = quote_map.get(part)
-        if r is not None:
-            ans.append('[' + r + ']')
+    for wpart in spat.split(text):
+        if not wpart.strip():
+            ans.append(r'\s+')
         else:
-            ans.append(regex.escape(part))
+            for part in qpat.split(wpart):
+                r = quote_map.get(part)
+                if r is not None:
+                    ans.append('[' + r + ']')
+                else:
+                    ans.append(regex.escape(part))
     return ''.join(ans)
 
 
@@ -97,6 +102,11 @@ class Search(object):
             self._regex = regex.compile(expr, flags)
         return self._regex
 
+    def __str__(self):
+        from collections import namedtuple
+        s = ('text', 'mode', 'case_sensitive', 'backwards')
+        return str(namedtuple('Search', s)(*tuple(getattr(self, x) for x in s)))
+
 
 class SearchFinished(object):
 
@@ -106,10 +116,11 @@ class SearchFinished(object):
 
 class SearchResult(object):
 
-    __slots__ = ('search_query', 'before', 'text', 'after', 'spine_idx', 'index', 'file_name', '_static_text')
+    __slots__ = ('search_query', 'before', 'text', 'after', 'q', 'spine_idx', 'index', 'file_name', '_static_text')
 
-    def __init__(self, search_query, before, text, after, name, spine_idx, index):
+    def __init__(self, search_query, before, text, after, q, name, spine_idx, index):
         self.search_query = search_query
+        self.q = q
         self.before, self.text, self.after = before, text, after
         self.spine_idx, self.index = spine_idx, index
         self.file_name = name
@@ -140,8 +151,13 @@ class SearchResult(object):
             'before': self.before, 'after': self.after, 'mode': self.search_query.mode
         }
 
-    def is_or_is_after(self, result_from_js):
-        return result_from_js['spine_idx'] == self.spine_idx and self.index >= result_from_js['index'] and result_from_js['text'] == self.text
+    def is_result(self, result_from_js):
+        return result_from_js['spine_idx'] == self.spine_idx and self.index == result_from_js['index'] and result_from_js['text'] == self.text
+
+    def __str__(self):
+        from collections import namedtuple
+        s = self.__slots__[:-1]
+        return str(namedtuple('SearchResult', s)(*tuple(getattr(self, x) for x in s)))
 
 
 @lru_cache(maxsize=None)
@@ -169,10 +185,7 @@ def searchable_text_for_name(name):
             stack.append(tail)
         if children:
             stack.extend(reversed(children))
-    # Normalize whitespace to a single space, this will cause failures
-    # when searching over spaces in pre nodes, but that is a lesser evil
-    # since the DOM converts \n, \t etc to a single space
-    return regex.sub(r'\s+', ' ', ''.join(ans))
+    return ''.join(ans)
 
 
 def search_in_name(name, search_query, ctx_size=50):
@@ -373,23 +386,24 @@ class Results(QListWidget):  # {{{
         self.item_activated()
 
     def search_result_not_found(self, sr):
-        remove = []
+        remove = None
         for i in range(self.count()):
             item = self.item(i)
             r = item.data(Qt.UserRole)
-            if r.is_or_is_after(sr):
-                remove.append(i)
-        if remove:
-            last_i = remove[-1]
-            if last_i < self.count() - 1:
-                self.setCurrentRow(last_i + 1)
+            if r.is_result(sr):
+                remove = i
+        if remove is not None:
+            q = sr['spine_idx']
+            for i in range(remove + 1, self.count()):
+                item = self.item(i)
+                r = item.data(Qt.UserRole)
+                if r.spine_index != q:
+                    break
+                r.index -= 1
+            self.takeItem(remove)
+            if self.count():
+                self.setCurrentRow(min(remove, self.count()-1))
                 self.item_activated()
-            elif remove[0] > 0:
-                self.setCurrentRow(remove[0] - 1)
-                self.item_activated()
-            for i in reversed(remove):
-                self.takeItem(i)
-
 # }}}
 
 
@@ -459,8 +473,9 @@ class SearchPanel(QWidget):  # {{{
                 try:
                     for i, result in enumerate(search_in_name(name, search_query)):
                         before, text, after = result
-                        self.results_found.emit(SearchResult(search_query, before, text, after, name, spine_idx, counter[text]))
-                        counter[text] += 1
+                        q = (before or '')[-5:] + text + (after or '')[:5]
+                        self.results_found.emit(SearchResult(search_query, before, text, after, q, name, spine_idx, counter[q]))
+                        counter[q] += 1
                 except Exception:
                     import traceback
                     traceback.print_exc()
